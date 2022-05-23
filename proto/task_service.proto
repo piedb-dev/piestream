@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package task_service;
+
+import "batch_plan.proto";
+import "common.proto";
+import "data.proto";
+
+option optimize_for = SPEED;
+
+// Task is a running instance of Stage.
+message TaskId {
+  string query_id = 1;
+  uint32 stage_id = 2;
+  uint32 task_id = 3;
+}
+
+// Every task will create N buffers (channels) for parent operators to fetch results from,
+// where N is the parallelism of parent stage.
+message TaskOutputId {
+  TaskId task_id = 1;
+  // The id of output channel to fetch from
+  uint32 output_id = 2;
+}
+
+message TaskInfo {
+  enum TaskStatus {
+    NOT_FOUND = 0;
+    PENDING = 1;
+    RUNNING = 2;
+    FAILING = 3;
+    CANCELLING = 4;
+    FINISHED = 5;
+    FAILED = 6;
+  }
+  batch_plan.TaskId task_id = 1;
+  TaskStatus task_status = 2;
+}
+
+message CreateTaskRequest {
+  batch_plan.TaskId task_id = 1;
+  batch_plan.PlanFragment plan = 2;
+  uint64 epoch = 3;
+}
+
+message CreateTaskResponse {
+  common.Status status = 1;
+}
+
+message AbortTaskRequest {
+  batch_plan.TaskId task_id = 1;
+  bool force = 2;
+}
+
+message AbortTaskResponse {
+  common.Status status = 1;
+}
+
+message GetTaskInfoRequest {
+  batch_plan.TaskId task_id = 1;
+}
+
+message GetTaskInfoResponse {
+  common.Status status = 1;
+  TaskInfo task_info = 2;
+}
+
+message GetDataResponse {
+  common.Status status = 1;
+  data.DataChunk record_batch = 2;
+}
+
+message GetStreamRequest {
+  uint32 up_fragment_id = 1;
+  uint32 down_fragment_id = 2;
+}
+
+service TaskService {
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  rpc GetTaskInfo(GetTaskInfoRequest) returns (GetTaskInfoResponse);
+  rpc AbortTask(AbortTaskRequest) returns (AbortTaskResponse);
+}
+
+message GetDataRequest {
+  batch_plan.TaskOutputId task_output_id = 1;
+}
+
+message GetStreamResponse {
+  data.StreamMessage message = 1;
+}
+
+service ExchangeService {
+  rpc GetData(GetDataRequest) returns (stream GetDataResponse);
+  rpc GetStream(GetStreamRequest) returns (stream GetStreamResponse);
+}

@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package meta;
+
+import "catalog.proto";
+import "common.proto";
+import "hummock.proto";
+import "stream_plan.proto";
+
+option optimize_for = SPEED;
+
+message HeartbeatRequest {
+  uint32 node_id = 1;
+  common.WorkerType worker_type = 2;
+}
+
+message HeartbeatResponse {
+  common.Status status = 1;
+}
+
+service HeartbeatService {
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// Fragments of a Materialized View
+message TableFragments {
+  // Current state of actor
+  enum ActorState {
+    // Initial state after creation
+    INACTIVE = 0;
+    // Running normally
+    RUNNING = 1;
+  }
+  // Runtime information of an actor
+  message ActorStatus {
+    // Current on which parallel unit
+    common.ParallelUnit parallel_unit = 1;
+    // Current state
+    ActorState state = 2;
+  }
+  message Fragment {
+    enum FragmentDistributionType {
+      SINGLE = 0;
+      HASH = 1;
+    }
+    uint32 fragment_id = 1;
+    stream_plan.FragmentType fragment_type = 2;
+    FragmentDistributionType distribution_type = 3;
+    repeated stream_plan.StreamActor actors = 4;
+    // Vnode mapping (which should be set in upstream dispatcher) of the fragment.
+    common.ParallelUnitMapping vnode_mapping = 5;
+  }
+  uint32 table_id = 1;
+  map<uint32, Fragment> fragments = 2;
+  map<uint32, ActorStatus> actor_status = 3;
+}
+
+// TODO: remove this when dashboard refactored.
+message ActorLocation {
+  common.WorkerNode node = 1;
+  repeated stream_plan.StreamActor actors = 2;
+}
+
+message FlushRequest {}
+
+message FlushResponse {
+  common.Status status = 1;
+}
+
+service StreamManagerService {
+  rpc Flush(FlushRequest) returns (FlushResponse);
+}
+
+// Below for cluster service.
+
+message AddWorkerNodeRequest {
+  common.WorkerType worker_type = 1;
+  common.HostAddress host = 2;
+}
+
+message AddWorkerNodeResponse {
+  common.Status status = 1;
+  common.WorkerNode node = 2;
+}
+
+message ActivateWorkerNodeRequest {
+  common.HostAddress host = 1;
+}
+
+message ActivateWorkerNodeResponse {
+  common.Status status = 1;
+}
+
+message DeleteWorkerNodeRequest {
+  common.HostAddress host = 1;
+}
+
+message DeleteWorkerNodeResponse {
+  common.Status status = 1;
+}
+
+message ListAllNodesRequest {
+  common.WorkerType worker_type = 1;
+  // Whether to include nodes still starting
+  bool include_starting_nodes = 2;
+}
+
+message ListAllNodesResponse {
+  common.Status status = 1;
+  repeated common.WorkerNode nodes = 2;
+}
+
+service ClusterService {
+  rpc AddWorkerNode(AddWorkerNodeRequest) returns (AddWorkerNodeResponse);
+  rpc ActivateWorkerNode(ActivateWorkerNodeRequest) returns (ActivateWorkerNodeResponse);
+  rpc DeleteWorkerNode(DeleteWorkerNodeRequest) returns (DeleteWorkerNodeResponse);
+  rpc ListAllNodes(ListAllNodesRequest) returns (ListAllNodesResponse);
+}
+
+// Below for notification service.
+message SubscribeRequest {
+  common.WorkerType worker_type = 1;
+  common.HostAddress host = 2;
+}
+
+message MetaSnapshot {
+  repeated common.WorkerNode nodes = 1;
+  repeated catalog.Database database = 2;
+  repeated catalog.Schema schema = 3;
+  repeated catalog.Source source = 4;
+  repeated catalog.Table table = 5;
+  repeated catalog.VirtualTable view = 6;
+}
+
+message SubscribeResponse {
+  enum Operation {
+    INVALID = 0;
+    ADD = 1;
+    DELETE = 2;
+    UPDATE = 3;
+    SNAPSHOT = 4;
+  }
+  common.Status status = 1;
+  Operation operation = 2;
+  uint64 version = 3;
+  oneof info {
+    common.WorkerNode node = 4;
+    catalog.Database database = 5;
+    catalog.Schema schema = 6;
+    catalog.Table table = 7;
+    catalog.Source source = 8;
+    MetaSnapshot snapshot = 9;
+    hummock.HummockSnapshot hummock_snapshot = 10;
+  }
+}
+
+service NotificationService {
+  rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse);
+}

@@ -1,0 +1,337 @@
+syntax = "proto3";
+
+package stream_plan;
+
+import "common.proto";
+import "data.proto";
+import "expr.proto";
+import "plan_common.proto";
+
+option optimize_for = SPEED;
+
+// Hash mapping for compute node. Stores mapping from virtual node to actor id.
+message ActorMapping {
+  repeated uint64 original_indices = 1;
+  repeated uint32 data = 2;
+}
+
+// todo: StreamSourceNode or TableSourceNode
+message SourceNode {
+  enum SourceType {
+    TABLE = 0;
+    SOURCE = 1;
+  }
+  plan_common.TableRefId table_ref_id = 1;
+  repeated int32 column_ids = 2;
+  SourceType source_type = 3;
+  // split allocation information,
+  // and in the future will distinguish between `StreamSource` and `TableSource`
+  // so that there is no need to put many fields that are not common into the same SourceNode structure
+  StreamSourceState stream_source_state = 4;
+}
+
+message StreamSourceState {
+  string split_type = 1;
+  repeated bytes stream_source_splits = 2;
+}
+
+message ProjectNode {
+  repeated expr.ExprNode select_list = 1;
+}
+
+message FilterNode {
+  expr.ExprNode search_condition = 1;
+}
+
+// A materialized view is regarded as a table,
+// hence we copy the CreateTableNode definition in OLAP PlanNode.
+// In addition, we also specify primary key to MV for efficient point lookup during update and deletion.
+// The node will be used for both create mv and create index. When creating mv,
+// `pk == distribution_keys == column_orders`. When creating index, `column_orders` will contain both
+// arrange columns and pk columns, while distribution keys will be arrange columns.
+message MaterializeNode {
+  plan_common.TableRefId table_ref_id = 1;
+  plan_common.TableRefId associated_table_ref_id = 2;
+  // Column indexes and orders of primary key
+  repeated plan_common.ColumnOrder column_orders = 3;
+  // Column IDs of input schema
+  repeated int32 column_ids = 4;
+  // Hash keys of the materialize node, which is a subset of pk.
+  repeated int32 distribution_keys = 5;
+}
+
+// Remark by Yanghao: for both local and global we use the same node in the protobuf.
+// Local and global aggregator distinguish with each other in PlanNode definition.
+message SimpleAggNode {
+  repeated expr.AggCall agg_calls = 1;
+  repeated int32 distribution_keys = 2;
+  repeated uint32 table_ids = 3;
+  bool append_only = 4;
+}
+
+message HashAggNode {
+  repeated int32 distribution_keys = 1;
+  repeated expr.AggCall agg_calls = 2;
+  repeated uint32 table_ids = 3;
+  bool append_only = 4;
+}
+
+message TopNNode {
+  repeated plan_common.ColumnOrder column_orders = 1;
+  // 0 means no limit as limit of 0 means this node should be optimized away
+  uint64 limit = 2;
+  uint64 offset = 3;
+  repeated int32 distribution_keys = 4;
+}
+
+message HashJoinNode {
+  plan_common.JoinType join_type = 1;
+  repeated int32 left_key = 2;
+  repeated int32 right_key = 3;
+  expr.ExprNode condition = 4;
+  repeated int32 distribution_keys = 5;
+  // Whether to use delta join for this hash join node. When enabled, arrangement will be created
+  // on-the-fly within the plan.
+  // TODO: remove this in the future when we have a separate DeltaHashJoin node.
+  bool is_delta_join = 6;
+  // Used for internal table states. Id of the left table.
+  uint32 left_table_id = 7;
+  // Used for internal table states. Id of the right table.
+  uint32 right_table_id = 8;
+}
+
+// Delta join with two indexes. This is a pseudo plan node generated on frontend. On meta
+// service, it will be rewritten into lookup joins.
+message DeltaIndexJoinNode {
+  plan_common.JoinType join_type = 1;
+  repeated int32 left_key = 2;
+  repeated int32 right_key = 3;
+  expr.ExprNode condition = 4;
+  // Table id of the left index.
+  uint32 left_table_id = 7;
+  // Table id of the right index.
+  uint32 right_table_id = 8;
+  // Info about the left index
+  ArrangementInfo left_info = 9;
+  // Info about the right index
+  ArrangementInfo right_info = 10;
+}
+
+message HopWindowNode {
+  expr.InputRefExpr time_col = 1;
+  data.IntervalUnit window_slide = 2;
+  data.IntervalUnit window_size = 3;
+}
+
+message MergeNode {
+  repeated uint32 upstream_actor_id = 1;
+  // The schema of input columns. TODO: remove this field.
+  repeated plan_common.Field fields = 2;
+}
+
+// passed from frontend to meta, used by fragmenter to generate `MergeNode`
+// and maybe `DispatcherNode` later.
+message ExchangeNode {
+  DispatchStrategy strategy = 2;
+}
+
+// ChainNode is used for mv on mv.
+// ChainNode is like a "UNION" on mv snapshot and streaming. So it takes two inputs with fixed order:
+//   1. MergeNode (as a placeholder) for streaming read.
+//   2. BatchPlanNode for snapshot read.
+message ChainNode {
+  plan_common.TableRefId table_ref_id = 1;
+  // The schema of input stream, which will be used to build a MergeNode
+  repeated plan_common.Field upstream_fields = 2;
+  repeated int32 column_ids = 3;
+  // Generally, the barrier needs to be rearranged during the MV creation process, so that data can
+  // be flushed to shared buffer periodically, instead of making the first epoch from batch query extra
+  // large. However, in some cases, e.g., shared state, the barrier cannot be rearranged in ChainNode.
+  // This option is used to disable barrier rearrangement.
+  bool disable_rearrange = 4;
+  // Whether to place this chain on the same worker node as upstream actors.
+  bool same_worker_node = 5;
+}
+
+// BatchPlanNode is used for mv on mv snapshot read.
+// BatchPlanNode is supposed to carry a batch plan that can be optimized with the streaming plan_common.
+// Currently, streaming to batch push down is not yet supported, BatchPlanNode is simply a table scan.
+message BatchPlanNode {
+  plan_common.TableRefId table_ref_id = 1;
+  repeated plan_common.ColumnDesc column_descs = 2;
+  repeated int32 distribution_keys = 3;
+  common.ParallelUnitMapping hash_mapping = 4;
+  uint32 parallel_unit_id = 5;
+}
+
+message ArrangementInfo {
+  // Order keys of the arrangement, including order by keys and pks from the materialize
+  // executor.
+  repeated plan_common.ColumnOrder arrange_key_orders = 1;
+  // Column descs of the arrangement
+  repeated plan_common.ColumnDesc column_descs = 2;
+}
+
+// Special node for shared state, which will only be produced in fragmenter. ArrangeNode will
+// produce a special Materialize executor, which materializes data for downstream to query.
+message ArrangeNode {
+  // Table Id of the arrangement
+  uint32 table_id = 2;
+  // Info about the arrangement
+  ArrangementInfo table_info = 3;
+}
+
+// Special node for shared state. LookupNode will join an arrangement with a stream.
+message LookupNode {
+  // Join keys of the arrangement side
+  repeated int32 arrange_key = 1;
+  // Join keys of the stream side
+  repeated int32 stream_key = 2;
+  // Whether to join the current epoch of arrangement
+  bool use_current_epoch = 3;
+  // Sometimes we need to re-order the output data to meet the requirement of schema.
+  // By default, lookup executor will produce `<arrangement side, stream side>`. We
+  // will then apply the column mapping to the combined result.
+  repeated int32 column_mapping = 4;
+  oneof arrangement_table_id {
+    // Table Id of the arrangement (when created along with join plan)
+    uint32 table_id = 5;
+    // Table Id of the arrangement (when using index)
+    uint32 index_id = 6;
+  }
+  // Info about the arrangement
+  ArrangementInfo arrangement_table_info = 7;
+}
+
+// Acts like a merger, but on different inputs.
+message UnionNode {}
+
+// Special node for shared state. Merge and align barrier from upstreams. Pipe inputs in order.
+message LookupUnionNode {
+  repeated uint32 order = 1;
+}
+
+message StreamNode {
+  oneof node_body {
+    SourceNode source = 100;
+    ProjectNode project = 101;
+    FilterNode filter = 102;
+    MaterializeNode materialize = 103;
+    SimpleAggNode local_simple_agg = 104;
+    SimpleAggNode global_simple_agg = 105;
+    HashAggNode hash_agg = 106;
+    TopNNode append_only_top_n = 107;
+    HashJoinNode hash_join = 108;
+    TopNNode top_n = 109;
+    HopWindowNode hop_window = 110;
+    MergeNode merge = 111;
+    ExchangeNode exchange = 112;
+    ChainNode chain = 113;
+    BatchPlanNode batch_plan = 114;
+    LookupNode lookup = 115;
+    ArrangeNode arrange = 116;
+    LookupUnionNode lookup_union = 117;
+    UnionNode union = 118;
+    DeltaIndexJoinNode delta_index_join = 119;
+  }
+  // The id for the operator.
+  uint64 operator_id = 1;
+  // Child node in plan aka. upstream nodes in the streaming DAG
+  repeated StreamNode input = 3;
+  repeated uint32 pk_indices = 2;
+  bool append_only = 24;
+  string identity = 18;
+  // The schema of the plan node
+  repeated plan_common.Field fields = 19;
+}
+
+enum DispatcherType {
+  INVALID = 0;
+  // Dispatch by hash key, hashed by consistent hash.
+  HASH = 1;
+  // Broadcast to all downstreams.
+  // TODO: we don't need this as we now support multi-dispatcher per actor.
+  BROADCAST = 2;
+  // Only one downstream.
+  // TODO: seems that same as broadcast dispatch (with only one downstream actor).
+  SIMPLE = 3;
+  // A special kind of exchange that doesn't involve shuffle. The upstream actor will be directly
+  // piped into the downstream actor, if there are the same number of actors. If number of actors
+  // are not the same, should use hash instead. Should be only used when distribution is the same.
+  NO_SHUFFLE = 4;
+}
+
+message DispatchStrategy {
+  DispatcherType type = 1;
+  repeated uint32 column_indices = 2;
+}
+
+// A dispatcher redistribute messages.
+// We encode both the type and other usage information in the proto.
+message Dispatcher {
+  DispatcherType type = 1;
+  repeated uint32 column_indices = 2;
+  // The hash mapping for consistent hash.
+  ActorMapping hash_mapping = 3;
+  // Dispatcher can be uniquely identified by a combination of actor id and dispatcher id.
+  // For dispatchers within actors, the id is the same as operator_id of the exchange plan node.
+  // For cross-MV dispatchers, there will only be one broadcast dispatcher of id 0.
+  uint64 dispatcher_id = 4;
+  // Number of downstreams decides how many endpoints a dispatcher should dispatch.
+  repeated uint32 downstream_actor_id = 5;
+}
+
+// A StreamActor is a running fragment of the overall stream graph,
+message StreamActor {
+  uint32 actor_id = 1;
+  uint32 fragment_id = 2;
+  StreamNode nodes = 3;
+  repeated Dispatcher dispatcher = 4;
+  // The actors that send messages to this actor.
+  // Note that upstream actor ids are also stored in the proto of merge nodes.
+  // It is painstaking to traverse through the node tree and get upstream actor id from the root StreamNode.
+  // We duplicate the information here to ease the parsing logic in stream manager.
+  repeated uint32 upstream_actor_id = 6;
+  // Placement rule for actor, need to stay on the same node as upstream.
+  bool same_worker_node_as_upstream = 7;
+}
+
+enum FragmentType {
+  SOURCE = 0;
+  SINK = 1;
+  OTHERS = 2;
+}
+
+message StreamFragmentGraph {
+  message StreamFragment {
+    // 0-based on frontend, and will be rewritten to global id on meta.
+    uint32 fragment_id = 1;
+    // root stream node in this fragment.
+    StreamNode node = 2;
+    FragmentType fragment_type = 3;
+    // mark whether this fragment should only have one actor.
+    bool is_singleton = 4;
+    // Number of table ids (stateful states) for this fragment.
+    uint32 table_ids_cnt = 5;
+  }
+
+  message StreamFragmentEdge {
+    // Dispatch strategy for the fragment.
+    DispatchStrategy dispatch_strategy = 1;
+    // Whether the two linked nodes should be placed on the same worker node
+    bool same_worker_node = 2;
+    // A unique identifer of this edge. Generally it should be exchange node's operator id. When
+    // rewriting fragments into delta joins or when inserting 1-to-1 exchange, there will be
+    // virtual links generated.
+    uint64 link_id = 3;
+    uint32 upstream_id = 4;
+    uint32 downstream_id = 5;
+  }
+  // all the fragments in the graph.
+  map<uint32, StreamFragment> fragments = 1;
+  // edges between fragments.
+  repeated StreamFragmentEdge edges = 2;
+
+  repeated uint32 dependent_table_ids = 3;
+  uint32 table_ids_cnt = 4;
+}

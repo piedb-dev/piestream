@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package data;
+
+import "common.proto";
+
+option optimize_for = SPEED;
+
+message IntervalUnit {
+  int32 months = 1;
+  int32 days = 2;
+  int64 ms = 3;
+}
+
+message Buffer {
+  enum CompressionType {
+    INVALID = 0;
+    NONE = 1;
+  }
+  CompressionType compression = 1;
+  bytes body = 2;
+}
+
+message DataType {
+  enum IntervalType {
+    INVALID = 0;
+    YEAR = 1;
+    MONTH = 2;
+    DAY = 3;
+    HOUR = 4;
+    MINUTE = 5;
+    SECOND = 6;
+    YEAR_TO_MONTH = 7;
+    DAY_TO_HOUR = 8;
+    DAY_TO_MINUTE = 9;
+    DAY_TO_SECOND = 10;
+    HOUR_TO_MINUTE = 11;
+    HOUR_TO_SECOND = 12;
+    MINUTE_TO_SECOND = 13;
+  }
+  enum TypeName {
+    INT16 = 0;
+    INT32 = 1;
+    INT64 = 2;
+    FLOAT = 3;
+    DOUBLE = 4;
+    BOOLEAN = 5;
+    VARCHAR = 7;
+    DECIMAL = 8;
+    TIME = 9;
+    TIMESTAMP = 10;
+    INTERVAL = 11;
+    DATE = 12;
+    // Timestamp type with timezone
+    TIMESTAMPZ = 13;
+    STRUCT = 15;
+    LIST = 16;
+  }
+  TypeName type_name = 1;
+  // Data length for char.
+  // Max data length for varchar.
+  // Precision for time, decimal.
+  uint32 precision = 2;
+  // Scale for decimal.
+  uint32 scale = 3;
+  bool is_nullable = 4;
+  IntervalType interval_type = 5;
+  // For struct type, it represents all the fields in the struct.
+  // For list type it only contains 1 element which is the inner item type of the List.
+  // For example, `ARRAY<INTEGER>` will be represented as `vec![DataType::Int32]`.
+  repeated DataType field_type = 6;
+}
+
+message StructArrayData {
+  repeated Array children_array = 1;
+  repeated DataType children_type = 2;
+}
+
+message ListArrayData {
+  repeated uint32 offsets = 1;
+  Array value = 2;
+  DataType value_type = 3;
+}
+
+enum ArrayType {
+  INT16 = 0;
+  INT32 = 1;
+  INT64 = 2;
+  FLOAT32 = 3;
+  FLOAT64 = 4;
+  UTF8 = 5;
+  BOOL = 6;
+  DECIMAL = 7;
+  DATE = 8;
+  TIME = 9;
+  TIMESTAMP = 10;
+  INTERVAL = 11;
+  STRUCT = 12;
+  LIST = 13;
+}
+
+message Array {
+  ArrayType array_type = 1;
+  Buffer null_bitmap = 2;
+  repeated Buffer values = 3;
+  StructArrayData struct_array_data = 4;
+  ListArrayData list_array_data = 5;
+}
+
+// New column proto def to replace fixed width column. This def
+// aims to include all column type. Currently it do not support struct/array
+// but capable of extending in future by add other fields.
+message Column {
+  Array array = 2;
+}
+
+message DataChunk {
+  uint32 cardinality = 1;
+  repeated Column columns = 2;
+}
+
+enum Op {
+  INSERT = 0;
+  DELETE = 1;
+  UPDATE_INSERT = 2;
+  UPDATE_DELETE = 3;
+}
+
+message StreamMessage {
+  oneof stream_message {
+    StreamChunk stream_chunk = 1;
+    Barrier barrier = 2;
+  }
+}
+
+message StreamChunk {
+  // for Column::from_protobuf(), may not need later
+  uint32 cardinality = 1;
+  repeated Op ops = 2;
+  repeated Column columns = 3;
+}
+
+message NothingMutation {}
+
+message StopMutation {
+  repeated uint32 actors = 1;
+}
+
+message DispatcherMutation {
+  uint32 actor_id = 1;
+  uint64 dispatcher_id = 2;
+  repeated common.ActorInfo info = 3;
+}
+
+message UpdateMutation {
+  repeated DispatcherMutation mutations = 1;
+}
+
+message AddMutation {
+  repeated DispatcherMutation mutations = 1;
+}
+
+message Epoch {
+  uint64 curr = 1;
+  uint64 prev = 2;
+}
+
+message Barrier {
+  Epoch epoch = 1;
+  oneof mutation {
+    NothingMutation nothing = 2;
+    StopMutation stop = 3;
+    UpdateMutation update = 4;
+    AddMutation add = 5;
+  }
+  bytes span = 6;
+}
+
+message Terminate {}
