@@ -2,7 +2,7 @@
 
 ## Background
 
-RisingWave supports creating a new materialized view (abbreviated as mview) based on the source and another mview, so users can split their data into multiple layers and use mviews' chains to connect them.
+piestream supports creating a new materialized view (abbreviated as mview) based on the source and another mview, so users can split their data into multiple layers and use mviews' chains to connect them.
 
 In detail, we will support the creation of a materialized view whose source is some other mview(s). **Please note that there should not be a circular dependency on mviews**.
 

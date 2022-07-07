@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_pb::data::data_type::TypeName;
-use risingwave_pb::data::DataType;
-use risingwave_pb::plan_common::ColumnDesc;
+use piestream_pb::data::data_type::TypeName;
+use piestream_pb::data::DataType;
+use piestream_pb::plan_common::ColumnDesc;
 
 pub trait ColumnDescTestExt {
     /// Create a [`ColumnDesc`] with the given name and type.

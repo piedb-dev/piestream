@@ -18,15 +18,15 @@ mod tests {
     use std::sync::Arc;
 
     use rand::SeedableRng;
-    use risingwave_frontend::binder::Binder;
-    use risingwave_frontend::handler::create_table;
-    use risingwave_frontend::planner::Planner;
-    use risingwave_frontend::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
-    use risingwave_frontend::test_utils::LocalFrontend;
-    use risingwave_frontend::FrontendOpts;
-    use risingwave_sqlparser::ast::Statement;
-    use risingwave_sqlparser::parser::Parser;
-    use risingwave_sqlsmith::{sql_gen, Table};
+    use piestream_frontend::binder::Binder;
+    use piestream_frontend::handler::create_table;
+    use piestream_frontend::planner::Planner;
+    use piestream_frontend::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
+    use piestream_frontend::test_utils::LocalFrontend;
+    use piestream_frontend::FrontendOpts;
+    use piestream_sqlparser::ast::Statement;
+    use piestream_sqlparser::parser::Parser;
+    use piestream_sqlsmith::{sql_gen, Table};
 
     /// Create the tables defined in testdata.
     async fn create_tables(session: Arc<SessionImpl>) -> Vec<Table> {

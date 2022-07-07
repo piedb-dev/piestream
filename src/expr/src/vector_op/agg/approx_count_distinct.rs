@@ -15,9 +15,9 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use risingwave_common::array::*;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::*;
+use piestream_common::array::*;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::*;
 
 use crate::vector_op::agg::aggregator::Aggregator;
 use crate::vector_op::agg::general_sorted_grouper::EqGroups;
@@ -192,11 +192,11 @@ impl Aggregator for ApproxCountDistinct {
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::{
+    use piestream_common::array::column::Column;
+    use piestream_common::array::{
         ArrayBuilder, ArrayBuilderImpl, DataChunk, I32Array, I64ArrayBuilder,
     };
-    use risingwave_common::types::DataType;
+    use piestream_common::types::DataType;
 
     use crate::vector_op::agg::aggregator::Aggregator;
     use crate::vector_op::agg::approx_count_distinct::ApproxCountDistinct;

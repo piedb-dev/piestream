@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::{ArrayImpl, Row};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::types::Datum;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::{ArrayImpl, Row};
+use piestream_common::buffer::Bitmap;
+use piestream_common::types::Datum;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use crate::executor::aggregation::{create_streaming_agg_state, AggCall, StreamingAggStateImpl};
 use crate::executor::error::StreamExecutorResult;
@@ -125,18 +125,18 @@ impl ManagedValueState {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{I64Array, Op};
-    use risingwave_common::catalog::{ColumnDesc, ColumnId, TableId};
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::table::state_table::StateTable;
+    use piestream_common::array::{I64Array, Op};
+    use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::state_table::StateTable;
 
     use super::*;
     use crate::executor::aggregation::AggArgs;
 
     fn create_test_count_state() -> AggCall {
         AggCall {
-            kind: risingwave_expr::expr::AggKind::Count,
+            kind: piestream_expr::expr::AggKind::Count,
             args: AggArgs::Unary(DataType::Int64, 0),
             return_type: DataType::Int64,
             append_only: false,
@@ -196,7 +196,7 @@ mod tests {
 
     fn create_test_max_agg_append_only() -> AggCall {
         AggCall {
-            kind: risingwave_expr::expr::AggKind::Max,
+            kind: piestream_expr::expr::AggKind::Max,
             args: AggArgs::Unary(DataType::Int64, 0),
             return_type: DataType::Int64,
             append_only: true,

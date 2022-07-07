@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use parking_lot::Mutex;
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::batch_plan::{
+use piestream_common::array::DataChunk;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::batch_plan::{
     PlanFragment, TaskId as ProstTaskId, TaskOutputId as ProstOutputId,
 };
-use risingwave_pb::task_service::task_info::TaskStatus;
-use risingwave_pb::task_service::GetDataResponse;
+use piestream_pb::task_service::task_info::TaskStatus;
+use piestream_pb::task_service::GetDataResponse;
 use tokio::sync::oneshot::{Receiver, Sender};
 use tracing_futures::Instrument;
 

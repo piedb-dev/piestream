@@ -14,10 +14,10 @@
 
 use std::future::Future;
 
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::exchange_info::DistributionMode as ShuffleDistributionMode;
-use risingwave_pb::batch_plan::ExchangeInfo;
+use piestream_common::array::DataChunk;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::exchange_info::DistributionMode as ShuffleDistributionMode;
+use piestream_pb::batch_plan::ExchangeInfo;
 
 use crate::task::broadcast_channel::{new_broadcast_channel, BroadcastReceiver, BroadcastSender};
 use crate::task::data_chunk_in_channel::DataChunkInChannel;
@@ -79,7 +79,7 @@ impl ChanReceiverImpl {
 
 /// Output-channel is a synchronous, bounded single-producer-multiple-consumer queue.
 /// The producer is the local task executor, the consumer is
-/// [`ExchangeService`](risingwave_pb::task_service::exchange_service_server::ExchangeService).
+/// [`ExchangeService`](piestream_pb::task_service::exchange_service_server::ExchangeService).
 /// The implementation depends on the shuffling strategy.
 pub fn create_output_channel(
     shuffle: &ExchangeInfo,

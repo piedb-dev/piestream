@@ -19,7 +19,7 @@ use std::ops::Sub;
 
 use chrono::{Duration, NaiveDateTime};
 use num_traits::{CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, Signed};
-use risingwave_common::types::{
+use piestream_common::types::{
     CheckedAdd, Decimal, IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper, NaiveTimeWrapper,
     OrderedF64,
 };
@@ -292,7 +292,7 @@ where
 mod tests {
     use std::str::FromStr;
 
-    use risingwave_common::types::Decimal;
+    use piestream_common::types::Decimal;
 
     use crate::vector_op::arithmetic_op::general_add;
 

@@ -15,11 +15,11 @@
 //! This module implements `StreamingSingleValueAgg`.
 
 use itertools::Itertools;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::*;
-use risingwave_common::bail;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::types::{option_to_owned_scalar, Datum, Scalar, ScalarImpl};
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::*;
+use piestream_common::bail;
+use piestream_common::buffer::Bitmap;
+use piestream_common::types::{option_to_owned_scalar, Datum, Scalar, ScalarImpl};
 
 use crate::executor::aggregation::StreamingAggStateImpl;
 use crate::executor::error::StreamExecutorResult;
@@ -177,7 +177,7 @@ impl_single_value_agg! {StructArray, Struct}
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array_nonnull;
+    use piestream_common::array_nonnull;
 
     use super::*;
 

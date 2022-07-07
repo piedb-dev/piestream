@@ -17,9 +17,9 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use moka::future::Cache;
-use risingwave_common::util::addr::HostAddr;
-use risingwave_pb::common::WorkerNode;
-use risingwave_pb::stream_service::stream_service_client::StreamServiceClient;
+use piestream_common::util::addr::HostAddr;
+use piestream_pb::common::WorkerNode;
+use piestream_pb::stream_service::stream_service_client::StreamServiceClient;
 use tonic::transport::{Channel, Endpoint};
 
 use crate::error::{Result, RpcError};

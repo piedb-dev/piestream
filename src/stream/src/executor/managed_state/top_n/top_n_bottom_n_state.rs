@@ -20,12 +20,12 @@ use std::ops::Index;
 use futures::pin_mut;
 use futures::stream::StreamExt;
 use madsim::collections::BTreeMap;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, TableId};
-use risingwave_common::types::DataType;
-use risingwave_common::util::ordered::*;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::{Keyspace, StateStore};
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+use piestream_common::types::DataType;
+use piestream_common::util::ordered::*;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::{Keyspace, StateStore};
 
 use crate::executor::error::StreamExecutorResult;
 use crate::executor::PkIndices;
@@ -322,11 +322,11 @@ impl<S: StateStore> ManagedTopNBottomNState<S> {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::catalog::TableId;
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::OrderType;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::StateStore;
+    use piestream_common::catalog::TableId;
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::StateStore;
 
     use super::*;
     use crate::row_nonnull;

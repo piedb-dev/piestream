@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, TableId};
-use risingwave_common::types::DataType;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_storage::memory::MemoryStateStore;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::table::storage_table::{StorageTable, READ_ONLY};
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, TableId};
+use piestream_common::types::DataType;
+use piestream_common::util::sort_util::OrderType;
+use piestream_storage::memory::MemoryStateStore;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::table::storage_table::{StorageTable, READ_ONLY};
 
 pub async fn gen_basic_table(row_count: usize) -> StorageTable<MemoryStateStore, READ_ONLY> {
     let state_store = MemoryStateStore::new();

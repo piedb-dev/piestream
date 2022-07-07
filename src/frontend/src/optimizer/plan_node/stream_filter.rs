@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
-use risingwave_pb::stream_plan::FilterNode;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_pb::stream_plan::FilterNode;
 
 use super::{LogicalFilter, PlanRef, PlanTreeNodeUnary, ToStreamProst};
 use crate::expr::{Expr, ExprImpl};

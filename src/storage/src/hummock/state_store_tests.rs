@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::executor::block_on;
-use risingwave_hummock_sdk::HummockEpoch;
-use risingwave_meta::hummock::test_utils::setup_compute_env;
-use risingwave_meta::hummock::MockHummockMetaClient;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_hummock_sdk::HummockEpoch;
+use piestream_meta::hummock::test_utils::setup_compute_env;
+use piestream_meta::hummock::MockHummockMetaClient;
+use piestream_rpc_client::HummockMetaClient;
 
 use super::HummockStorage;
 use crate::hummock::compaction_group::StaticCompactionGroupId;
@@ -399,7 +399,7 @@ async fn test_state_store_sync() {
         .unwrap();
 
     // TODO: Uncomment the following lines after flushed sstable can be accessed.
-    // FYI: https://github.com/singularity-data/risingwave/pull/1928#discussion_r852698719
+    // FYI: https://github.com/singularity-data/piestream/pull/1928#discussion_r852698719
     // shared buffer threshold size should have been reached and will trigger a flush
     // then ingest the batch
     // assert_eq!(
@@ -424,7 +424,7 @@ async fn test_state_store_sync() {
         .unwrap();
 
     // TODO: Uncomment the following lines after flushed sstable can be accessed.
-    // FYI: https://github.com/singularity-data/risingwave/pull/1928#discussion_r852698719
+    // FYI: https://github.com/singularity-data/piestream/pull/1928#discussion_r852698719
     // 16B in total with 8B epoch appended to the key
     // assert_eq!(
     //     (16 + VALUE_META_SIZE) as u64,
@@ -435,7 +435,7 @@ async fn test_state_store_sync() {
     hummock_storage.sync(Some(epoch)).await.unwrap();
 
     // TODO: Uncomment the following lines after flushed sstable can be accessed.
-    // FYI: https://github.com/singularity-data/risingwave/pull/1928#discussion_r852698719
+    // FYI: https://github.com/singularity-data/piestream/pull/1928#discussion_r852698719
     // assert_eq!(0, hummock_storage.shared_buffer_manager().size());
 }
 

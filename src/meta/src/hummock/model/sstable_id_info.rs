@@ -15,8 +15,8 @@
 use std::time::SystemTime;
 
 use prost::Message;
-use risingwave_hummock_sdk::HummockSSTableId;
-use risingwave_pb::hummock::SstableIdInfo;
+use piestream_hummock_sdk::HummockSSTableId;
+use piestream_pb::hummock::SstableIdInfo;
 
 use crate::model::MetadataModel;
 
@@ -48,7 +48,7 @@ impl MetadataModel for SstableIdInfo {
         prost
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.id)
     }
 }

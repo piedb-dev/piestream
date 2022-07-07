@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::future::try_join_all;
-use risingwave_common::cache::{CachableEntry, LruCache};
+use piestream_common::cache::{CachableEntry, LruCache};
 use tokio::io::AsyncWriteExt;
 
 use crate::object::{BlockLocation, ObjectError, ObjectMetadata, ObjectResult, ObjectStore};

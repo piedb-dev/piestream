@@ -18,12 +18,12 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use itertools::Itertools;
-use risingwave_common::config::StorageConfig;
-use risingwave_hummock_sdk::key::key_with_epoch;
-use risingwave_hummock_sdk::HummockSSTableId;
-use risingwave_meta::hummock::test_utils::setup_compute_env;
-use risingwave_meta::hummock::MockHummockMetaClient;
-use risingwave_pb::hummock::{KeyRange, SstableInfo};
+use piestream_common::config::StorageConfig;
+use piestream_hummock_sdk::key::key_with_epoch;
+use piestream_hummock_sdk::HummockSSTableId;
+use piestream_meta::hummock::test_utils::setup_compute_env;
+use piestream_meta::hummock::MockHummockMetaClient;
+use piestream_pb::hummock::{KeyRange, SstableInfo};
 
 use super::{CompressionAlgorithm, SstableMeta, DEFAULT_RESTART_INTERVAL};
 use crate::hummock::compaction_group::StaticCompactionGroupId;

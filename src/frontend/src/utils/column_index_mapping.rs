@@ -94,7 +94,7 @@ impl ColIndexMapping {
     /// Positive offset:
     ///
     /// ```rust
-    /// # use risingwave_frontend::utils::ColIndexMapping;
+    /// # use piestream_frontend::utils::ColIndexMapping;
     /// let mapping = ColIndexMapping::with_shift_offset(3, 3);
     /// assert_eq!(mapping.map(0), 3);
     /// assert_eq!(mapping.map(1), 4);
@@ -104,7 +104,7 @@ impl ColIndexMapping {
     /// Negative offset:
     ///
     ///  ```rust
-    /// # use risingwave_frontend::utils::ColIndexMapping;
+    /// # use piestream_frontend::utils::ColIndexMapping;
     /// let mapping = ColIndexMapping::with_shift_offset(6, -3);
     /// assert_eq!(mapping.try_map(0), None);
     /// assert_eq!(mapping.try_map(1), None);
@@ -133,7 +133,7 @@ impl ColIndexMapping {
     ///
     /// ```rust
     /// # use fixedbitset::FixedBitSet;
-    /// # use risingwave_frontend::utils::ColIndexMapping;
+    /// # use piestream_frontend::utils::ColIndexMapping;
     /// let mut remaining_cols = vec![1, 3];
     /// let mapping = ColIndexMapping::with_remaining_columns(&remaining_cols, 4);
     /// assert_eq!(mapping.map(1), 0);
@@ -157,7 +157,7 @@ impl ColIndexMapping {
     ///
     /// ```rust
     /// # use fixedbitset::FixedBitSet;
-    /// # use risingwave_frontend::utils::ColIndexMapping;
+    /// # use piestream_frontend::utils::ColIndexMapping;
     /// let mut removed_cols = vec![0, 2, 4];
     /// let mapping = ColIndexMapping::with_removed_columns(&removed_cols, 5);
     /// assert_eq!(mapping.map(1), 0);

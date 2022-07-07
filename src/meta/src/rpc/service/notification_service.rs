@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::tonic_err;
-use risingwave_pb::common::worker_node::State::Running;
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::meta::notification_service_server::NotificationService;
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
-use risingwave_pb::meta::{MetaSnapshot, SubscribeRequest, SubscribeResponse};
+use piestream_common::error::tonic_err;
+use piestream_pb::common::worker_node::State::Running;
+use piestream_pb::common::WorkerType;
+use piestream_pb::meta::notification_service_server::NotificationService;
+use piestream_pb::meta::subscribe_response::{Info, Operation};
+use piestream_pb::meta::{MetaSnapshot, SubscribeRequest, SubscribeResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{Request, Response, Status};

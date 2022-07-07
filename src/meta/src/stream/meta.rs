@@ -16,14 +16,14 @@ use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::try_match_expand;
-use risingwave_common::types::{ParallelUnitId, VIRTUAL_NODE_COUNT};
-use risingwave_common::util::compress::decompress_data;
-use risingwave_pb::meta::table_fragments::ActorState;
-use risingwave_pb::stream_plan::{FragmentType, StreamActor};
+use piestream_common::catalog::TableId;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::try_match_expand;
+use piestream_common::types::{ParallelUnitId, VIRTUAL_NODE_COUNT};
+use piestream_common::util::compress::decompress_data;
+use piestream_pb::meta::table_fragments::ActorState;
+use piestream_pb::stream_plan::{FragmentType, StreamActor};
 use tokio::sync::RwLock;
 
 use crate::cluster::WorkerId;

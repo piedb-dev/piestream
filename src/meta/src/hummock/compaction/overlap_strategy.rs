@@ -15,9 +15,9 @@
 use std::cmp::Ordering;
 
 use itertools::Itertools;
-use risingwave_hummock_sdk::key::user_key;
-use risingwave_hummock_sdk::key_range::KeyRangeCommon;
-use risingwave_pb::hummock::{KeyRange, SstableInfo};
+use piestream_hummock_sdk::key::user_key;
+use piestream_hummock_sdk::key_range::KeyRangeCommon;
+use piestream_pb::hummock::{KeyRange, SstableInfo};
 
 pub trait OverlapInfo {
     fn check_overlap(&self, a: &SstableInfo) -> bool;

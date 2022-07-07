@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_rpc_client"
+name = "piestream_rpc_client"
 version = "0.1.10"
 edition = "2021"
 
@@ -11,9 +11,9 @@ log = "0.4"
 madsim = "=0.2.0-alpha.3"
 moka = { version = "0.8", features = ["future"] }
 paste = "1"
-risingwave_common = { path = "../common" }
-risingwave_hummock_sdk = { path = "../storage/hummock_sdk" }
-risingwave_pb = { path = "../prost" }
+piestream_common = { path = "../common" }
+piestream_hummock_sdk = { path = "../storage/hummock_sdk" }
+piestream_pb = { path = "../prost" }
 thiserror = "1"
 tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "rt",

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use risingwave_object_store::object::ObjectStore;
-use risingwave_pb::hummock::VacuumTask;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_object_store::object::ObjectStore;
+use piestream_pb::hummock::VacuumTask;
+use piestream_rpc_client::HummockMetaClient;
 
 use super::{HummockError, HummockResult};
 use crate::hummock::SstableStoreRef;
@@ -64,9 +64,9 @@ mod tests {
     use std::sync::Arc;
 
     use itertools::Itertools;
-    use risingwave_meta::hummock::test_utils::setup_compute_env;
-    use risingwave_meta::hummock::MockHummockMetaClient;
-    use risingwave_pb::hummock::VacuumTask;
+    use piestream_meta::hummock::test_utils::setup_compute_env;
+    use piestream_meta::hummock::MockHummockMetaClient;
+    use piestream_pb::hummock::VacuumTask;
 
     use crate::hummock::iterator::test_utils::{default_builder_opt_for_test, mock_sstable_store};
     use crate::hummock::test_utils::gen_default_test_sstable;

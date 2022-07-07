@@ -19,15 +19,15 @@ use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use itertools::Itertools;
-use risingwave_common::catalog::{generate_intertable_name, TableId};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_pb::catalog::Table;
-use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
-use risingwave_pb::meta::table_fragments::Fragment;
-use risingwave_pb::stream_plan::lookup_node::ArrangementTableId;
-use risingwave_pb::stream_plan::stream_fragment_graph::{StreamFragment, StreamFragmentEdge};
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{
+use piestream_common::catalog::{generate_intertable_name, TableId};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_pb::catalog::Table;
+use piestream_pb::meta::table_fragments::fragment::FragmentDistributionType;
+use piestream_pb::meta::table_fragments::Fragment;
+use piestream_pb::stream_plan::lookup_node::ArrangementTableId;
+use piestream_pb::stream_plan::stream_fragment_graph::{StreamFragment, StreamFragmentEdge};
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{
     DispatchStrategy, Dispatcher, DispatcherType, MergeNode, StreamActor,
     StreamFragmentGraph as StreamFragmentGraphProto, StreamNode,
 };

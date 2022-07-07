@@ -18,12 +18,12 @@ use std::mem;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{Array, ArrayBuilderImpl, ArrayRef, DataChunk};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::hash::{HashKey, PrecomputedBuildHasher};
+use piestream_common::array::column::Column;
+use piestream_common::array::{Array, ArrayBuilderImpl, ArrayRef, DataChunk};
+use piestream_common::buffer::Bitmap;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::hash::{HashKey, PrecomputedBuildHasher};
 
 use crate::executor::join::chunked_data::{ChunkedData, RowId};
 use crate::executor::join::hash_join::EquiJoinParams;

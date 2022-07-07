@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, DatabaseId, OrderedColumnDesc, SchemaId, TableId};
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::plan_common::JoinType;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::HashJoinNode;
+use piestream_common::catalog::{ColumnDesc, DatabaseId, OrderedColumnDesc, SchemaId, TableId};
+use piestream_common::util::sort_util::OrderType;
+use piestream_pb::plan_common::JoinType;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::HashJoinNode;
 
 use super::{LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, StreamDeltaJoin, ToStreamProst};
 use crate::catalog::column_catalog::ColumnCatalog;
@@ -262,7 +262,7 @@ fn infer_internal_table_catalog(input: PlanRef) -> TableCatalog {
         distribution_keys: base.dist.dist_column_indices().to_vec(),
         is_index_on: None,
         appendonly: input.append_only(),
-        owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+        owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
         vnode_mapping: None,
         properties: HashMap::default(),
     }

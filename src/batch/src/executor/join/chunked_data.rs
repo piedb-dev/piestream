@@ -14,7 +14,7 @@
 
 use std::ops::{Index, IndexMut};
 
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 
 /// Id of one row in chunked data.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]

@@ -16,8 +16,8 @@ use std::cmp::Ordering::{Equal, Greater, Less};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use risingwave_hummock_sdk::VersionedComparator;
-use risingwave_pb::hummock::SstableInfo;
+use piestream_hummock_sdk::VersionedComparator;
+use piestream_pb::hummock::SstableInfo;
 
 use crate::hummock::iterator::{
     DirectionEnum, HummockIterator, HummockIteratorDirection, ReadOptions,

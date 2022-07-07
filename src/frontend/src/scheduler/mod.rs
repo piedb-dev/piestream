@@ -17,8 +17,8 @@
 use std::sync::Arc;
 
 use futures::Stream;
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::Result;
+use piestream_common::array::DataChunk;
+use piestream_common::error::Result;
 
 use crate::session::SessionImpl;
 

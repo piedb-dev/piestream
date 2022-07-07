@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use risingwave_batch::executor::BatchMetrics;
-use risingwave_batch::task::{BatchTaskContext, TaskOutput, TaskOutputId};
-use risingwave_common::catalog::SysCatalogReaderRef;
-use risingwave_common::error::Result;
-use risingwave_common::util::addr::{is_local_address, HostAddr};
-use risingwave_source::SourceManagerRef;
+use piestream_batch::executor::BatchMetrics;
+use piestream_batch::task::{BatchTaskContext, TaskOutput, TaskOutputId};
+use piestream_common::catalog::SysCatalogReaderRef;
+use piestream_common::error::Result;
+use piestream_common::util::addr::{is_local_address, HostAddr};
+use piestream_source::SourceManagerRef;
 
 use crate::catalog::pg_catalog::SysCatalogReaderImpl;
 use crate::session::{AuthContext, FrontendEnv};
@@ -60,7 +60,7 @@ impl BatchTaskContext for FrontendBatchTaskContext {
         todo!()
     }
 
-    fn state_store(&self) -> Option<risingwave_storage::store_impl::StateStoreImpl> {
+    fn state_store(&self) -> Option<piestream_storage::store_impl::StateStoreImpl> {
         todo!()
     }
 

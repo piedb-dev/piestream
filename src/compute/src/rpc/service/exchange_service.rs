@@ -16,14 +16,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use madsim::time::Instant;
-use risingwave_batch::task::BatchManager;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::task_service::exchange_service_server::ExchangeService;
-use risingwave_pb::task_service::{
+use piestream_batch::task::BatchManager;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::task_service::exchange_service_server::ExchangeService;
+use piestream_pb::task_service::{
     GetDataRequest, GetDataResponse, GetStreamRequest, GetStreamResponse,
 };
-use risingwave_stream::executor::Message;
-use risingwave_stream::task::LocalStreamManager;
+use piestream_stream::executor::Message;
+use piestream_stream::task::LocalStreamManager;
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};

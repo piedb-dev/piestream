@@ -24,9 +24,9 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_hummock_sdk::key::user_key;
-use risingwave_hummock_sdk::{is_remote_sst_id, HummockEpoch, LocalSstableInfo};
-use risingwave_pb::hummock::{KeyRange, SstableInfo};
+use piestream_hummock_sdk::key::user_key;
+use piestream_hummock_sdk::{is_remote_sst_id, HummockEpoch, LocalSstableInfo};
+use piestream_pb::hummock::{KeyRange, SstableInfo};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -506,8 +506,8 @@ mod tests {
     use std::ops::DerefMut;
 
     use bytes::Bytes;
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-    use risingwave_hummock_sdk::key::{key_with_epoch, user_key};
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_hummock_sdk::key::{key_with_epoch, user_key};
     use tokio::sync::mpsc;
 
     use super::*;

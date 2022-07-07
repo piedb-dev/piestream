@@ -15,7 +15,7 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::once;
 
-use risingwave_pb::stream_service::barrier_complete_response::CreateMviewProgress;
+use piestream_pb::stream_service::barrier_complete_response::CreateMviewProgress;
 use tokio::sync::oneshot;
 
 use super::progress::ChainState;

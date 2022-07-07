@@ -16,9 +16,9 @@ use std::vec;
 
 use rand::prelude::SliceRandom;
 use rand::Rng;
-use risingwave_frontend::binder::bind_data_type;
-use risingwave_frontend::expr::DataTypeName;
-use risingwave_sqlparser::ast::{
+use piestream_frontend::binder::bind_data_type;
+use piestream_frontend::expr::DataTypeName;
+use piestream_sqlparser::ast::{
     ColumnDef, Expr, Ident, OrderByExpr, Query, Select, SelectItem, SetExpr, Statement,
     TableWithJoins, Value, With,
 };

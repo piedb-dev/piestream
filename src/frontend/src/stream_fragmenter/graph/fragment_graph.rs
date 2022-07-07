@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use risingwave_pb::stream_plan::stream_fragment_graph::{
+use piestream_pb::stream_plan::stream_fragment_graph::{
     StreamFragment as StreamFragmentProto, StreamFragmentEdge as StreamFragmentEdgeProto,
 };
-use risingwave_pb::stream_plan::{
+use piestream_pb::stream_plan::{
     DispatchStrategy, FragmentType, StreamFragmentGraph as StreamFragmentGraphProto, StreamNode,
 };
 

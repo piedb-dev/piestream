@@ -19,7 +19,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
-use risingwave_common::config::StorageConfig;
+use piestream_common::config::StorageConfig;
 
 use crate::hummock::value::HummockValue;
 use crate::hummock::HummockEpoch;

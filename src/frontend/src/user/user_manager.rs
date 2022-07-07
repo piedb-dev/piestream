@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use risingwave_pb::user::{GrantPrivilege, UserInfo};
+use piestream_pb::user::{GrantPrivilege, UserInfo};
 
 use crate::user::{UserInfoVersion, UserName};
 

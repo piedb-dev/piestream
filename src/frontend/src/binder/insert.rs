@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::{Ident, ObjectName, Query, SetExpr};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::{Ident, ObjectName, Query, SetExpr};
 
 use super::{BoundQuery, BoundSetExpr};
 use crate::binder::{Binder, BoundTableSource};

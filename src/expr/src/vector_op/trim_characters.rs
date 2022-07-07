@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::Result;
 
@@ -46,7 +46,7 @@ for_three_variants! { gen_trim }
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::*;
 

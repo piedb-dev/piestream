@@ -15,10 +15,10 @@
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::Result;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
+use piestream_common::catalog::Schema;
+use piestream_common::error::Result;
+use piestream_common::util::sort_util::OrderType;
+use piestream_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
 
 use super::super::plan_node::*;
 use crate::optimizer::PlanRef;

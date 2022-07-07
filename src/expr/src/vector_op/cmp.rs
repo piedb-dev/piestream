@@ -15,7 +15,7 @@
 use std::any::type_name;
 use std::fmt::Debug;
 
-use risingwave_common::array::{ListRef, StructRef};
+use piestream_common::array::{ListRef, StructRef};
 
 use crate::{ExprError, Result};
 
@@ -201,7 +201,7 @@ pub fn is_not_unknown(v: Option<bool>) -> Result<Option<bool>> {
 mod tests {
     use std::str::FromStr;
 
-    use risingwave_common::types::Decimal;
+    use piestream_common::types::Decimal;
 
     use super::*;
 

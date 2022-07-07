@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use risingwave_common::field_generator::FieldGeneratorImpl;
+use piestream_common::field_generator::FieldGeneratorImpl;
 
 use super::generator::DatagenEventGenerator;
 use crate::datagen::source::SEQUENCE_FIELD_KIND;

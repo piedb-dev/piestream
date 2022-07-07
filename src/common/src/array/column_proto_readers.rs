@@ -17,7 +17,7 @@ use std::io::{Cursor, Read};
 use anyhow::anyhow;
 use byteorder::{BigEndian, ReadBytesExt};
 use paste::paste;
-use risingwave_pb::data::Array as ProstArray;
+use piestream_pb::data::Array as ProstArray;
 
 use crate::array::value_reader::{PrimitiveValueReader, VarSizedValueReader};
 use crate::array::{

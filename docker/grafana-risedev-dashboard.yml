@@ -2,7 +2,7 @@
 apiVersion: 1
 
 providers:
-  - name: 'risingwave-grafana'
+  - name: 'piestream-grafana'
     orgId: 1
     folder: ''
     folderUid: ''
@@ -11,6 +11,6 @@ providers:
     updateIntervalSeconds: 1
     allowUiUpdates: true
     options:
-      path: /risingwave-dashboard.json
+      path: /piestream-dashboard.json
       foldersFromFilesStructure: false
     

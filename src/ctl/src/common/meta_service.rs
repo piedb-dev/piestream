@@ -15,8 +15,8 @@
 use std::env;
 
 use anyhow::{bail, Result};
-use risingwave_pb::common::WorkerType;
-use risingwave_rpc_client::MetaClient;
+use piestream_pb::common::WorkerType;
+use piestream_rpc_client::MetaClient;
 
 pub struct MetaServiceOpts {
     pub meta_addr: String,
@@ -35,7 +35,7 @@ impl MetaServiceOpts {
                 url
             }
             Err(_) => {
-                bail!("env variable `RW_META_ADDR` not found, please do one of the following:\n* use `./risedev ctl` to start risectl.\n* `source .risingwave/config/risectl-env` or `source ~/risingwave-deploy/risectl-env` before running risectl.\n* manually set `RW_META_ADDR` in env variable.\nrisectl requires a full persistent cluster to operate, so please also remember to add `use: minio` to risedev config.");
+                bail!("env variable `RW_META_ADDR` not found, please do one of the following:\n* use `./risedev ctl` to start risectl.\n* `source .piestream/config/risectl-env` or `source ~/piestream-deploy/risectl-env` before running risectl.\n* manually set `RW_META_ADDR` in env variable.\nrisectl requires a full persistent cluster to operate, so please also remember to add `use: minio` to risedev config.");
             }
         };
         Ok(Self { meta_addr })

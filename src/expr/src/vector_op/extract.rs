@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use chrono::{Datelike, Timelike};
-use risingwave_common::types::{Decimal, NaiveDateTimeWrapper, NaiveDateWrapper};
+use piestream_common::types::{Decimal, NaiveDateTimeWrapper, NaiveDateWrapper};
 
 use crate::{bail, Result};
 

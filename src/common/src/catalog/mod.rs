@@ -132,8 +132,8 @@ impl fmt::Display for TableId {
 }
 
 // TODO: replace boilerplate code
-impl From<&Option<risingwave_pb::plan_common::DatabaseRefId>> for DatabaseId {
-    fn from(option: &Option<risingwave_pb::plan_common::DatabaseRefId>) -> Self {
+impl From<&Option<piestream_pb::plan_common::DatabaseRefId>> for DatabaseId {
+    fn from(option: &Option<piestream_pb::plan_common::DatabaseRefId>) -> Self {
         match option {
             Some(pb) => DatabaseId {
                 database_id: pb.database_id,
@@ -146,15 +146,15 @@ impl From<&Option<risingwave_pb::plan_common::DatabaseRefId>> for DatabaseId {
 }
 
 // TODO: replace boilerplate code
-impl From<&Option<risingwave_pb::plan_common::SchemaRefId>> for SchemaId {
-    fn from(option: &Option<risingwave_pb::plan_common::SchemaRefId>) -> Self {
+impl From<&Option<piestream_pb::plan_common::SchemaRefId>> for SchemaId {
+    fn from(option: &Option<piestream_pb::plan_common::SchemaRefId>) -> Self {
         match option {
             Some(pb) => SchemaId {
                 database_ref_id: DatabaseId::from(&pb.database_ref_id),
                 schema_id: pb.schema_id,
             },
             None => {
-                let pb = risingwave_pb::plan_common::SchemaRefId::default();
+                let pb = piestream_pb::plan_common::SchemaRefId::default();
                 SchemaId {
                     database_ref_id: DatabaseId::from(&pb.database_ref_id),
                     schema_id: pb.schema_id,
@@ -165,14 +165,14 @@ impl From<&Option<risingwave_pb::plan_common::SchemaRefId>> for SchemaId {
 }
 
 // TODO: replace boilerplate code
-impl From<&Option<risingwave_pb::plan_common::TableRefId>> for TableId {
-    fn from(option: &Option<risingwave_pb::plan_common::TableRefId>) -> Self {
+impl From<&Option<piestream_pb::plan_common::TableRefId>> for TableId {
+    fn from(option: &Option<piestream_pb::plan_common::TableRefId>) -> Self {
         match option {
             Some(pb) => TableId {
                 table_id: pb.table_id as u32,
             },
             None => {
-                let pb = risingwave_pb::plan_common::TableRefId::default();
+                let pb = piestream_pb::plan_common::TableRefId::default();
                 TableId {
                     table_id: pb.table_id as u32,
                 }
@@ -182,19 +182,19 @@ impl From<&Option<risingwave_pb::plan_common::TableRefId>> for TableId {
 }
 
 // TODO: replace boilerplate code
-impl From<&DatabaseId> for risingwave_pb::plan_common::DatabaseRefId {
+impl From<&DatabaseId> for piestream_pb::plan_common::DatabaseRefId {
     fn from(database_id: &DatabaseId) -> Self {
-        risingwave_pb::plan_common::DatabaseRefId {
+        piestream_pb::plan_common::DatabaseRefId {
             database_id: database_id.database_id,
         }
     }
 }
 
 // TODO: replace boilerplate code
-impl From<&SchemaId> for risingwave_pb::plan_common::SchemaRefId {
+impl From<&SchemaId> for piestream_pb::plan_common::SchemaRefId {
     fn from(schema_id: &SchemaId) -> Self {
-        risingwave_pb::plan_common::SchemaRefId {
-            database_ref_id: Some(risingwave_pb::plan_common::DatabaseRefId::from(
+        piestream_pb::plan_common::SchemaRefId {
+            database_ref_id: Some(piestream_pb::plan_common::DatabaseRefId::from(
                 &schema_id.database_ref_id,
             )),
             schema_id: schema_id.schema_id,
@@ -203,9 +203,9 @@ impl From<&SchemaId> for risingwave_pb::plan_common::SchemaRefId {
 }
 
 // TODO: replace boilerplate code
-impl From<&TableId> for risingwave_pb::plan_common::TableRefId {
+impl From<&TableId> for piestream_pb::plan_common::TableRefId {
     fn from(table_id: &TableId) -> Self {
-        risingwave_pb::plan_common::TableRefId {
+        piestream_pb::plan_common::TableRefId {
             schema_ref_id: None,
             table_id: table_id.table_id as i32,
         }
@@ -219,8 +219,8 @@ pub struct TableOption {
     pub ttl: Option<u32>, // second
 }
 
-impl From<&risingwave_pb::hummock::TableOption> for TableOption {
-    fn from(table_option: &risingwave_pb::hummock::TableOption) -> Self {
+impl From<&piestream_pb::hummock::TableOption> for TableOption {
+    fn from(table_option: &piestream_pb::hummock::TableOption) -> Self {
         let ttl = if table_option.ttl == hummock::TABLE_OPTION_DUMMY_TTL {
             None
         } else {
@@ -231,7 +231,7 @@ impl From<&risingwave_pb::hummock::TableOption> for TableOption {
     }
 }
 
-impl From<&TableOption> for risingwave_pb::hummock::TableOption {
+impl From<&TableOption> for piestream_pb::hummock::TableOption {
     fn from(table_option: &TableOption) -> Self {
         Self {
             ttl: table_option.ttl.unwrap_or(hummock::TABLE_OPTION_DUMMY_TTL),
@@ -267,7 +267,7 @@ impl TableOption {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::plan_common::{DatabaseRefId, SchemaRefId, TableRefId};
+    use piestream_pb::plan_common::{DatabaseRefId, SchemaRefId, TableRefId};
 
     use crate::catalog::{DatabaseId, SchemaId, TableId};
 

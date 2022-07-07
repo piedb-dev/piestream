@@ -18,7 +18,7 @@ use std::{fmt, iter};
 
 use auto_enums::auto_enum;
 use itertools::Itertools;
-use risingwave_pb::data::DataChunk as ProstDataChunk;
+use piestream_pb::data::DataChunk as ProstDataChunk;
 
 use super::ArrayResult;
 use crate::array::column::Column;
@@ -461,7 +461,7 @@ pub trait DataChunkTestExt {
     ///
     /// # Example
     /// ```
-    /// use risingwave_common::array::{DataChunk, DataChunkTestExt};
+    /// use piestream_common::array::{DataChunk, DataChunkTestExt};
     /// let chunk = DataChunk::from_pretty(
     ///     "I I I I      // type chars
     ///      2 5 . .      // '.' means NULL

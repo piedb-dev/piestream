@@ -1,6 +1,6 @@
 # Docker Images
 
-RisingWave currently *only supports Linux x86_64* for building docker images.
+piestream currently *only supports Linux x86_64* for building docker images.
 
 To build the images, simply run:
 
@@ -10,21 +10,21 @@ make docker
 
 in the project root.
 
-To ensure you are using the latest version of RisingWave image,
+To ensure you are using the latest version of piestream image,
 
 ```
-# Ensure risingwave image is of latest version
-docker pull ghcr.io/singularity-data/risingwave:latest
+# Ensure piestream image is of latest version
+docker pull ghcr.io/singularity-data/piestream:latest
 ```
 
-To start a RisingWave playground, run
+To start a piestream playground, run
 
 ```
 # Start playground
-docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/singularity-data/risingwave:latest playground
+docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/singularity-data/piestream:latest playground
 ```
 
-To start a RisingWave cluster, run
+To start a piestream cluster, run
 
 ```
 # Start all components
@@ -39,7 +39,7 @@ To clean all data, run:
 docker-compose down -v
 ```
 
-For RisingWave kernel hackers, we always recommend using [risedev](../src/risedevtool/README.md) to start the full cluster, instead of using docker images.
+For piestream kernel hackers, we always recommend using [risedev](../src/risedevtool/README.md) to start the full cluster, instead of using docker images.
 See [CONTRIBUTING](../CONTRIBUTING.md) for more information.
 
 # Generate docker-compose.yml

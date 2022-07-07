@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_cmd"
+name = "piestream_cmd"
 version = "0.1.10"
 edition = "2021"
 
@@ -11,12 +11,12 @@ anyhow = "1"
 clap = { version = "3", features = ["derive"] }
 log = { version = "0.4", features = ["release_max_level_info"] }
 madsim = "=0.2.0-alpha.3"
-risingwave_compactor = { path = "../storage/compactor" }
-risingwave_compute = { path = "../compute" }
-risingwave_ctl = { path = "../ctl" }
-risingwave_frontend = { path = "../frontend" }
-risingwave_meta = { path = "../meta" }
-risingwave_rt = { path = "../utils/runtime" }
+piestream_compactor = { path = "../storage/compactor" }
+piestream_compute = { path = "../compute" }
+piestream_ctl = { path = "../ctl" }
+piestream_frontend = { path = "../frontend" }
+piestream_meta = { path = "../meta" }
+piestream_rt = { path = "../utils/runtime" }
 tikv-jemallocator = "0.5"
 tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "rt",

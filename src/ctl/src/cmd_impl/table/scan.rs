@@ -14,13 +14,13 @@
 
 use anyhow::{anyhow, Result};
 use futures::{pin_mut, StreamExt};
-use risingwave_frontend::catalog::TableCatalog;
-use risingwave_rpc_client::MetaClient;
-use risingwave_storage::hummock::HummockStorage;
-use risingwave_storage::monitor::MonitoredStateStore;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::table::Distribution;
-use risingwave_storage::StateStore;
+use piestream_frontend::catalog::TableCatalog;
+use piestream_rpc_client::MetaClient;
+use piestream_storage::hummock::HummockStorage;
+use piestream_storage::monitor::MonitoredStateStore;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::table::Distribution;
+use piestream_storage::StateStore;
 
 use crate::common::HummockServiceOpts;
 

@@ -18,12 +18,12 @@ use std::rc::Rc;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::source::Info;
-use risingwave_pb::catalog::{Source as ProstSource, Table as ProstTable, TableSourceInfo};
-use risingwave_pb::plan_common::ColumnCatalog;
-use risingwave_sqlparser::ast::{ColumnDef, DataType as AstDataType, ObjectName, SqlOption};
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::Result;
+use piestream_pb::catalog::source::Info;
+use piestream_pb::catalog::{Source as ProstSource, Table as ProstTable, TableSourceInfo};
+use piestream_pb::plan_common::ColumnCatalog;
+use piestream_sqlparser::ast::{ColumnDef, DataType as AstDataType, ObjectName, SqlOption};
 
 use super::create_source::make_prost_source;
 use super::util::handle_with_properties;
@@ -176,8 +176,8 @@ mod tests {
     use std::collections::HashMap;
 
     use itertools::Itertools;
-    use risingwave_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
-    use risingwave_common::types::DataType;
+    use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+    use piestream_common::types::DataType;
 
     use crate::catalog::row_id_column_name;
     use crate::test_utils::LocalFrontend;

@@ -16,7 +16,7 @@ use std::cmp::Ordering::{Equal, Less};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use risingwave_hummock_sdk::VersionedComparator;
+use piestream_hummock_sdk::VersionedComparator;
 
 use super::super::{HummockResult, HummockValue};
 use crate::hummock::iterator::{Forward, HummockIterator, ReadOptions};
@@ -184,7 +184,7 @@ mod tests {
     use futures::executor::block_on;
     use itertools::Itertools;
     use rand::prelude::*;
-    use risingwave_hummock_sdk::key::key_with_epoch;
+    use piestream_hummock_sdk::key::key_with_epoch;
 
     use super::*;
     use crate::assert_bytes_eq;

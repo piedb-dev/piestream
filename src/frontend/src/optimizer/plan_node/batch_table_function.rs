@@ -15,9 +15,9 @@
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::TableFunctionNode;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::TableFunctionNode;
 
 use super::{PlanBase, PlanRef, PlanTreeNodeLeaf, ToBatchProst, ToDistributedBatch};
 use crate::expr::Expr;

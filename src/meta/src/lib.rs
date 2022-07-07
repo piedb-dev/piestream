@@ -37,7 +37,7 @@
 #![feature(custom_test_frameworks)]
 #![feature(lint_reasons)]
 #![cfg_attr(coverage, feature(no_coverage))]
-#![test_runner(risingwave_test_runner::test_runner::run_failpont_tests)]
+#![test_runner(piestream_test_runner::test_runner::run_failpont_tests)]
 
 extern crate core;
 
@@ -55,7 +55,7 @@ pub mod test_utils;
 use std::time::Duration;
 
 use clap::{ArgEnum, Parser};
-use risingwave_common::config::ComputeNodeConfig;
+use piestream_common::config::ComputeNodeConfig;
 
 use crate::manager::MetaOpts;
 use crate::rpc::server::{rpc_serve, AddressInfo, MetaStoreBackend};
@@ -113,7 +113,7 @@ pub struct MetaNodeOpts {
 }
 
 fn load_config(opts: &MetaNodeOpts) -> ComputeNodeConfig {
-    risingwave_common::config::load_config(&opts.config_path)
+    piestream_common::config::load_config(&opts.config_path)
 }
 
 use std::future::Future;

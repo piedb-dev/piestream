@@ -14,9 +14,9 @@
 
 //! For expression that only accept two nullable arguments as input.
 
-use risingwave_common::array::*;
-use risingwave_common::types::DataType;
-use risingwave_pb::expr::expr_node::Type;
+use piestream_common::array::*;
+use piestream_common::types::DataType;
+use piestream_pb::expr::expr_node::Type;
 
 use super::BoxedExpression;
 use crate::expr::template::BinaryNullableExpression;
@@ -141,10 +141,10 @@ pub fn new_distinct_from_expr(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::Row;
-    use risingwave_common::types::Scalar;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::array::Row;
+    use piestream_common::types::Scalar;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::expr::expr_node::Type;
 
     use crate::expr::build_from_prost;
     use crate::expr::test_utils::make_expression;

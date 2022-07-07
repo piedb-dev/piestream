@@ -19,14 +19,14 @@ use either::Either;
 use futures::stream::{select_with_strategy, PollNext};
 use futures::{pin_mut, Stream, StreamExt};
 use futures_async_stream::try_stream;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{ArrayBuilder, ArrayImpl, I64ArrayBuilder, StreamChunk};
-use risingwave_common::catalog::{ColumnId, Schema, TableId};
-use risingwave_common::error::{internal_error, Result, RwError, ToRwResult};
-use risingwave_connector::{ConnectorState, SplitImpl, SplitMetaData};
-use risingwave_source::connector_source::SourceContext;
-use risingwave_source::*;
-use risingwave_storage::{Keyspace, StateStore};
+use piestream_common::array::column::Column;
+use piestream_common::array::{ArrayBuilder, ArrayImpl, I64ArrayBuilder, StreamChunk};
+use piestream_common::catalog::{ColumnId, Schema, TableId};
+use piestream_common::error::{internal_error, Result, RwError, ToRwResult};
+use piestream_connector::{ConnectorState, SplitImpl, SplitMetaData};
+use piestream_source::connector_source::SourceContext;
+use piestream_source::*;
+use piestream_storage::{Keyspace, StateStore};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::{Mutex, Notify};
 
@@ -35,7 +35,7 @@ use crate::executor::monitor::StreamingMetrics;
 use crate::executor::source::state::SourceStateHandler;
 use crate::executor::*;
 
-/// [`SourceExecutor`] is a streaming source, from risingwave's batch table, or external systems
+/// [`SourceExecutor`] is a streaming source, from piestream's batch table, or external systems
 /// such as Kafka.
 pub struct SourceExecutor<S: StateStore> {
     actor_id: ActorId,
@@ -467,21 +467,21 @@ mod tests {
 
     use futures::StreamExt;
     use maplit::hashmap;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{ColumnDesc, Field, Schema};
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::{OrderPair, OrderType};
-    use risingwave_connector::datagen::DatagenSplit;
-    use risingwave_pb::catalog::StreamSourceInfo;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::plan_common::{
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{ColumnDesc, Field, Schema};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::{OrderPair, OrderType};
+    use piestream_connector::datagen::DatagenSplit;
+    use piestream_pb::catalog::StreamSourceInfo;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::plan_common::{
         ColumnCatalog as ProstColumnCatalog, ColumnDesc as ProstColumnDesc,
         RowFormatType as ProstRowFormatType,
     };
-    use risingwave_source::*;
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_source::*;
+    use piestream_storage::memory::MemoryStateStore;
     use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;

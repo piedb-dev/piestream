@@ -17,8 +17,8 @@ use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Utc};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-use risingwave_frontend::expr::DataTypeName;
-use risingwave_sqlparser::ast::{DataType, Expr, Value};
+use piestream_frontend::expr::DataTypeName;
+use piestream_sqlparser::ast::{DataType, Expr, Value};
 
 use crate::expr::sql_null;
 use crate::SqlGenerator;

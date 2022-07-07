@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use risingwave_pb::plan_common::TableRefId;
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
-use risingwave_pb::stream_plan::SourceNode;
+use piestream_pb::plan_common::TableRefId;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_pb::stream_plan::SourceNode;
 
 use super::{LogicalSource, PlanBase, ToStreamProst};
 use crate::optimizer::property::Distribution;

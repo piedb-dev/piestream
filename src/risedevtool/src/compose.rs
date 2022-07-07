@@ -65,7 +65,7 @@ pub struct ComposeFile {
 #[serde(rename_all = "kebab-case")]
 #[serde(deny_unknown_fields)]
 pub struct DockerImageConfig {
-    pub risingwave: String,
+    pub piestream: String,
     pub prometheus: String,
     pub grafana: String,
     pub minio: String,
@@ -151,11 +151,11 @@ impl Compose for ComputeNodeConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("compute-node");
         ComputeNodeService::apply_command_args(&mut command, self)?;
-        command.arg("--config-path").arg("/risingwave.toml");
+        command.arg("--config-path").arg("/piestream.toml");
 
         std::fs::copy(
-            Path::new("src").join("config").join("risingwave.toml"),
-            Path::new(&config.config_directory).join("risingwave.toml"),
+            Path::new("src").join("config").join("piestream.toml"),
+            Path::new(&config.config_directory).join("piestream.toml"),
         )?;
 
         let command = get_cmd_args(&command, true)?;
@@ -164,11 +164,11 @@ impl Compose for ComputeNodeConfig {
         let provide_minio = self.provide_minio.as_ref().unwrap();
 
         Ok(ComposeService {
-            image: config.image.risingwave.clone(),
+            image: config.image.piestream.clone(),
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
                 .into_iter()
                 .collect(),
-            volumes: [("./risingwave.toml:/risingwave.toml".to_string())]
+            volumes: [("./piestream.toml:/piestream.toml".to_string())]
                 .into_iter()
                 .collect(),
             command,
@@ -188,20 +188,20 @@ impl Compose for MetaNodeConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("meta-node");
         MetaNodeService::apply_command_args(&mut command, self)?;
-        command.arg("--config-path").arg("/risingwave.toml");
+        command.arg("--config-path").arg("/piestream.toml");
         let command = get_cmd_args(&command, true)?;
 
         std::fs::copy(
-            Path::new("src").join("config").join("risingwave.toml"),
-            Path::new(&config.config_directory).join("risingwave.toml"),
+            Path::new("src").join("config").join("piestream.toml"),
+            Path::new(&config.config_directory).join("piestream.toml"),
         )?;
 
         Ok(ComposeService {
-            image: config.image.risingwave.clone(),
+            image: config.image.piestream.clone(),
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
                 .into_iter()
                 .collect(),
-            volumes: [("./risingwave.toml:/risingwave.toml".to_string())]
+            volumes: [("./piestream.toml:/piestream.toml".to_string())]
                 .into_iter()
                 .collect(),
             command,
@@ -225,7 +225,7 @@ impl Compose for FrontendConfig {
         let provide_meta_node = self.provide_meta_node.as_ref().unwrap();
 
         Ok(ComposeService {
-            image: config.image.risingwave.clone(),
+            image: config.image.piestream.clone(),
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
                 .into_iter()
                 .collect(),
@@ -243,23 +243,23 @@ impl Compose for CompactorConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("compactor-node");
         CompactorService::apply_command_args(&mut command, self)?;
-        command.arg("--config-path").arg("/risingwave.toml");
+        command.arg("--config-path").arg("/piestream.toml");
         let command = get_cmd_args(&command, true)?;
 
         std::fs::copy(
-            Path::new("src").join("config").join("risingwave.toml"),
-            Path::new(&config.config_directory).join("risingwave.toml"),
+            Path::new("src").join("config").join("piestream.toml"),
+            Path::new(&config.config_directory).join("piestream.toml"),
         )?;
 
         let provide_meta_node = self.provide_meta_node.as_ref().unwrap();
         let provide_minio = self.provide_minio.as_ref().unwrap();
 
         Ok(ComposeService {
-            image: config.image.risingwave.clone(),
+            image: config.image.piestream.clone(),
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
                 .into_iter()
                 .collect(),
-            volumes: [("./risingwave.toml:/risingwave.toml".to_string())]
+            volumes: [("./piestream.toml:/piestream.toml".to_string())]
                 .into_iter()
                 .collect(),
             command,
@@ -422,7 +422,7 @@ impl Compose for GrafanaConfig {
                 "./grafana.ini:/etc/grafana/grafana.ini".to_string(),
                 "./grafana-risedev-datasource.yml:/etc/grafana/provisioning/datasources/grafana-risedev-datasource.yml".to_string(),
                 "./grafana-risedev-dashboard.yml:/etc/grafana/provisioning/dashboards/grafana-risedev-dashboard.yml".to_string(),
-                "./risingwave-dashboard.json:/risingwave-dashboard.json".to_string()
+                "./piestream-dashboard.json:/piestream-dashboard.json".to_string()
             ],
             healthcheck: Some(health_check_port(self.port)),
             ..Default::default()

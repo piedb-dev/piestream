@@ -16,20 +16,20 @@ use std::sync::Arc;
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use futures::StreamExt;
-use risingwave_batch::executor::test_utils::MockExecutor;
-use risingwave_batch::executor::{BoxedExecutor, FilterExecutor};
-use risingwave_common::array::column::Column;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::schema_test_utils::field_n;
-use risingwave_common::field_generator::FieldGeneratorImpl;
-use risingwave_common::types::{DataType, ScalarImpl};
-use risingwave_expr::expr::build_from_prost;
-use risingwave_pb::data::data_type::TypeName;
-use risingwave_pb::expr::expr_node::RexNode;
-use risingwave_pb::expr::expr_node::Type::{
+use piestream_batch::executor::test_utils::MockExecutor;
+use piestream_batch::executor::{BoxedExecutor, FilterExecutor};
+use piestream_common::array::column::Column;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::schema_test_utils::field_n;
+use piestream_common::field_generator::FieldGeneratorImpl;
+use piestream_common::types::{DataType, ScalarImpl};
+use piestream_expr::expr::build_from_prost;
+use piestream_pb::data::data_type::TypeName;
+use piestream_pb::expr::expr_node::RexNode;
+use piestream_pb::expr::expr_node::Type::{
     ConstantValue as TConstValue, Equal, InputRef, Modulus,
 };
-use risingwave_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
+use piestream_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
 use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
 
@@ -51,7 +51,7 @@ fn gen_data(data_type: DataType, batch_size: usize, batch_num: usize) -> Vec<Dat
             array_builder
                 .append_datum(&Some(ScalarImpl::Int64(
                     // TODO: We should remove this later when generator supports generate Datum,
-                    // see https://github.com/singularity-data/risingwave/issues/3519
+                    // see https://github.com/singularity-data/piestream/issues/3519
                     data_gen.generate(0).as_i64().unwrap(),
                 )))
                 .unwrap();
@@ -77,7 +77,7 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
     let expr = {
         let input_ref1 = ExprNode {
             expr_type: InputRef as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),
@@ -86,7 +86,7 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
 
         let literal2 = ExprNode {
             expr_type: TConstValue as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),
@@ -98,7 +98,7 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
         // $1 % 2
         let mod2 = ExprNode {
             expr_type: Modulus as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),
@@ -109,7 +109,7 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
 
         let literal0 = ExprNode {
             expr_type: TConstValue as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),
@@ -121,7 +121,7 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
         // $1 % 2 == 0
         ExprNode {
             expr_type: Equal as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Boolean as i32,
                 ..Default::default()
             }),

@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result, RwError};
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result, RwError};
 
 use super::{
     ColPrunable, LogicalFilter, LogicalProject, PlanBase, PlanRef, PredicatePushdown, StreamSource,

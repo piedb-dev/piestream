@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::Sink as ProstSink;
-use risingwave_sqlparser::ast::CreateSinkStatement;
+use piestream_common::error::Result;
+use piestream_pb::catalog::Sink as ProstSink;
+use piestream_sqlparser::ast::CreateSinkStatement;
 
 use super::util::handle_with_properties;
 use crate::binder::Binder;
@@ -74,7 +74,7 @@ pub async fn handle_create_sink(
 
 #[cfg(test)]
 pub mod tests {
-    use risingwave_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+    use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
 
     use crate::test_utils::{create_proto_file, LocalFrontend, PROTO_FILE_DATA};
 

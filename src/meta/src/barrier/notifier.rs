@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{Result, RwError};
+use piestream_common::error::{Result, RwError};
 use tokio::sync::oneshot;
 
 /// Used for notifying the status of a scheduled command/barrier.

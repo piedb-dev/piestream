@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_expr::expr::build_from_prost;
+use piestream_expr::expr::build_from_prost;
 
 use super::*;
 use crate::executor::ProjectExecutor;

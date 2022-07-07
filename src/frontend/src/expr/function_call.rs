@@ -14,8 +14,8 @@
 
 use itertools::Itertools;
 use num_integer::Integer as _;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
 
 use super::{align_types, cast_ok, infer_type, CastContext, Expr, ExprImpl, Literal};
 use crate::expr::ExprType;
@@ -243,9 +243,9 @@ impl Expr for FunctionCall {
         self.return_type.clone()
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
-        use risingwave_pb::expr::expr_node::*;
-        use risingwave_pb::expr::*;
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
+        use piestream_pb::expr::expr_node::*;
+        use piestream_pb::expr::*;
         ExprNode {
             expr_type: self.get_expr_type().into(),
             return_type: Some(self.return_type().to_protobuf()),

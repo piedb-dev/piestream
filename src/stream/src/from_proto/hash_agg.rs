@@ -16,8 +16,8 @@
 
 use std::marker::PhantomData;
 
-use risingwave_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
-use risingwave_storage::table::state_table::StateTable;
+use piestream_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
+use piestream_storage::table::state_table::StateTable;
 
 use super::*;
 use crate::executor::aggregation::{generate_state_tables_from_proto, AggCall};

@@ -39,8 +39,8 @@
 macro_rules! boolean {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Boolean,
-            risingwave_common::array::BoolArray
+            piestream_common::types::DataType::Boolean,
+            piestream_common::array::BoolArray
         }
     };
 }
@@ -51,8 +51,8 @@ pub(crate) use boolean;
 macro_rules! struct_type {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Struct{fields:_},
-            risingwave_common::array::StructArray
+            piestream_common::types::DataType::Struct{fields:_},
+            piestream_common::array::StructArray
         }
     };
 }
@@ -63,8 +63,8 @@ pub(crate) use struct_type;
 macro_rules! list {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::List{datatype:_},
-            risingwave_common::array::ListArray
+            piestream_common::types::DataType::List{datatype:_},
+            piestream_common::array::ListArray
         }
     };
 }
@@ -75,8 +75,8 @@ pub(crate) use list;
 macro_rules! int16 {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Int16,
-            risingwave_common::array::I16Array
+            piestream_common::types::DataType::Int16,
+            piestream_common::array::I16Array
         }
     };
 }
@@ -87,8 +87,8 @@ pub(crate) use int16;
 macro_rules! int32 {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Int32,
-            risingwave_common::array::I32Array
+            piestream_common::types::DataType::Int32,
+            piestream_common::array::I32Array
         }
     };
 }
@@ -99,8 +99,8 @@ pub(crate) use int32;
 macro_rules! int64 {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Int64,
-            risingwave_common::array::I64Array
+            piestream_common::types::DataType::Int64,
+            piestream_common::array::I64Array
         }
     };
 }
@@ -111,8 +111,8 @@ pub(crate) use int64;
 macro_rules! float32 {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Float32,
-            risingwave_common::array::F32Array
+            piestream_common::types::DataType::Float32,
+            piestream_common::array::F32Array
         }
     };
 }
@@ -123,8 +123,8 @@ pub(crate) use float32;
 macro_rules! float64 {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Float64,
-            risingwave_common::array::F64Array
+            piestream_common::types::DataType::Float64,
+            piestream_common::array::F64Array
         }
     };
 }
@@ -135,8 +135,8 @@ pub(crate) use float64;
 macro_rules! decimal {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Decimal { .. },
-            risingwave_common::array::DecimalArray
+            piestream_common::types::DataType::Decimal { .. },
+            piestream_common::array::DecimalArray
         }
     };
 }
@@ -147,8 +147,8 @@ pub(crate) use decimal;
 macro_rules! date {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Date,
-            risingwave_common::array::NaiveDateArray
+            piestream_common::types::DataType::Date,
+            piestream_common::array::NaiveDateArray
         }
     };
 }
@@ -159,8 +159,8 @@ pub(crate) use date;
 macro_rules! varchar {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Varchar,
-            risingwave_common::array::Utf8Array
+            piestream_common::types::DataType::Varchar,
+            piestream_common::array::Utf8Array
         }
     };
 }
@@ -171,8 +171,8 @@ pub(crate) use varchar;
 macro_rules! time {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Time,
-            risingwave_common::array::NaiveTimeArray
+            piestream_common::types::DataType::Time,
+            piestream_common::array::NaiveTimeArray
         }
     };
 }
@@ -183,8 +183,8 @@ pub(crate) use time;
 macro_rules! timestamp {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Timestamp,
-            risingwave_common::array::NaiveDateTimeArray
+            piestream_common::types::DataType::Timestamp,
+            piestream_common::array::NaiveDateTimeArray
         }
     };
 }
@@ -195,8 +195,8 @@ pub(crate) use timestamp;
 macro_rules! timestampz {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Timestampz,
-            risingwave_common::array::I64Array
+            piestream_common::types::DataType::Timestampz,
+            piestream_common::array::I64Array
         }
     };
 }
@@ -207,8 +207,8 @@ pub(crate) use timestampz;
 macro_rules! interval {
     ($macro:ident) => {
         $macro! {
-            risingwave_common::types::DataType::Interval,
-            risingwave_common::array::IntervalArray
+            piestream_common::types::DataType::Interval,
+            piestream_common::array::IntervalArray
         }
     };
 }

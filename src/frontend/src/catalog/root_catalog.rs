@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_common::catalog::{CatalogVersion, TableId, PG_CATALOG_SCHEMA_NAME};
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::{
+use piestream_common::catalog::{CatalogVersion, TableId, PG_CATALOG_SCHEMA_NAME};
+use piestream_common::error::Result;
+use piestream_pb::catalog::{
     Database as ProstDatabase, Schema as ProstSchema, Sink as ProstSink, Source as ProstSource,
     Table as ProstTable,
 };
@@ -235,10 +235,10 @@ impl Catalog {
         if let Some(source) = schema.get_source_by_name(relation_name) {
             // TODO: check if it is a materialized source and improve the err msg
             match source.source_type {
-                risingwave_pb::stream_plan::source_node::SourceType::Table => {
+                piestream_pb::stream_plan::source_node::SourceType::Table => {
                     Err(CatalogError::Duplicated("table", relation_name.to_string()).into())
                 }
-                risingwave_pb::stream_plan::source_node::SourceType::Source => {
+                piestream_pb::stream_plan::source_node::SourceType::Source => {
                     Err(CatalogError::Duplicated("source", relation_name.to_string()).into())
                 }
             }

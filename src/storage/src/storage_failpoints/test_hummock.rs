@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-use risingwave_meta::hummock::test_utils::setup_compute_env;
-use risingwave_meta::hummock::MockHummockMetaClient;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+use piestream_meta::hummock::test_utils::setup_compute_env;
+use piestream_meta::hummock::MockHummockMetaClient;
+use piestream_rpc_client::HummockMetaClient;
 
 use crate::hummock::compaction_group_client::DummyCompactionGroupClient;
 use crate::hummock::iterator::test_utils::mock_sstable_store;

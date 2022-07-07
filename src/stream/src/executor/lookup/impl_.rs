@@ -15,12 +15,12 @@
 use futures::{pin_mut, StreamExt};
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::{Row, RowRef};
-use risingwave_common::catalog::{ColumnDesc, Schema, TableId};
-use risingwave_common::error::Result;
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::{Row, RowRef};
+use piestream_common::catalog::{ColumnDesc, Schema, TableId};
+use piestream_common::error::Result;
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use super::sides::{stream_lookup_arrange_prev_epoch, stream_lookup_arrange_this_epoch};
 use crate::common::StreamChunkBuilder;

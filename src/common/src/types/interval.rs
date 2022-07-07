@@ -22,7 +22,7 @@ use anyhow::anyhow;
 use byteorder::{BigEndian, WriteBytesExt};
 use bytes::BytesMut;
 use num_traits::{CheckedAdd, CheckedSub};
-use risingwave_pb::data::IntervalUnit as IntervalUnitProto;
+use piestream_pb::data::IntervalUnit as IntervalUnitProto;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 

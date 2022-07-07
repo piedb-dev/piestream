@@ -16,8 +16,8 @@ use std::cmp::Ordering;
 use std::ops::Bound::{Excluded, Included, Unbounded};
 use std::ops::RangeBounds;
 
-use risingwave_hummock_sdk::key::user_key;
-use risingwave_pb::hummock::{Level, SstableInfo};
+use piestream_hummock_sdk::key::user_key;
+use piestream_pb::hummock::{Level, SstableInfo};
 
 use super::{HummockError, HummockResult};
 

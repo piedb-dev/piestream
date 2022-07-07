@@ -18,11 +18,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use itertools::Itertools;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::*;
-use risingwave_common::bail;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::types::{Datum, DatumRef, Scalar, ScalarImpl};
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::*;
+use piestream_common::bail;
+use piestream_common::buffer::Bitmap;
+use piestream_common::types::{Datum, DatumRef, Scalar, ScalarImpl};
 
 use super::StreamingAggStateImpl;
 use crate::executor::error::StreamExecutorResult;
@@ -335,7 +335,7 @@ impl<const DENSE_BITS: usize> StreamingAggStateImpl for StreamingApproxCountDist
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use risingwave_common::array_nonnull;
+    use piestream_common::array_nonnull;
 
     use super::*;
 

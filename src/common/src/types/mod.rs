@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use bytes::{Buf, BufMut};
-use risingwave_pb::data::DataType as ProstDataType;
+use piestream_pb::data::DataType as ProstDataType;
 use serde::{Deserialize, Serialize};
 
 use crate::array::{ArrayError, ArrayResult, NULL_VAL_FOR_HASH};
@@ -31,8 +31,8 @@ use std::io::Cursor;
 use std::str::FromStr;
 
 pub use native_type::*;
-use risingwave_pb::data::data_type::IntervalType::*;
-use risingwave_pb::data::data_type::{IntervalType, TypeName};
+use piestream_pb::data::data_type::IntervalType::*;
+use piestream_pb::data::data_type::{IntervalType, TypeName};
 pub use scalar_impl::*;
 pub mod chrono_wrapper;
 pub mod decimal;
@@ -51,7 +51,7 @@ pub use ops::CheckedAdd;
 pub use ordered_float::IntoOrdered;
 use paste::paste;
 use prost::Message;
-use risingwave_pb::expr::{ListValue as ProstListValue, StructValue as ProstStructValue};
+use piestream_pb::expr::{ListValue as ProstListValue, StructValue as ProstStructValue};
 
 use crate::array::{
     read_interval_unit, ArrayBuilderImpl, ListRef, ListValue, PrimitiveArrayItemType, StructRef,

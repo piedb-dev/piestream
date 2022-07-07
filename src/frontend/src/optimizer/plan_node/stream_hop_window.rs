@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
-use risingwave_pb::stream_plan::HopWindowNode;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_pb::stream_plan::HopWindowNode;
 
 use super::{LogicalHopWindow, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
 

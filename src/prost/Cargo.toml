@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "risingwave_pb"
+name = "piestream_pb"
 version = "0.1.10"
 
 [dependencies]

@@ -11,8 +11,8 @@
 // limitations under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use risingwave_sqlparser::dialect::GenericDialect;
-use risingwave_sqlparser::parser::Parser;
+use piestream_sqlparser::dialect::GenericDialect;
+use piestream_sqlparser::parser::Parser;
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");

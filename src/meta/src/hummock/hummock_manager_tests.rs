@@ -16,16 +16,16 @@ use std::cmp::Ordering;
 use std::time::Duration;
 
 use itertools::Itertools;
-use risingwave_common::util::epoch::INVALID_EPOCH;
-use risingwave_hummock_sdk::compact::compact_task_to_string;
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-// use risingwave_hummock_sdk::key_range::KeyRange;
-use risingwave_hummock_sdk::{
+use piestream_common::util::epoch::INVALID_EPOCH;
+use piestream_hummock_sdk::compact::compact_task_to_string;
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+// use piestream_hummock_sdk::key_range::KeyRange;
+use piestream_hummock_sdk::{
     HummockContextId, HummockSSTableId, FIRST_VERSION_ID, INVALID_VERSION_ID,
 };
-use risingwave_pb::common::{HostAddress, ParallelUnitType, WorkerType};
-use risingwave_pb::hummock::{
+use piestream_pb::common::{HostAddress, ParallelUnitType, WorkerType};
+use piestream_pb::hummock::{
     HummockPinnedSnapshot, HummockPinnedVersion, HummockSnapshot, HummockVersion, KeyRange,
 };
 

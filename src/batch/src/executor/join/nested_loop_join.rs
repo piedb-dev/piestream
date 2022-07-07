@@ -17,15 +17,15 @@ use std::sync::Arc;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::data_chunk_iter::RowRef;
-use risingwave_common::array::{Array, DataChunk, Row, Vis};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::{DataType, DatumRef};
-use risingwave_common::util::chunk_coalesce::{DataChunkBuilder, SlicedDataChunk};
-use risingwave_expr::expr::{build_from_prost as expr_build_from_prost, BoxedExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::column::Column;
+use piestream_common::array::data_chunk_iter::RowRef;
+use piestream_common::array::{Array, DataChunk, Row, Vis};
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::{DataType, DatumRef};
+use piestream_common::util::chunk_coalesce::{DataChunkBuilder, SlicedDataChunk};
+use piestream_expr::expr::{build_from_prost as expr_build_from_prost, BoxedExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::join::chunked_data::RowId;
 use crate::executor::join::row_level_iter::RowLevelIter;
@@ -584,14 +584,14 @@ impl NestedLoopJoinExecutor {
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::*;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::{DataType, ScalarRefImpl};
-    use risingwave_common::util::chunk_coalesce::DataChunkBuilder;
-    use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-    use risingwave_expr::expr::InputRefExpression;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::*;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::{DataType, ScalarRefImpl};
+    use piestream_common::util::chunk_coalesce::DataChunkBuilder;
+    use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+    use piestream_expr::expr::InputRefExpression;
+    use piestream_pb::expr::expr_node::Type;
 
     use crate::executor::join::nested_loop_join::{NestedLoopJoinExecutor, RowLevelIter};
     use crate::executor::join::JoinType;

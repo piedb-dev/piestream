@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::Row;
-use risingwave_common::types::{DataType, Datum, ScalarImpl};
-use risingwave_expr::expr::expr_unary::new_unary_expr;
-use risingwave_expr::expr::{Expression, LiteralExpression};
-use risingwave_pb::expr::expr_node::RexNode;
+use piestream_common::array::Row;
+use piestream_common::types::{DataType, Datum, ScalarImpl};
+use piestream_expr::expr::expr_unary::new_unary_expr;
+use piestream_expr::expr::{Expression, LiteralExpression};
+use piestream_pb::expr::expr_node::RexNode;
 
 use super::Expr;
 use crate::expr::ExprType;
@@ -66,7 +66,7 @@ impl Literal {
     /// This is a temporary workaround.
     ///
     /// TODO: evaluate expression in frontend.
-    /// Tracking issue <https://github.com/singularity-data/risingwave/issues/3479>
+    /// Tracking issue <https://github.com/singularity-data/piestream/issues/3479>
     pub fn eval_as(&self, return_type: DataType) -> ScalarImpl {
         assert!(self.data.is_some());
         let lit = LiteralExpression::try_from(&self.to_expr_proto()).unwrap();
@@ -83,8 +83,8 @@ impl Expr for Literal {
         self.data_type.clone()
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
-        use risingwave_pb::expr::*;
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
+        use piestream_pb::expr::*;
         ExprNode {
             expr_type: self.get_expr_type() as i32,
             return_type: Some(self.return_type().to_protobuf()),
@@ -98,16 +98,16 @@ fn literal_to_protobuf(d: &Datum) -> Option<RexNode> {
     let Some(d) = d.as_ref() else {
         return None;
     };
-    use risingwave_pb::expr::*;
+    use piestream_pb::expr::*;
     let body = d.to_protobuf();
     Some(RexNode::Constant(ConstantValue { body }))
 }
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{ListValue, StructValue};
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_pb::expr::expr_node::RexNode;
+    use piestream_common::array::{ListValue, StructValue};
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_pb::expr::expr_node::RexNode;
 
     use crate::expr::literal::literal_to_protobuf;
 

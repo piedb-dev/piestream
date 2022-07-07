@@ -15,16 +15,16 @@
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use itertools::Itertools;
-use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
-use risingwave_common::types::DataType;
-use risingwave_common::util::ordered::{deserialize_column_id, SENTINEL_CELL_ID};
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_common::util::value_encoding::deserialize_cell;
-use risingwave_storage::memory::MemoryStateStore;
-use risingwave_storage::store::ReadOptions;
-use risingwave_storage::StateStore;
+use piestream_common::array::stream_chunk::StreamChunkTestExt;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
+use piestream_common::types::DataType;
+use piestream_common::util::ordered::{deserialize_column_id, SENTINEL_CELL_ID};
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_common::util::value_encoding::deserialize_cell;
+use piestream_storage::memory::MemoryStateStore;
+use piestream_storage::store::ReadOptions;
+use piestream_storage::StateStore;
 
 use crate::executor::lookup::impl_::LookupExecutorParams;
 use crate::executor::lookup::LookupExecutor;

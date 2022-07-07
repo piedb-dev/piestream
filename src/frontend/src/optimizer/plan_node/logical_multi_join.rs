@@ -15,9 +15,9 @@
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::plan_common::JoinType;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::plan_common::JoinType;
 
 use super::{
     ColPrunable, LogicalFilter, LogicalJoin, LogicalProject, PlanBase, PlanNodeType, PlanRef,

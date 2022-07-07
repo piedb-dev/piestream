@@ -14,9 +14,9 @@
 
 use std::borrow::Cow;
 
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::types::DataType;
-use risingwave_pb::plan_common::ColumnCatalog as ProstColumnCatalog;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::types::DataType;
+use piestream_pb::plan_common::ColumnCatalog as ProstColumnCatalog;
 
 use super::row_id_column_desc;
 

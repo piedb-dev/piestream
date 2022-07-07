@@ -15,10 +15,10 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use risingwave_common::array::{ArrayRef, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::{ArrayRef, DataChunk, Row};
+use piestream_common::types::{DataType, Datum};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::{build_from_prost as expr_build_from_prost, BoxedExpression, Expression};
 use crate::{bail, ensure, ExprError, Result};
@@ -109,14 +109,14 @@ impl<'a> TryFrom<&'a ExprNode> for CoalesceExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{DataChunk, Row};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::{Scalar, ScalarImpl};
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::expr_node::RexNode;
-    use risingwave_pb::expr::expr_node::Type::Coalesce;
-    use risingwave_pb::expr::{ExprNode, FunctionCall};
+    use piestream_common::array::{DataChunk, Row};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::{Scalar, ScalarImpl};
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::expr_node::RexNode;
+    use piestream_pb::expr::expr_node::Type::Coalesce;
+    use piestream_pb::expr::{ExprNode, FunctionCall};
 
     use crate::expr::expr_coalesce::CoalesceExpression;
     use crate::expr::test_utils::make_input_ref;

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use futures::executor::block_on;
-use risingwave_hummock_sdk::key::key_with_epoch;
+use piestream_hummock_sdk::key::key_with_epoch;
 
 use crate::assert_bytes_eq;
 use crate::hummock::iterator::test_utils::mock_sstable_store;

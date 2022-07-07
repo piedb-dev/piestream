@@ -18,8 +18,8 @@ use std::string::String;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::Result;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::Result;
 
 use super::{
     gen_filter_and_pushdown, BatchProject, ColPrunable, PlanBase, PlanRef, PlanTreeNodeUnary,
@@ -383,9 +383,9 @@ impl ToStream for LogicalProject {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::catalog::Field;
-    use risingwave_common::types::DataType;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::catalog::Field;
+    use piestream_common::types::DataType;
+    use piestream_pb::expr::expr_node::Type;
 
     use super::*;
     use crate::expr::{assert_eq_input_ref, FunctionCall, InputRef, Literal};

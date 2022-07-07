@@ -15,14 +15,14 @@
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{tonic_err, Result as RwResult};
-use risingwave_pb::catalog::Source;
-use risingwave_pb::stream_service::barrier_complete_response::GroupedSstableInfo;
-use risingwave_pb::stream_service::stream_service_server::StreamService;
-use risingwave_pb::stream_service::*;
-use risingwave_stream::executor::{Barrier, Epoch};
-use risingwave_stream::task::{LocalStreamManager, StreamEnvironment};
+use piestream_common::catalog::TableId;
+use piestream_common::error::{tonic_err, Result as RwResult};
+use piestream_pb::catalog::Source;
+use piestream_pb::stream_service::barrier_complete_response::GroupedSstableInfo;
+use piestream_pb::stream_service::stream_service_server::StreamService;
+use piestream_pb::stream_service::*;
+use piestream_stream::executor::{Barrier, Epoch};
+use piestream_stream::task::{LocalStreamManager, StreamEnvironment};
 use tonic::{Request, Response, Status};
 
 #[derive(Clone)]
@@ -224,7 +224,7 @@ impl StreamService for StreamServiceImpl {
 
 impl StreamServiceImpl {
     async fn create_source_inner(&self, source: &Source) -> RwResult<()> {
-        use risingwave_pb::catalog::source::Info;
+        use piestream_pb::catalog::source::Info;
 
         let id = TableId::new(source.id); // TODO: use SourceId instead
 

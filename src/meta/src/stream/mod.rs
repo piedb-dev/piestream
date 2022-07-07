@@ -21,9 +21,9 @@ mod stream_manager;
 mod test_fragmenter;
 
 pub use meta::*;
-use risingwave_common::error::Result;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::StreamNode;
+use piestream_common::error::Result;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::StreamNode;
 pub use scheduler::*;
 pub use source_manager::*;
 pub use stream_graph::*;

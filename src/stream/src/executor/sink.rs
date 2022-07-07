@@ -14,8 +14,8 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::catalog::Schema;
-use risingwave_connector::sink::Sink;
+use piestream_common::catalog::Schema;
+use piestream_connector::sink::Sink;
 
 use super::error::StreamExecutorError;
 use super::{BoxedExecutor, Executor, Message};
@@ -62,7 +62,7 @@ impl<S: Sink + 'static + Send> Executor for SinkExecutor<S> {
 #[cfg(test)]
 mod test {
 
-    use risingwave_connector::sink::mysql::{MySQLConfig, MySQLSink};
+    use piestream_connector::sink::mysql::{MySQLConfig, MySQLSink};
 
     use super::*;
     use crate::executor::test_utils::*;

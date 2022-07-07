@@ -12,7 +12,7 @@
 
 ## Background
 
-RisingWave provides both real-time analytical query as well as high-concurrent access to Materialized Views. Therefore, both the frontend and compute nodes are designed to be scalable, and they may share the same set of host machines or not, depending on cluster size and whether the user cares about resource isolation.
+piestream provides both real-time analytical query as well as high-concurrent access to Materialized Views. Therefore, both the frontend and compute nodes are designed to be scalable, and they may share the same set of host machines or not, depending on cluster size and whether the user cares about resource isolation.
 
 Meanwhile, components such as metadata provider, scheduler, monitoring are more suitable for a centralized design. For example, a typical on-premise deployment may look like below, where the dotted boxes represent minimal unit of deployment (VM or container).
 

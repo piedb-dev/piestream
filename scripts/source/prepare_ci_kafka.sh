@@ -6,7 +6,7 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/.." || exit 1
 
-KAFKA_BIN="$SCRIPT_PATH/../../.risingwave/bin/kafka/bin"
+KAFKA_BIN="$SCRIPT_PATH/../../.piestream/bin/kafka/bin"
 
 echo "Create topics"
 for filename in "$SCRIPT_PATH"/test_data/*; do

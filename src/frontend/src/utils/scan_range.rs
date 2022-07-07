@@ -14,9 +14,9 @@
 
 use std::ops::{Bound, RangeBounds};
 
-use risingwave_common::types::ScalarImpl;
-use risingwave_pb::batch_plan::scan_range::Bound as BoundProst;
-use risingwave_pb::batch_plan::ScanRange as ScanRangeProst;
+use piestream_common::types::ScalarImpl;
+use piestream_pb::batch_plan::scan_range::Bound as BoundProst;
+use piestream_pb::batch_plan::ScanRange as ScanRangeProst;
 
 /// See also [`ScanRangeProst`]
 #[derive(Debug, Clone)]

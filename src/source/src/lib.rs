@@ -38,8 +38,8 @@ use enum_as_inner::EnumAsInner;
 use madsim::collections::HashMap;
 pub use manager::*;
 pub use parser::*;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::error::Result;
+use piestream_common::array::StreamChunk;
+use piestream_common::error::Result;
 pub use table_v2::*;
 
 use crate::connector_source::{ConnectorSource, ConnectorSourceReader};

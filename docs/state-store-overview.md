@@ -1,6 +1,6 @@
-# An Overview of RisingWave State Store
+# An Overview of piestream State Store
 
-- [An Overview of RisingWave State Store](#an-overview-of-risingwave-state-store)
+- [An Overview of piestream State Store](#an-overview-of-piestream-state-store)
   - [Overview](#overview)
   - [Architecture](#architecture)
   - [The Hummock User API](#the-hummock-user-api)
@@ -16,7 +16,7 @@
 
 ## Overview
 
-In RisingWave, all streaming executors store their data into a state store. This KV state store is backed by a service called Hummock, a cloud-native LSM-Tree-based storage engine. Hummock provides key-value API, and stores all data on S3-compatible service. However, it is not a KV store for general purpose, but a storage engine co-designed with RisingWave streaming engine and optimized for streaming workload.
+In piestream, all streaming executors store their data into a state store. This KV state store is backed by a service called Hummock, a cloud-native LSM-Tree-based storage engine. Hummock provides key-value API, and stores all data on S3-compatible service. However, it is not a KV store for general purpose, but a storage engine co-designed with piestream streaming engine and optimized for streaming workload.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ This leads to the design of Hummock, the cloud-native KV-based streaming state s
 
 ## The Hummock User API
 
-[source code](https://github.com/singularity-data/risingwave/blob/main/src/storage/src/hummock/mod.rs)
+[source code](https://github.com/singularity-data/piestream/blob/main/src/storage/src/hummock/mod.rs)
 
 In this part, we will introduce how users can use Hummock as a KV store.
 
@@ -73,7 +73,7 @@ In this part, we will discuss how data are stored and organized in Hummock inter
 
 ### Storage Format
 
-[SST encoding source code](https://github.com/singularity-data/risingwave/tree/main/src/storage/src/hummock/sstable)
+[SST encoding source code](https://github.com/singularity-data/piestream/tree/main/src/storage/src/hummock/sstable)
 
 All key-value pairs are stored in block-based SSTables. Each user key is associated with an epoch. In SSTs, key-value pairs are sorted first by user key (lexicographical order), and then by epoch (largest to smallest).
 
@@ -123,7 +123,7 @@ Hummock implements the following iterators:
 - `MergeIterator`: iterates SSTables with overlapping keyspaces.
 - `UserIterator`: wraps internal iterators and outputs user key-value with epoch <= read epoch.
 
-[iterators source code](https://github.com/singularity-data/risingwave/tree/main/src/storage/src/hummock/iterator)
+[iterators source code](https://github.com/singularity-data/piestream/tree/main/src/storage/src/hummock/iterator)
 
 
 ### Compaction
@@ -136,7 +136,7 @@ To support MVCC read without affecting compaction, we track the epoch low waterm
 
 ### Transaction Management with Hummock Manager
 
-[source code of Hummock manager on meta service](https://github.com/singularity-data/risingwave/tree/main/src/meta/src/hummock)
+[source code of Hummock manager on meta service](https://github.com/singularity-data/piestream/tree/main/src/meta/src/hummock)
 
 In this part, we discuss how Hummock coordinates between multiple compute nodes. We will introduce key concepts like “snapshot”, “version”, and give examples on how Hummock manages them.
 
@@ -156,7 +156,7 @@ When there is no reference to a version, all file deletions in this version can 
 
 ### Checkpointing in Streaming
 
-[related PR](https://github.com/singularity-data/risingwave/pull/602)
+[related PR](https://github.com/singularity-data/piestream/pull/602)
 
 Now we discuss how streaming executors and streaming manager use Hummock as a state store.
 

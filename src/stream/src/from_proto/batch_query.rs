@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
-use risingwave_pb::plan_common::CellBasedTableDesc;
-use risingwave_storage::table::storage_table::StorageTable;
-use risingwave_storage::table::Distribution;
-use risingwave_storage::StateStore;
+use piestream_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
+use piestream_pb::plan_common::CellBasedTableDesc;
+use piestream_storage::table::storage_table::StorageTable;
+use piestream_storage::table::Distribution;
+use piestream_storage::StateStore;
 
 use super::*;
 use crate::executor::BatchQueryExecutor;

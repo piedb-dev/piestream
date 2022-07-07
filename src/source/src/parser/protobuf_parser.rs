@@ -16,12 +16,12 @@ use std::path::Path;
 
 use protobuf::descriptor::FileDescriptorSet;
 use protobuf::RepeatedField;
-use risingwave_common::array::Op;
-use risingwave_common::error::ErrorCode::{self, InternalError, ItemNotFound, ProtocolError};
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::{DataType, Datum, Decimal, OrderedF32, OrderedF64, ScalarImpl};
-use risingwave_expr::vector_op::cast::{str_to_date, str_to_timestamp};
-use risingwave_pb::plan_common::ColumnDesc;
+use piestream_common::array::Op;
+use piestream_common::error::ErrorCode::{self, InternalError, ItemNotFound, ProtocolError};
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::{DataType, Datum, Decimal, OrderedF32, OrderedF64, ScalarImpl};
+use piestream_expr::vector_op::cast::{str_to_date, str_to_timestamp};
+use piestream_pb::plan_common::ColumnDesc;
 use serde::de::Deserialize;
 use serde_protobuf::de::Deserializer;
 use serde_protobuf::descriptor::{Descriptors, FieldDescriptor, FieldType};
@@ -293,12 +293,12 @@ mod tests {
     use std::io::Write;
 
     use maplit::hashmap;
-    use risingwave_common::catalog::ColumnId;
-    use risingwave_common::error::Result;
-    use risingwave_common::test_prelude::*;
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_expr::vector_op::cast::str_to_date;
-    use risingwave_pb::plan_common::ColumnDesc;
+    use piestream_common::catalog::ColumnId;
+    use piestream_common::error::Result;
+    use piestream_common::test_prelude::*;
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_expr::vector_op::cast::str_to_date;
+    use piestream_pb::plan_common::ColumnDesc;
     use serde_value::Value;
     use tempfile::Builder;
 
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_map_to_columns() {
-        use risingwave_common::types::*;
+        use piestream_common::types::*;
 
         let parser = create_parser(PROTO_NESTED_FILE_DATA).unwrap();
         let columns = parser.map_to_columns().unwrap();

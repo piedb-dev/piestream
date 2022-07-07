@@ -43,7 +43,7 @@ async fn load_risedev_config(
     Ok((steps, services))
 }
 
-pub enum RisingWaveService {
+pub enum piestreamService {
     Compute(Vec<OsString>),
     Meta(Vec<OsString>),
     Frontend(Vec<OsString>),
@@ -53,11 +53,11 @@ pub enum RisingWaveService {
 pub async fn playground() -> Result<()> {
     eprintln!("launching playground");
 
-    risingwave_rt::oneshot_common();
-    risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new_default());
+    piestream_rt::oneshot_common();
+    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
 
     // Enable tokio console for `./risedev p` by replacing the above statement to:
-    // risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new(false, true));
+    // piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new(false, true));
 
     let profile = if let Ok(profile) = std::env::var("PLAYGROUND_PROFILE") {
         profile.to_string()
@@ -78,28 +78,28 @@ pub async fn playground() -> Result<()> {
                     ServiceConfig::ComputeNode(c) => {
                         let mut command = Command::new("compute-node");
                         ComputeNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(RisingWaveService::Compute(
+                        rw_services.push(piestreamService::Compute(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::MetaNode(c) => {
                         let mut command = Command::new("meta-node");
                         MetaNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(RisingWaveService::Meta(
+                        rw_services.push(piestreamService::Meta(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::FrontendV2(c) => {
                         let mut command = Command::new("frontend-node");
                         FrontendService::apply_command_args(&mut command, c)?;
-                        rw_services.push(RisingWaveService::Frontend(
+                        rw_services.push(piestreamService::Frontend(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::Compactor(c) => {
                         let mut command = Command::new("compactor");
                         CompactorService::apply_command_args(&mut command, c)?;
-                        rw_services.push(RisingWaveService::Compactor(
+                        rw_services.push(piestreamService::Compactor(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
@@ -113,22 +113,22 @@ pub async fn playground() -> Result<()> {
         Err(e) => {
             tracing::warn!("Failed to load risedev config. All components will be started using the default command line options.\n{}", e);
             vec![
-                RisingWaveService::Meta(vec!["--backend".into(), "mem".into()]),
-                RisingWaveService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
-                RisingWaveService::Frontend(vec![]),
+                piestreamService::Meta(vec!["--backend".into(), "mem".into()]),
+                piestreamService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
+                piestreamService::Frontend(vec![]),
             ]
         }
     };
 
     for service in services {
         match service {
-            RisingWaveService::Meta(mut opts) => {
+            piestreamService::Meta(mut opts) => {
                 opts.insert(0, "meta-node".into());
                 tracing::info!("starting meta-node thread with cli args: {:?}", opts);
-                let opts = risingwave_meta::MetaNodeOpts::parse_from(opts);
+                let opts = piestream_meta::MetaNodeOpts::parse_from(opts);
                 tracing::info!("opts: {:#?}", opts);
                 let _meta_handle = tokio::spawn(async move {
-                    risingwave_meta::start(opts).await;
+                    piestream_meta::start(opts).await;
                     tracing::info!("meta is stopped, shutdown all nodes");
                     // As a playground, it's fine to just kill everything.
                     std::process::exit(0);
@@ -136,29 +136,29 @@ pub async fn playground() -> Result<()> {
                 // wait for the service to be ready
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-            RisingWaveService::Compute(mut opts) => {
+            piestreamService::Compute(mut opts) => {
                 opts.insert(0, "compute-node".into());
                 tracing::info!("starting compute-node thread with cli args: {:?}", opts);
-                let opts = risingwave_compute::ComputeNodeOpts::parse_from(opts);
+                let opts = piestream_compute::ComputeNodeOpts::parse_from(opts);
                 tracing::info!("opts: {:#?}", opts);
                 let _compute_handle =
-                    tokio::spawn(async move { risingwave_compute::start(opts).await });
+                    tokio::spawn(async move { piestream_compute::start(opts).await });
             }
-            RisingWaveService::Frontend(mut opts) => {
+            piestreamService::Frontend(mut opts) => {
                 opts.insert(0, "frontend-node".into());
                 tracing::info!("starting frontend-node thread with cli args: {:?}", opts);
-                let opts = risingwave_frontend::FrontendOpts::parse_from(opts);
+                let opts = piestream_frontend::FrontendOpts::parse_from(opts);
                 tracing::info!("opts: {:#?}", opts);
                 let _frontend_handle =
-                    tokio::spawn(async move { risingwave_frontend::start(opts).await });
+                    tokio::spawn(async move { piestream_frontend::start(opts).await });
             }
-            RisingWaveService::Compactor(mut opts) => {
+            piestreamService::Compactor(mut opts) => {
                 opts.insert(0, "compactor".into());
                 tracing::info!("starting compactor thread with cli args: {:?}", opts);
-                let opts = risingwave_compactor::CompactorOpts::parse_from(opts);
+                let opts = piestream_compactor::CompactorOpts::parse_from(opts);
                 tracing::info!("opts: {:#?}", opts);
                 let _compactor_handle =
-                    tokio::spawn(async move { risingwave_compactor::start(opts).await });
+                    tokio::spawn(async move { piestream_compactor::start(opts).await });
             }
         }
     }

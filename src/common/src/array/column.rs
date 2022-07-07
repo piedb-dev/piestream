@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use risingwave_pb::data::Column as ProstColumn;
+use piestream_pb::data::Column as ProstColumn;
 
 use super::{Array, ArrayResult};
 use crate::array::{ArrayImpl, ArrayRef};

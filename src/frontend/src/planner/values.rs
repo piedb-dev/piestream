@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 
 use crate::binder::BoundValues;
 use crate::optimizer::plan_node::{LogicalValues, PlanRef};

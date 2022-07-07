@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use futures::executor::block_on;
 use itertools::Itertools;
-use risingwave_hummock_sdk::key::{key_with_epoch, Epoch};
-use risingwave_hummock_sdk::HummockSSTableId;
-use risingwave_object_store::object::{
+use piestream_hummock_sdk::key::{key_with_epoch, Epoch};
+use piestream_hummock_sdk::HummockSSTableId;
+use piestream_object_store::object::{
     InMemObjectStore, ObjectStore, ObjectStoreImpl, ObjectStoreRef,
 };
 

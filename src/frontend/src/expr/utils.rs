@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use fixedbitset::FixedBitSet;
-use risingwave_common::types::ScalarImpl;
-use risingwave_pb::expr::expr_node::Type;
+use piestream_common::types::ScalarImpl;
+use piestream_pb::expr::expr_node::Type;
 
 use super::{ExprImpl, ExprRewriter, ExprVisitor, FunctionCall, InputRef};
 use crate::expr::ExprType;
@@ -382,8 +382,8 @@ impl From<CollectInputRef> for FixedBitSet {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_pb::expr::expr_node::Type;
 
     use super::{fold_boolean_constant, push_down_not};
     use crate::expr::{ExprImpl, FunctionCall, InputRef};

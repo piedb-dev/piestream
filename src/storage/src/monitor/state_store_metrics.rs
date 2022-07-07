@@ -20,8 +20,8 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, Histogram, HistogramVec, IntGauge, Opts, Registry,
 };
-use risingwave_common::monitor::Print;
-use risingwave_hummock_sdk::HummockSSTableId;
+use piestream_common::monitor::Print;
+use piestream_hummock_sdk::HummockSSTableId;
 
 use super::monitor_process;
 use crate::hummock::sstable_store::SstableStoreRef;
@@ -87,7 +87,7 @@ macro_rules! define_state_store_metrics {
         /// [`StateStoreMetrics`] stores the performance and IO metrics of `XXXStore` such as
         /// `RocksDBStateStore` and `TikvStateStore`.
         /// In practice, keep in mind that this represents the whole Hummock utilization of
-        /// a `RisingWave` instance. More granular utilization of per `materialization view`
+        /// a `piestream` instance. More granular utilization of per `materialization view`
         /// job or an executor should be collected by views like `StateStats` and `JobStats`.
         #[derive(Debug)]
         pub struct StateStoreMetrics {

@@ -15,10 +15,10 @@
 use std::str::FromStr;
 
 use itertools::Itertools;
-use risingwave_common::catalog::Field;
-use risingwave_common::error::{ErrorCode, RwError};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, ObjectName, TableAlias};
+use piestream_common::catalog::Field;
+use piestream_common::error::{ErrorCode, RwError};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, ObjectName, TableAlias};
 
 use super::{Binder, Relation, Result};
 use crate::expr::{ExprImpl, InputRef};

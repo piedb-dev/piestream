@@ -15,7 +15,7 @@
 // Data-driven tests.
 
 use anyhow::{anyhow, Result};
-use risingwave_sqlparser::parser::Parser;
+use piestream_sqlparser::parser::Parser;
 use serde::Deserialize;
 
 /// `TestCase` will be deserialized from yaml.

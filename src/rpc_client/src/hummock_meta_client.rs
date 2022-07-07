@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use risingwave_hummock_sdk::{HummockEpoch, HummockSSTableId, HummockVersionId, LocalSstableInfo};
-use risingwave_pb::hummock::{
+use piestream_hummock_sdk::{HummockEpoch, HummockSSTableId, HummockVersionId, LocalSstableInfo};
+use piestream_pb::hummock::{
     CompactTask, CompactionGroup, HummockVersion, SstableIdInfo, SubscribeCompactTasksResponse,
     VacuumTask,
 };

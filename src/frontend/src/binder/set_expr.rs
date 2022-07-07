@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::SetExpr;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::SetExpr;
 
 use crate::binder::{Binder, BoundSelect, BoundValues};
 

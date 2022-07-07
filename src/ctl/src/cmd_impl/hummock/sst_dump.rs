@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use bytes::Buf;
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_object_store::object::{BlockLocation, ObjectStore};
-use risingwave_rpc_client::HummockMetaClient;
-use risingwave_storage::hummock::CompressionAlgorithm;
-use risingwave_storage::monitor::StoreLocalStatistic;
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_object_store::object::{BlockLocation, ObjectStore};
+use piestream_rpc_client::HummockMetaClient;
+use piestream_storage::hummock::CompressionAlgorithm;
+use piestream_storage::monitor::StoreLocalStatistic;
 
 use crate::common::HummockServiceOpts;
 

@@ -15,10 +15,10 @@ gh release create "${BUILDKITE_TAG}" --generate-notes -d -p
 
 echo "--- Download artifacts"
 mkdir -p target/debug && cd target/debug
-buildkite-agent artifact download risingwave-release .
-mv risingwave-release risingwave
-chmod +x risingwave
-tar -czvf risingwave-"${BUILDKITE_TAG}"-x86_64-unknown-linux.tar.gz risingwave
+buildkite-agent artifact download piestream-release .
+mv piestream-release piestream
+chmod +x piestream
+tar -czvf piestream-"${BUILDKITE_TAG}"-x86_64-unknown-linux.tar.gz piestream
 
 echo "--- Release upload asset"
-gh release upload "${BUILDKITE_TAG}" risingwave-"${BUILDKITE_TAG}"-x86_64-unknown-linux.tar.gz
+gh release upload "${BUILDKITE_TAG}" piestream-"${BUILDKITE_TAG}"-x86_64-unknown-linux.tar.gz

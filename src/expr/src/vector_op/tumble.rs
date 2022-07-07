@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use chrono::NaiveDateTime;
-use risingwave_common::types::{IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper};
+use piestream_common::types::{IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper};
 
 use super::cast::date_to_timestamp;
 use crate::{ExprError, Result};
@@ -52,7 +52,7 @@ pub fn tumble_start_date_time(
 #[cfg(test)]
 mod tests {
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
-    use risingwave_common::types::{IntervalUnit, NaiveDateTimeWrapper};
+    use piestream_common::types::{IntervalUnit, NaiveDateTimeWrapper};
 
     use super::tumble_start_date_time;
 

@@ -21,10 +21,10 @@
 #[macro_use]
 mod test_utils;
 use matches::assert_matches;
-use risingwave_sqlparser::ast::*;
-use risingwave_sqlparser::keywords::ALL_KEYWORDS;
-use risingwave_sqlparser::parser::ParserError;
-use risingwave_sqlparser::test_utils::*;
+use piestream_sqlparser::ast::*;
+use piestream_sqlparser::keywords::ALL_KEYWORDS;
+use piestream_sqlparser::parser::ParserError;
+use piestream_sqlparser::test_utils::*;
 use test_utils::{expr_from_projection, join, number, only, table, table_alias};
 
 #[test]

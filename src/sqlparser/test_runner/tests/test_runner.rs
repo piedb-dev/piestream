@@ -15,5 +15,5 @@
 // Traverses the 'testdata/' directory and runs all files.
 #[test]
 fn run_all_test_files() {
-    risingwave_sqlparser_test_runner::run_all_test_files();
+    piestream_sqlparser_test_runner::run_all_test_files();
 }

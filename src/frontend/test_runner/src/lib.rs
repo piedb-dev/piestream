@@ -23,17 +23,17 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 pub use resolve_id::*;
-use risingwave_frontend::binder::Binder;
-use risingwave_frontend::handler::{
+use piestream_frontend::binder::Binder;
+use piestream_frontend::handler::{
     create_index, create_mv, create_source, create_table, drop_table,
 };
-use risingwave_frontend::optimizer::PlanRef;
-use risingwave_frontend::planner::Planner;
-use risingwave_frontend::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
-use risingwave_frontend::test_utils::{create_proto_file, LocalFrontend};
-use risingwave_frontend::FrontendOpts;
-use risingwave_sqlparser::ast::{ObjectName, Statement, WithProperties};
-use risingwave_sqlparser::parser::Parser;
+use piestream_frontend::optimizer::PlanRef;
+use piestream_frontend::planner::Planner;
+use piestream_frontend::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
+use piestream_frontend::test_utils::{create_proto_file, LocalFrontend};
+use piestream_frontend::FrontendOpts;
+use piestream_sqlparser::ast::{ObjectName, Statement, WithProperties};
+use piestream_sqlparser::parser::Parser;
 use serde::{Deserialize, Serialize};
 
 #[serde_with::skip_serializing_none]

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::{DataType, Decimal, IntervalUnit, ScalarImpl};
-use risingwave_expr::vector_op::cast::str_parse;
-use risingwave_sqlparser::ast::{DateTimeField, Expr, Value};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::{DataType, Decimal, IntervalUnit, ScalarImpl};
+use piestream_expr::vector_op::cast::str_parse;
+use piestream_sqlparser::ast::{DateTimeField, Expr, Value};
 
 use crate::binder::Binder;
 use crate::expr::{align_types, Expr as _, ExprImpl, ExprType, FunctionCall, Literal};
@@ -244,8 +244,8 @@ pub fn parse_interval(s: &str) -> Result<Vec<TimeStrToken>> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::build_from_prost;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::build_from_prost;
 
     use crate::binder::test_utils::mock_binder;
     use crate::expr::{Expr, ExprImpl, ExprType, FunctionCall};

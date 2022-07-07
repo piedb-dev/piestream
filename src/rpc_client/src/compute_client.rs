@@ -14,12 +14,12 @@
 
 use std::time::Duration;
 
-use risingwave_common::util::addr::HostAddr;
-use risingwave_pb::batch_plan::exchange_info::DistributionMode;
-use risingwave_pb::batch_plan::{ExchangeInfo, PlanFragment, PlanNode, TaskId, TaskOutputId};
-use risingwave_pb::task_service::exchange_service_client::ExchangeServiceClient;
-use risingwave_pb::task_service::task_service_client::TaskServiceClient;
-use risingwave_pb::task_service::{
+use piestream_common::util::addr::HostAddr;
+use piestream_pb::batch_plan::exchange_info::DistributionMode;
+use piestream_pb::batch_plan::{ExchangeInfo, PlanFragment, PlanNode, TaskId, TaskOutputId};
+use piestream_pb::task_service::exchange_service_client::ExchangeServiceClient;
+use piestream_pb::task_service::task_service_client::TaskServiceClient;
+use piestream_pb::task_service::{
     CreateTaskRequest, CreateTaskResponse, ExecuteRequest, GetDataRequest, GetDataResponse,
     GetStreamRequest, GetStreamResponse,
 };

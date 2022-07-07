@@ -34,11 +34,11 @@ mod union;
 
 // import for submodules
 use itertools::Itertools;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::try_match_expand;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::StreamNode;
-use risingwave_storage::{Keyspace, StateStore};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::try_match_expand;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::StreamNode;
+use piestream_storage::{Keyspace, StateStore};
 
 use self::batch_query::*;
 use self::chain::*;

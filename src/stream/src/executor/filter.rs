@@ -15,10 +15,10 @@
 use std::fmt::{Debug, Formatter};
 
 use itertools::Itertools;
-use risingwave_common::array::{Array, ArrayImpl, Op, StreamChunk, Vis};
-use risingwave_common::buffer::BitmapBuilder;
-use risingwave_common::catalog::Schema;
-use risingwave_expr::expr::BoxedExpression;
+use piestream_common::array::{Array, ArrayImpl, Op, StreamChunk, Vis};
+use piestream_common::buffer::BitmapBuilder;
+use piestream_common::catalog::Schema;
+use piestream_expr::expr::BoxedExpression;
 
 use super::{
     Executor, ExecutorInfo, PkIndicesRef, SimpleExecutor, SimpleExecutorWrapper,
@@ -171,13 +171,13 @@ impl SimpleExecutor for SimpleFilterExecutor {
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-    use risingwave_expr::expr::InputRefExpression;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+    use piestream_expr::expr::InputRefExpression;
+    use piestream_pb::expr::expr_node::Type;
 
     use super::super::test_utils::MockSource;
     use super::super::*;

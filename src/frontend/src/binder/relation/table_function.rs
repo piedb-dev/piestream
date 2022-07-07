@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::catalog::Field;
-use risingwave_common::error::ErrorCode;
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::FunctionArg;
+use piestream_common::catalog::Field;
+use piestream_common::error::ErrorCode;
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::FunctionArg;
 
 use super::{Binder, Result};
 use crate::binder::FunctionType;

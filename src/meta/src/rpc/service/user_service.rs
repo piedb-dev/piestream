@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{tonic_err, Result as RwResult};
-use risingwave_pb::user::grant_privilege::Object;
-use risingwave_pb::user::user_service_server::UserService;
-use risingwave_pb::user::{
+use piestream_common::error::{tonic_err, Result as RwResult};
+use piestream_pb::user::grant_privilege::Object;
+use piestream_pb::user::user_service_server::UserService;
+use piestream_pb::user::{
     CreateUserRequest, CreateUserResponse, DropUserRequest, DropUserResponse, GrantPrivilege,
     GrantPrivilegeRequest, GrantPrivilegeResponse, RevokePrivilegeRequest, RevokePrivilegeResponse,
 };

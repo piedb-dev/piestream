@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_pb::user::UserInfo;
+use piestream_pb::user::UserInfo;
 
 use crate::model::MetadataModel;
 
@@ -36,7 +36,7 @@ impl MetadataModel for UserInfo {
         prost
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.name.clone())
     }
 }

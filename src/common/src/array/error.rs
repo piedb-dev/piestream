@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub use anyhow::anyhow;
-use risingwave_pb::ProstFieldNotFound;
+use piestream_pb::ProstFieldNotFound;
 use thiserror::Error;
 
 use crate::error::{ErrorCode, RwError};

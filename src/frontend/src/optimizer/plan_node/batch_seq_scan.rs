@@ -16,11 +16,11 @@ use std::fmt;
 use std::ops::Bound;
 
 use itertools::Itertools;
-use risingwave_common::error::Result;
-use risingwave_common::types::ScalarImpl;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::{RowSeqScanNode, SysRowSeqScanNode};
-use risingwave_pb::plan_common::ColumnDesc as ProstColumnDesc;
+use piestream_common::error::Result;
+use piestream_common::types::ScalarImpl;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::{RowSeqScanNode, SysRowSeqScanNode};
+use piestream_pb::plan_common::ColumnDesc as ProstColumnDesc;
 
 use super::{PlanBase, PlanRef, ToBatchProst, ToDistributedBatch};
 use crate::catalog::ColumnId;

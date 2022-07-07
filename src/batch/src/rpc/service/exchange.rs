@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{Result, ToRwResult};
-use risingwave_pb::task_service::GetDataResponse;
+use piestream_common::error::{Result, ToRwResult};
+use piestream_pb::task_service::GetDataResponse;
 use tonic::Status;
 
 type ExchangeDataSender = tokio::sync::mpsc::Sender<std::result::Result<GetDataResponse, Status>>;
@@ -54,7 +54,7 @@ impl ExchangeWriter for GrpcExchangeWriter {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::task_service::GetDataResponse;
+    use piestream_pb::task_service::GetDataResponse;
 
     use crate::rpc::service::exchange::{ExchangeWriter, GrpcExchangeWriter};
 

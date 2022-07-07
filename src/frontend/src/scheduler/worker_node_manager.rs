@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use rand::distributions::{Distribution as RandDistribution, Uniform};
-use risingwave_common::bail;
-use risingwave_common::types::ParallelUnitId;
-use risingwave_pb::common::WorkerNode;
+use piestream_common::bail;
+use piestream_common::types::ParallelUnitId;
+use piestream_pb::common::WorkerNode;
 
 use crate::scheduler::SchedulerResult;
 
@@ -111,8 +111,8 @@ impl WorkerNodeManager {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::util::addr::HostAddr;
-    use risingwave_pb::common::{worker_node, WorkerType};
+    use piestream_common::util::addr::HostAddr;
+    use piestream_pb::common::{worker_node, WorkerType};
 
     #[test]
     fn test_worker_node_manager() {

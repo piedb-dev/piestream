@@ -21,12 +21,12 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use itertools::Itertools;
-use risingwave_common::error::{internal_error, ErrorCode, Result};
-use risingwave_common::try_match_expand;
-use risingwave_common::types::ParallelUnitId;
-use risingwave_pb::common::worker_node::State;
-use risingwave_pb::common::{HostAddress, ParallelUnit, ParallelUnitType, WorkerNode, WorkerType};
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
+use piestream_common::error::{internal_error, ErrorCode, Result};
+use piestream_common::try_match_expand;
+use piestream_common::types::ParallelUnitId;
+use piestream_pb::common::worker_node::State;
+use piestream_pb::common::{HostAddress, ParallelUnit, ParallelUnitType, WorkerNode, WorkerType};
+use piestream_pb::meta::subscribe_response::{Info, Operation};
 use tokio::sync::oneshot::Sender;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio::task::JoinHandle;

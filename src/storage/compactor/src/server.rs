@@ -17,16 +17,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use risingwave_common::service::MetricsManager;
-use risingwave_common::util::addr::HostAddr;
-use risingwave_object_store::object::parse_remote_object_store;
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::hummock::compactor_service_server::CompactorServiceServer;
-use risingwave_rpc_client::MetaClient;
-use risingwave_storage::hummock::compaction_executor::CompactionExecutor;
-use risingwave_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
-use risingwave_storage::hummock::SstableStore;
-use risingwave_storage::monitor::{
+use piestream_common::service::MetricsManager;
+use piestream_common::util::addr::HostAddr;
+use piestream_object_store::object::parse_remote_object_store;
+use piestream_pb::common::WorkerType;
+use piestream_pb::hummock::compactor_service_server::CompactorServiceServer;
+use piestream_rpc_client::MetaClient;
+use piestream_storage::hummock::compaction_executor::CompactionExecutor;
+use piestream_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
+use piestream_storage::hummock::SstableStore;
+use piestream_storage::monitor::{
     monitor_cache, HummockMetrics, ObjectStoreMetrics, StateStoreMetrics,
 };
 use tokio::sync::oneshot::Sender;
@@ -96,7 +96,7 @@ pub async fn compactor_serve(
             meta_client.clone(),
             Duration::from_millis(config.server.heartbeat_interval_ms as u64),
         ),
-        risingwave_storage::hummock::compactor::Compactor::start_compactor(
+        piestream_storage::hummock::compactor::Compactor::start_compactor(
             storage_config,
             hummock_meta_client,
             sstable_store,

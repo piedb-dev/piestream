@@ -34,10 +34,10 @@ use std::rc::Rc;
 use downcast_rs::{impl_downcast, Downcast};
 use dyn_clone::{self, DynClone};
 use paste::paste;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_pb::batch_plan::PlanNode as BatchPlanProst;
-use risingwave_pb::stream_plan::StreamNode as StreamPlanProst;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_pb::batch_plan::PlanNode as BatchPlanProst;
+use piestream_pb::stream_plan::StreamNode as StreamPlanProst;
 
 use super::property::{Distribution, Order};
 
@@ -314,7 +314,7 @@ use crate::session::OptimizerContextRef;
 /// macro_rules! use_plan {
 ///     ([], $({ $convention:ident, $name:ident }),*) => {};
 /// }
-/// risingwave_frontend::for_all_plan_nodes! { use_plan }
+/// piestream_frontend::for_all_plan_nodes! { use_plan }
 /// ```
 /// See the following implementations for example.
 #[macro_export]

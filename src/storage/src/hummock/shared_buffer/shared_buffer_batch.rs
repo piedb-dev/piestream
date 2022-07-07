@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use risingwave_hummock_sdk::CompactionGroupId;
+use piestream_hummock_sdk::CompactionGroupId;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -277,8 +277,8 @@ impl<D: HummockIteratorDirection> HummockIterator for SharedBufferBatchIterator<
 mod tests {
 
     use itertools::Itertools;
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-    use risingwave_hummock_sdk::key::user_key;
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_hummock_sdk::key::user_key;
 
     use super::*;
     use crate::hummock::iterator::test_utils::{iterator_test_key_of, iterator_test_key_of_epoch};

@@ -14,7 +14,7 @@
 
 use bytes::{BufMut, Bytes, BytesMut};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use risingwave_storage::hummock::{
+use piestream_storage::hummock::{
     Block, BlockBuilder, BlockBuilderOptions, BlockHolder, BlockIterator, CompressionAlgorithm,
 };
 

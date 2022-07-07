@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use parking_lot::lock_api::ArcRwLockReadGuard;
 use parking_lot::{RawRwLock, RwLock};
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::user::{GrantPrivilege, UserInfo};
-use risingwave_rpc_client::MetaClient;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_pb::user::{GrantPrivilege, UserInfo};
+use piestream_rpc_client::MetaClient;
 use tokio::sync::watch::Receiver;
 
 use crate::user::user_manager::UserInfoManager;

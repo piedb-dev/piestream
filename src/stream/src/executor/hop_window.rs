@@ -17,12 +17,12 @@ use std::num::NonZeroUsize;
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use num_traits::CheckedSub;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{DataChunk, StreamChunk, Vis};
-use risingwave_common::types::{DataType, IntervalUnit, ScalarImpl};
-use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-use risingwave_expr::expr::{Expression, InputRefExpression, LiteralExpression};
-use risingwave_pb::expr::expr_node;
+use piestream_common::array::column::Column;
+use piestream_common::array::{DataChunk, StreamChunk, Vis};
+use piestream_common::types::{DataType, IntervalUnit, ScalarImpl};
+use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+use piestream_expr::expr::{Expression, InputRefExpression, LiteralExpression};
+use piestream_pb::expr::expr_node;
 
 use super::error::StreamExecutorError;
 use super::{BoxedExecutor, Executor, ExecutorInfo, Message};
@@ -62,7 +62,7 @@ impl Executor for HopWindowExecutor {
         self.execute_inner().boxed()
     }
 
-    fn schema(&self) -> &risingwave_common::catalog::Schema {
+    fn schema(&self) -> &piestream_common::catalog::Schema {
         &self.info.schema
     }
 
@@ -121,7 +121,7 @@ impl HopWindowExecutor {
 
         let hop_start = new_binary_expr(
             expr_node::Type::TumbleStart,
-            risingwave_common::types::DataType::Timestamp,
+            piestream_common::types::DataType::Timestamp,
             new_binary_expr(
                 expr_node::Type::Subtract,
                 DataType::Timestamp,
@@ -224,9 +224,9 @@ impl HopWindowExecutor {
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::{DataType, IntervalUnit};
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::{DataType, IntervalUnit};
 
     use crate::executor::test_utils::MockSource;
     use crate::executor::{Executor, ExecutorInfo, StreamChunk};

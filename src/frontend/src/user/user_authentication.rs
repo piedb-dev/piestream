@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use md5;
-use risingwave_pb::user::auth_info::EncryptionType;
-use risingwave_pb::user::AuthInfo;
+use piestream_pb::user::auth_info::EncryptionType;
+use piestream_pb::user::AuthInfo;
 use sha2::{Digest, Sha256};
 
 // SHA-256 is not supported in PostgreSQL protocol. We need to implement SCRAM-SHA-256 instead
@@ -40,7 +40,7 @@ const VALID_MD5_ENCRYPTED_LEN: usize = MD5_ENCRYPTED_PREFIX.len() + 32;
 /// For an SHA-256 encrypted password, rolpassword column will begin with the string SHA-256:
 /// followed by a 64-character hexadecimal SHA-256 hash, which is the SHA-256 hash of the user's
 /// password concatenated to their user name. The SHA-256 will be the default hash algorithm for
-/// Risingwave.
+/// piestream.
 ///
 /// A password that does not follow either of those formats is assumed to be unencrypted.
 #[inline(always)]

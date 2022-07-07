@@ -14,8 +14,8 @@
 
 //! For expression that only accept two arguments + 1 bytes writer as input.
 
-use risingwave_common::array::{I32Array, NaiveDateTimeArray, Utf8Array};
-use risingwave_common::types::DataType;
+use piestream_common::array::{I32Array, NaiveDateTimeArray, Utf8Array};
+use piestream_common::types::DataType;
 
 use super::Expression;
 use crate::expr::template::BinaryBytesExpression;
@@ -112,8 +112,8 @@ for_all_utf8_utf8_op! { impl_utf8_utf8 }
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{DataChunk, Row};
-    use risingwave_common::types::{Datum, ScalarImpl};
+    use piestream_common::array::{DataChunk, Row};
+    use piestream_common::types::{Datum, ScalarImpl};
 
     use super::*;
     use crate::expr::LiteralExpression;

@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use risingwave_common::catalog::SysCatalogReaderRef;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::Result;
-use risingwave_common::util::addr::{is_local_address, HostAddr};
-use risingwave_source::SourceManagerRef;
-use risingwave_storage::StateStoreImpl;
+use piestream_common::catalog::SysCatalogReaderRef;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::Result;
+use piestream_common::util::addr::{is_local_address, HostAddr};
+use piestream_source::SourceManagerRef;
+use piestream_storage::StateStoreImpl;
 
 use crate::executor::BatchMetrics;
 use crate::task::{BatchEnvironment, TaskOutput, TaskOutputId};

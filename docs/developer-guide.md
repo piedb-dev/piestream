@@ -1,10 +1,10 @@
 # Developer guide
 
-This guide is intended to be used by contributors to learn about how to develop RisingWave. The instructions about how to submit code changes are included in [contributing guidelines](../CONTRIBUTING.md).
+This guide is intended to be used by contributors to learn about how to develop piestream. The instructions about how to submit code changes are included in [contributing guidelines](../CONTRIBUTING.md).
 
-If you have questions, you can search for existing discussions or start a new discussion in the [Discussions forum of RisingWave](https://github.com/singularity-data/risingwave/discussions), or ask in the RisingWave Community channel on Slack. Please use the [invitation link](https://join.slack.com/t/risingwave-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw) to join the channel.
+If you have questions, you can search for existing discussions or start a new discussion in the [Discussions forum of piestream](https://github.com/singularity-data/piestream/discussions), or ask in the piestream Community channel on Slack. Please use the [invitation link](https://join.slack.com/t/piestream-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw) to join the channel.
 
-To report bugs, create a [GitHub issue](https://github.com/singularity-data/risingwave/issues/new/choose).
+To report bugs, create a [GitHub issue](https://github.com/singularity-data/piestream/issues/new/choose).
 
 
 ## Table of contents
@@ -43,19 +43,19 @@ To report bugs, create a [GitHub issue](https://github.com/singularity-data/risi
 
 ## Read the design docs
 
-Before you start to make code changes, ensure that you understand the design and implementation of RisingWave. We recommend that you read the design docs listed in [docs/README.md](README.md) first.
+Before you start to make code changes, ensure that you understand the design and implementation of piestream. We recommend that you read the design docs listed in [docs/README.md](README.md) first.
 
 ## Learn about the code structure
 
 - The `src` folder contains all of the kernel components, refer to [src/README.md](../src/README.md) for more details.
-- The `docker` folder contains Docker files to build and start RisingWave.
+- The `docker` folder contains Docker files to build and start piestream.
 - The `e2e_test` folder contains the latest end-to-end test cases.
-- The `docs` folder contains the design docs. If you want to learn about how RisingWave is designed and implemented, check out the design docs here.
-- The `dashboard` folder contains RisingWave dashboard v2.
+- The `docs` folder contains the design docs. If you want to learn about how piestream is designed and implemented, check out the design docs here.
+- The `dashboard` folder contains piestream dashboard v2.
 
 ## Set up the development environment
 
-RiseDev is the development mode of RisingWave. To develop RisingWave, you need to build from the source code and run RiseDev. RiseDev can be built on macOS and Linux. It has the following dependencies:
+RiseDev is the development mode of piestream. To develop piestream, you need to build from the source code and run RiseDev. RiseDev can be built on macOS and Linux. It has the following dependencies:
 
 * Rust toolchain
 * CMake
@@ -89,7 +89,7 @@ You can now build RiseDev and start a dev cluster. It is as simple as:
 psql -h localhost -p 4566 -d dev -U root
 ```
 
-The default dev cluster includes metadata-node, compute-node and frontend-node processes, and an embedded volatile in-memory state storage. No data will be persisted. This configuration is intended to make it easier to develop and debug RisingWave.
+The default dev cluster includes metadata-node, compute-node and frontend-node processes, and an embedded volatile in-memory state storage. No data will be persisted. This configuration is intended to make it easier to develop and debug piestream.
 
 To stop the cluster:
 
@@ -116,7 +116,7 @@ There are a few components that you can configure in RiseDev.
 Use the `./risedev configure` command to start the interactive configuration mode, in which you can enable and disable components.
 
 - Hummock (MinIO + MinIO-CLI): Enable this component to persist state data.
-- Prometheus and Grafana: Enable this component to view RisingWave metrics. You can view the metrics through a built-in Grafana dashboard.
+- Prometheus and Grafana: Enable this component to view piestream metrics. You can view the metrics through a built-in Grafana dashboard.
 - Etcd: Enable this component if you want to persist metadata node data.
 - Kafka: Enable this component if you want to create a streaming source from a Kafka topic.
 - Jaeger: Use this component for tracing.
@@ -167,7 +167,7 @@ For more information, refer to `README.md` under `src/risedevtool`.
 To start the playground (all-in-one process) from IDE or command line, you can use:
 
 ```shell
-cargo run --bin risingwave -- playground
+cargo run --bin piestream -- playground
 ```
 
 Then, connect to the playground instance via:
@@ -178,7 +178,7 @@ psql -h localhost -p 4566 -d dev -U root
 
 ## Develop the dashboard
 
-Currently, RisingWave has two versions of dashboards. You can use RiseDev config to select which version to use.
+Currently, piestream has two versions of dashboards. You can use RiseDev config to select which version to use.
 
 The dashboard will be available at `http://127.0.0.1:5691/` on meta node.
 
@@ -202,7 +202,7 @@ RiseDev supports several observability components.
 
 ### Cluster Control
 
-`risectl` is the tool for providing internal access to the RisingWave cluster. See
+`risectl` is the tool for providing internal access to the piestream cluster. See
 
 ```
 cargo run --bin risectl -- --help
@@ -211,7 +211,7 @@ cargo run --bin risectl -- --help
 ... or
 
 ```
-./risingwave risectl --help
+./piestream risectl --help
 ```
 
 for more information.
@@ -228,7 +228,7 @@ service in `risedev.yml` and start a new dev cluster to allow the components to 
 
 ### Dashboard
 
-You may use RisingWave Dashboard to see actors in the system. It will be started along with meta node.
+You may use piestream Dashboard to see actors in the system. It will be started along with meta node.
 
 ### Logging
 
@@ -244,11 +244,11 @@ If you need to adjust log levels, change the logging filters in `utils/runtime/l
 
 Before you submit a PR, fully test the code changes and perform necessary checks.
 
-The RisingWave project enforces several checks in CI. Every time the code is modified, you need to perform the checks and ensure they pass.
+The piestream project enforces several checks in CI. Every time the code is modified, you need to perform the checks and ensure they pass.
 
 ### Lint
 
-RisingWave requires all code to pass fmt, clippy, sort and hakari checks. Run the following commands to install test tools and perform these checks.
+piestream requires all code to pass fmt, clippy, sort and hakari checks. Run the following commands to install test tools and perform these checks.
 
 ```shell
 ./risedev install-tools # Install required tools for running unit tests
@@ -272,11 +272,11 @@ If you want to see the coverage report, run this command:
 
 ### Planner tests
 
-RisingWave's SQL frontend has SQL planner tests. For more information, see [Planner Test Guide](../src/frontend/test_runner/README.md).
+piestream's SQL frontend has SQL planner tests. For more information, see [Planner Test Guide](../src/frontend/test_runner/README.md).
 
 ### End-to-end tests
 
-Use [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) to run RisingWave e2e tests.
+Use [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) to run piestream e2e tests.
 
 sqllogictest installation is included when you install test tools with the `./risedev install-tools` command. You may also install it with:
 
@@ -303,7 +303,7 @@ After running e2e tests, you may kill the cluster and clean data.
 ./risedev clean-data
 ```
 
-RisingWave's codebase is constantly changing. The persistent data might not be stable. In case of unexpected decode errors, try `./risedev clean-data` first.
+piestream's codebase is constantly changing. The persistent data might not be stable. In case of unexpected decode errors, try `./risedev clean-data` first.
 
 ### End-to-end tests on CI
 

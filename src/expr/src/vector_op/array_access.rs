@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::ListRef;
-use risingwave_common::types::{Scalar, ToOwnedDatum};
+use piestream_common::array::ListRef;
+use piestream_common::types::{Scalar, ToOwnedDatum};
 
 use crate::Result;
 
@@ -36,8 +36,8 @@ pub fn array_access<T: Scalar>(l: Option<ListRef>, r: Option<i32>) -> Result<Opt
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::array::ListValue;
-    use risingwave_common::types::ScalarImpl;
+    use piestream_common::array::ListValue;
+    use piestream_common::types::ScalarImpl;
 
     use super::*;
 

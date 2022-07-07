@@ -23,18 +23,18 @@ use dyn_clone::DynClone;
 use futures::future::{try_join_all, BoxFuture};
 use futures::{stream, FutureExt, StreamExt, TryFutureExt};
 use itertools::Itertools;
-use risingwave_common::config::constant::hummock::{CompactionFilterFlag, TABLE_OPTION_DUMMY_TTL};
-use risingwave_common::config::StorageConfig;
-use risingwave_common::util::compress::decompress_data;
-use risingwave_hummock_sdk::compact::compact_task_to_string;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-use risingwave_hummock_sdk::key::{
+use piestream_common::config::constant::hummock::{CompactionFilterFlag, TABLE_OPTION_DUMMY_TTL};
+use piestream_common::config::StorageConfig;
+use piestream_common::util::compress::decompress_data;
+use piestream_hummock_sdk::compact::compact_task_to_string;
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+use piestream_hummock_sdk::key::{
     extract_table_id_and_epoch, get_epoch, get_table_id, Epoch, FullKey,
 };
-use risingwave_hummock_sdk::key_range::KeyRange;
-use risingwave_hummock_sdk::{CompactionGroupId, HummockSSTableId, VersionedComparator};
-use risingwave_pb::hummock::{CompactTask, SstableInfo, SubscribeCompactTasksResponse, VacuumTask};
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_hummock_sdk::key_range::KeyRange;
+use piestream_hummock_sdk::{CompactionGroupId, HummockSSTableId, VersionedComparator};
+use piestream_pb::hummock::{CompactTask, SstableInfo, SubscribeCompactTasksResponse, VacuumTask};
+use piestream_rpc_client::HummockMetaClient;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
@@ -142,7 +142,7 @@ pub struct TTLCompactionFilter {
 
 impl CompactionFilter for TTLCompactionFilter {
     fn filter(&self, key: &[u8]) -> bool {
-        pub use risingwave_common::util::epoch::Epoch;
+        pub use piestream_common::util::epoch::Epoch;
         let (table_id, epoch) = extract_table_id_and_epoch(key);
         match table_id {
             Some(table_id) => match self.table_id_to_ttl.get(&table_id) {
@@ -406,7 +406,7 @@ impl Compactor {
     /// Handle a compaction task and report its status to hummock manager.
     /// Always return `Ok` and let hummock manager handle errors.
     pub async fn compact(context: Arc<CompactorContext>, mut compact_task: CompactTask) -> bool {
-        use risingwave_common::catalog::TableOption;
+        use piestream_common::catalog::TableOption;
         tracing::info!("Ready to handle compaction task: {}", compact_task.task_id,);
         let group_label = compact_task.compaction_group_id.to_string();
         let cur_level_label = compact_task.input_ssts[0].level_idx.to_string();
@@ -457,7 +457,7 @@ impl Compactor {
             .start_timer();
 
         if !compact_task.vnode_mappings.is_empty() {
-            compact_task.splits = vec![risingwave_pb::hummock::KeyRange {
+            compact_task.splits = vec![piestream_pb::hummock::KeyRange {
                 left: vec![],
                 right: vec![],
                 inf: false,
@@ -574,7 +574,7 @@ impl Compactor {
             for (sst, unit_id, table_ids) in ssts {
                 let sst_info = SstableInfo {
                     id: sst.id,
-                    key_range: Some(risingwave_pb::hummock::KeyRange {
+                    key_range: Some(piestream_pb::hummock::KeyRange {
                         left: sst.meta.smallest_key.clone(),
                         right: sst.meta.largest_key.clone(),
                         inf: false,

@@ -16,11 +16,11 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use enum_as_inner::EnumAsInner;
-use risingwave_common::config::StorageConfig;
-use risingwave_object_store::object::{
+use piestream_common::config::StorageConfig;
+use piestream_object_store::object::{
     parse_local_object_store, parse_remote_object_store, ObjectStoreImpl,
 };
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_rpc_client::HummockMetaClient;
 
 use crate::error::StorageResult;
 use crate::hummock::compaction_group_client::CompactionGroupClientImpl;

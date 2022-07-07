@@ -16,8 +16,8 @@ use std::collections::HashMap;
 
 use rand::seq::SliceRandom;
 use rand::Rng;
-use risingwave_frontend::expr::{func_sigs, DataTypeName, ExprType, FuncSign};
-use risingwave_sqlparser::ast::{
+use piestream_frontend::expr::{func_sigs, DataTypeName, ExprType, FuncSign};
+use piestream_sqlparser::ast::{
     BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr, Ident, ObjectName,
     TrimWhereField, UnaryOperator, Value,
 };

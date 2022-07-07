@@ -17,15 +17,15 @@ use std::num::NonZeroUsize;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use num_traits::CheckedSub;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{DataChunk, Vis};
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::{DataType, IntervalUnit, ScalarImpl};
-use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-use risingwave_expr::expr::{Expression, InputRefExpression, LiteralExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::expr::expr_node;
+use piestream_common::array::column::Column;
+use piestream_common::array::{DataChunk, Vis};
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::{DataType, IntervalUnit, ScalarImpl};
+use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+use piestream_expr::expr::{Expression, InputRefExpression, LiteralExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::expr::expr_node;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -174,7 +174,7 @@ impl HopWindowExecutor {
         .boxed();
         let hop_expr = new_binary_expr(
             expr_node::Type::TumbleStart,
-            risingwave_common::types::DataType::Timestamp,
+            piestream_common::types::DataType::Timestamp,
             new_binary_expr(
                 expr_node::Type::Subtract,
                 DataType::Timestamp,
@@ -289,9 +289,9 @@ impl HopWindowExecutor {
 #[cfg(test)]
 mod tests {
     use futures::stream::StreamExt;
-    use risingwave_common::array::{DataChunk, DataChunkTestExt};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
+    use piestream_common::array::{DataChunk, DataChunkTestExt};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;

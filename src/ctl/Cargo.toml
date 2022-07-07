@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_ctl"
+name = "piestream_ctl"
 version = "0.1.10"
 edition = "2021"
 
@@ -8,13 +8,13 @@ anyhow = "1"
 bytes = "1"
 clap = { version = "3", features = ["derive"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
-risingwave_common = { path = "../common" }
-risingwave_frontend = { path = "../frontend" }
-risingwave_hummock_sdk = { path = "../storage/hummock_sdk" }
-risingwave_object_store = { path = "../object_store" }
-risingwave_pb = { path = "../prost" }
-risingwave_rpc_client = { path = "../rpc_client" }
-risingwave_storage = { path = "../storage" }
+piestream_common = { path = "../common" }
+piestream_frontend = { path = "../frontend" }
+piestream_hummock_sdk = { path = "../storage/hummock_sdk" }
+piestream_object_store = { path = "../object_store" }
+piestream_pb = { path = "../prost" }
+piestream_rpc_client = { path = "../rpc_client" }
+piestream_storage = { path = "../storage" }
 size = "0.2"
 tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "rt",

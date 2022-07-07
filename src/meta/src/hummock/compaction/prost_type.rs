@@ -16,8 +16,8 @@ use std::borrow::Borrow;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::error::Result;
-use risingwave_hummock_sdk::CompactionGroupId;
+use piestream_common::error::Result;
+use piestream_hummock_sdk::CompactionGroupId;
 
 use crate::hummock::compaction::level_selector::DynamicLevelSelector;
 use crate::hummock::compaction::{create_overlap_strategy, CompactStatus};
@@ -27,7 +27,7 @@ const HUMMOCK_COMPACTION_STATUS_CF_NAME: &str = "cf/hummock_compaction_status";
 
 impl MetadataModel for CompactStatus {
     type KeyType = CompactionGroupId;
-    type ProstType = risingwave_pb::hummock::CompactStatus;
+    type ProstType = piestream_pb::hummock::CompactStatus;
 
     fn cf_name() -> String {
         String::from(HUMMOCK_COMPACTION_STATUS_CF_NAME)
@@ -46,9 +46,9 @@ impl MetadataModel for CompactStatus {
     }
 }
 
-impl From<&CompactStatus> for risingwave_pb::hummock::CompactStatus {
+impl From<&CompactStatus> for piestream_pb::hummock::CompactStatus {
     fn from(status: &CompactStatus) -> Self {
-        risingwave_pb::hummock::CompactStatus {
+        piestream_pb::hummock::CompactStatus {
             compaction_group_id: status.compaction_group_id,
             level_handlers: status.level_handlers.iter().map_into().collect(),
             compaction_config: Some(status.compaction_config.clone()),
@@ -56,14 +56,14 @@ impl From<&CompactStatus> for risingwave_pb::hummock::CompactStatus {
     }
 }
 
-impl From<CompactStatus> for risingwave_pb::hummock::CompactStatus {
+impl From<CompactStatus> for piestream_pb::hummock::CompactStatus {
     fn from(status: CompactStatus) -> Self {
         status.borrow().into()
     }
 }
 
-impl From<&risingwave_pb::hummock::CompactStatus> for CompactStatus {
-    fn from(status: &risingwave_pb::hummock::CompactStatus) -> Self {
+impl From<&piestream_pb::hummock::CompactStatus> for CompactStatus {
+    fn from(status: &piestream_pb::hummock::CompactStatus) -> Self {
         let compaction_config = status.compaction_config.as_ref().cloned().unwrap();
         let overlap_strategy = create_overlap_strategy(compaction_config.compaction_mode());
         // Currently we only support DynamicLevelSelector. If we add more LevelSelector in the

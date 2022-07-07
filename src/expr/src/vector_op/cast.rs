@@ -17,7 +17,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use num_traits::ToPrimitive;
-use risingwave_common::types::{
+use piestream_common::types::{
     Decimal, NaiveDateTimeWrapper, NaiveDateWrapper, NaiveTimeWrapper, OrderedF32, OrderedF64,
 };
 

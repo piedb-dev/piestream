@@ -18,9 +18,9 @@ use cmd_impl::bench::BenchCommands;
 mod cmd_impl;
 pub(crate) mod common;
 
-/// risectl provides internal access to the RisingWave cluster. Generally, you will need
+/// risectl provides internal access to the piestream cluster. Generally, you will need
 /// to provide the meta address and the state store URL to enable risectl to access the cluster. You
-/// must start RisingWave in full cluster mode (e.g. enable MinIO and compactor in risedev.yml)
+/// must start piestream in full cluster mode (e.g. enable MinIO and compactor in risedev.yml)
 /// instead of playground mode to use this tool. risectl will read environment variables
 /// `RW_META_ADDR` and `RW_HUMMOCK_URL` to configure itself.
 #[derive(Parser)]

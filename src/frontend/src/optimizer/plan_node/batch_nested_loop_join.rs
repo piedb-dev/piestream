@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::NestedLoopJoinNode;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::NestedLoopJoinNode;
 
 use super::{LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, ToBatchProst, ToDistributedBatch};
 use crate::expr::{Expr, ExprImpl};

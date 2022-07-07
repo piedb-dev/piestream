@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::Statement;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::Statement;
 
 use super::delete::BoundDelete;
 use super::update::BoundUpdate;

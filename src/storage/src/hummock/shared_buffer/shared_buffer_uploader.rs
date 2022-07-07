@@ -17,10 +17,10 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
 use futures::FutureExt;
-use risingwave_common::config::StorageConfig;
-use risingwave_hummock_sdk::{get_local_sst_id, HummockEpoch, LocalSstableInfo};
-use risingwave_pb::hummock::SstableInfo;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_common::config::StorageConfig;
+use piestream_hummock_sdk::{get_local_sst_id, HummockEpoch, LocalSstableInfo};
+use piestream_pb::hummock::SstableInfo;
+use piestream_rpc_client::HummockMetaClient;
 
 use crate::hummock::compaction_executor::CompactionExecutor;
 use crate::hummock::compactor::{get_remote_sstable_id_generator, Compactor, CompactorContext};
@@ -116,7 +116,7 @@ impl SharedBufferUploader {
                     compaction_group_id,
                     SstableInfo {
                         id: sst.id,
-                        key_range: Some(risingwave_pb::hummock::KeyRange {
+                        key_range: Some(piestream_pb::hummock::KeyRange {
                             left: sst.meta.smallest_key.clone(),
                             right: sst.meta.largest_key.clone(),
                             inf: false,

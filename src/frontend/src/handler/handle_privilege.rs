@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_pb::user::grant_privilege::{
+use piestream_common::error::{ErrorCode, Result};
+use piestream_pb::user::grant_privilege::{
     Action as ProstAction, ActionWithGrantOption, Object as ProstObject,
 };
-use risingwave_pb::user::GrantPrivilege as ProstPrivilege;
-use risingwave_sqlparser::ast::{Action, GrantObjects, Privileges, Statement};
+use piestream_pb::user::GrantPrivilege as ProstPrivilege;
+use piestream_sqlparser::ast::{Action, GrantObjects, Privileges, Statement};
 
 use crate::binder::Binder;
 use crate::session::{OptimizerContext, SessionImpl};
@@ -273,7 +273,7 @@ pub async fn handle_revoke_privilege(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::DEFAULT_SUPPER_USER;
+    use piestream_common::catalog::DEFAULT_SUPPER_USER;
 
     use super::*;
     use crate::test_utils::LocalFrontend;

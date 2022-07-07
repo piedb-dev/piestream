@@ -16,7 +16,7 @@ use std::cmp::Ordering::{Equal, Less};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use risingwave_hummock_sdk::VersionedComparator;
+use piestream_hummock_sdk::VersionedComparator;
 
 use crate::hummock::iterator::{Backward, HummockIterator, ReadOptions};
 use crate::hummock::value::HummockValue;
@@ -160,7 +160,7 @@ impl SSTableIteratorType for BackwardSSTableIterator {
 mod tests {
     use itertools::Itertools;
     use rand::prelude::*;
-    use risingwave_hummock_sdk::key::key_with_epoch;
+    use piestream_hummock_sdk::key::key_with_epoch;
 
     use super::*;
     use crate::assert_bytes_eq;

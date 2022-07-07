@@ -2,11 +2,11 @@
 
 ## Background
 
-Scaling could occur for multiple reasons in RisingWave. For example, when workload of some streaming operator is heavier than expected, we need to scale out. During scaling out or scaling in, physical resources will be allocated or freed accordingly. That is to say, new [actors](./streaming-overview.md#actors) will be created on scaling out, while some old actors will be dropped on scaling in. As a result of actor change, redistributing data (i.e. states of the actors) is required inevitably. That yields a question: how to efficiently determine the distribution of data and minimize data movement on scaling?
+Scaling could occur for multiple reasons in piestream. For example, when workload of some streaming operator is heavier than expected, we need to scale out. During scaling out or scaling in, physical resources will be allocated or freed accordingly. That is to say, new [actors](./streaming-overview.md#actors) will be created on scaling out, while some old actors will be dropped on scaling in. As a result of actor change, redistributing data (i.e. states of the actors) is required inevitably. That yields a question: how to efficiently determine the distribution of data and minimize data movement on scaling?
 
 On the other hand, we need to parallel the scan on tables or materialized views in [batch query mode](./architecture-design.md#batch-query-mode). Therefore, we need to partition the data in a way that could boost the performance most. So what is the most beneficial way of data partition for tables and materialized views?
 
-In RisingWave, we adopt consistent-hash-based strategy to solve the two problems above. This document will elaborate on our design.
+In piestream, we adopt consistent-hash-based strategy to solve the two problems above. This document will elaborate on our design.
 
 ## Design
 
@@ -14,7 +14,7 @@ In RisingWave, we adopt consistent-hash-based strategy to solve the two problems
 
 #### Actor Scheduling
 
-First, we need to introduce a little about how we schedule the actors. Each worker node in RisingWave cluster will have a number of parallel units. A parallel unit is the minimal scheduling unit in RisingWave, as well as the physical location of an actor. Each actor will be scheduled to exactly one parallel unit.
+First, we need to introduce a little about how we schedule the actors. Each worker node in piestream cluster will have a number of parallel units. A parallel unit is the minimal scheduling unit in piestream, as well as the physical location of an actor. Each actor will be scheduled to exactly one parallel unit.
 
 #### Data Distribution
 
@@ -24,7 +24,7 @@ For all data $k \in U_k$, where $U_k$ is an unbounded set, we apply a hash funct
 
 ![initial data distribution](./images/consistent-hash/data-distribution.svg)
 
-Then we have vnode mapping, which ensures that vnodes are mapped evenly to parallel units in the cluster. In other words, the number of vnodes that are mapped to each parallel unit should be as close as possible. This is denoted by different colors in the figure above. As is depicted, we have 3 parallel units (shown as circles), each taking $\frac{1}{3}$ of total vnodes. Vnode mapping is [constructed and maintained by meta](https://github.com/singularity-data/risingwave/blob/main/src/meta/src/manager/hash_mapping.rs).
+Then we have vnode mapping, which ensures that vnodes are mapped evenly to parallel units in the cluster. In other words, the number of vnodes that are mapped to each parallel unit should be as close as possible. This is denoted by different colors in the figure above. As is depicted, we have 3 parallel units (shown as circles), each taking $\frac{1}{3}$ of total vnodes. Vnode mapping is [constructed and maintained by meta](https://github.com/singularity-data/piestream/blob/main/src/meta/src/manager/hash_mapping.rs).
 
 As long as the hash function $H$ could ensure uniformity, the data distribution determined by this strategy would be even across physical resources. The evenness will be retained even if data in $U_k$ are skewed to a certain range, say, most students scoring over 60 in a hundred-mark system.
 

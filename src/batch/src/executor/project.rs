@@ -14,12 +14,12 @@
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{Result, RwError};
-use risingwave_expr::expr::{build_from_prost, BoxedExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::column::Column;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{Result, RwError};
+use piestream_expr::expr::{build_from_prost, BoxedExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -104,11 +104,11 @@ impl BoxedExecutorBuilder for ProjectExecutor {
 #[cfg(test)]
 mod tests {
     use futures::stream::StreamExt;
-    use risingwave_common::array::{Array, I32Array};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::*;
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::{InputRefExpression, LiteralExpression};
+    use piestream_common::array::{Array, I32Array};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::*;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::{InputRefExpression, LiteralExpression};
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;

@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use risingwave_pb::common::HostAddress as ProstHostAddress;
+use piestream_pb::common::HostAddress as ProstHostAddress;
 
 use crate::error::{internal_error, Result};
 

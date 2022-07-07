@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use risingwave_common::catalog::Field;
-use risingwave_common::error::{ErrorCode, Result};
+use piestream_common::catalog::Field;
+use piestream_common::error::{ErrorCode, Result};
 
 #[derive(Debug, Clone)]
 pub struct ColumnBinding {

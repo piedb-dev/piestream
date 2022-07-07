@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_pb::data::data_type::TypeName;
-use risingwave_pb::data::{DataType as ProstDataType, DataType};
-use risingwave_pb::expr::expr_node::Type::{Field, InputRef};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
+use piestream_pb::data::data_type::TypeName;
+use piestream_pb::data::{DataType as ProstDataType, DataType};
+use piestream_pb::expr::expr_node::Type::{Field, InputRef};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
 
 pub fn make_expression(kind: Type, rets: &[TypeName], indices: &[i32]) -> ExprNode {
     let mut exprs = Vec::new();

@@ -16,9 +16,9 @@ use std::sync::RwLock;
 
 use async_trait::async_trait;
 use rand::prelude::SliceRandom;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::Result;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::Result;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{StreamChunkWithState, StreamSourceReader};
@@ -166,11 +166,11 @@ mod tests {
 
     use assert_matches::assert_matches;
     use itertools::Itertools;
-    use risingwave_common::array::{Array, I64Array, Op};
-    use risingwave_common::column_nonnull;
-    use risingwave_common::types::DataType;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::Keyspace;
+    use piestream_common::array::{Array, I64Array, Op};
+    use piestream_common::column_nonnull;
+    use piestream_common::types::DataType;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::Keyspace;
 
     use super::*;
 

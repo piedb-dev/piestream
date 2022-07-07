@@ -23,12 +23,12 @@ use futures_async_stream::try_stream;
 use itertools::Itertools;
 use madsim::collections::{HashMap, HashSet};
 use madsim::time::Instant;
-use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::buffer::BitmapBuilder;
-use risingwave_common::error::{internal_error, Result};
-use risingwave_common::types::VIRTUAL_NODE_COUNT;
-use risingwave_common::util::addr::{is_local_address, HostAddr};
-use risingwave_common::util::hash_util::CRC32FastBuilder;
+use piestream_common::array::{Op, StreamChunk};
+use piestream_common::buffer::BitmapBuilder;
+use piestream_common::error::{internal_error, Result};
+use piestream_common::types::VIRTUAL_NODE_COUNT;
+use piestream_common::util::addr::{is_local_address, HostAddr};
+use piestream_common::util::hash_util::CRC32FastBuilder;
 use tokio::sync::mpsc::Sender;
 use tracing::event;
 
@@ -839,12 +839,12 @@ mod tests {
     use futures::{pin_mut, StreamExt};
     use itertools::Itertools;
     use madsim::collections::HashMap;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::{Array, ArrayBuilder, I32ArrayBuilder, Op};
-    use risingwave_common::catalog::Schema;
-    use risingwave_common::types::VIRTUAL_NODE_COUNT;
-    use risingwave_pb::common::{ActorInfo, HostAddress};
+    use piestream_common::array::column::Column;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::{Array, ArrayBuilder, I32ArrayBuilder, Op};
+    use piestream_common::catalog::Schema;
+    use piestream_common::types::VIRTUAL_NODE_COUNT;
+    use piestream_pb::common::{ActorInfo, HostAddress};
     use static_assertions::const_assert_eq;
     use tokio::sync::mpsc::channel;
 

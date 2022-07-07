@@ -111,9 +111,9 @@ impl PartialOrd for KeyRange {
     }
 }
 
-impl From<KeyRange> for risingwave_pb::hummock::KeyRange {
+impl From<KeyRange> for piestream_pb::hummock::KeyRange {
     fn from(kr: KeyRange) -> Self {
-        risingwave_pb::hummock::KeyRange {
+        piestream_pb::hummock::KeyRange {
             left: kr.left.to_vec(),
             right: kr.right.to_vec(),
             inf: kr.inf,
@@ -121,8 +121,8 @@ impl From<KeyRange> for risingwave_pb::hummock::KeyRange {
     }
 }
 
-impl From<&risingwave_pb::hummock::KeyRange> for KeyRange {
-    fn from(kr: &risingwave_pb::hummock::KeyRange) -> Self {
+impl From<&piestream_pb::hummock::KeyRange> for KeyRange {
+    fn from(kr: &piestream_pb::hummock::KeyRange) -> Self {
         KeyRange::new(
             Bytes::copy_from_slice(&kr.left),
             Bytes::copy_from_slice(&kr.right),

@@ -14,7 +14,7 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::catalog::Schema;
+use piestream_common::catalog::Schema;
 
 use super::error::{StreamExecutorError, StreamExecutorResult};
 use super::{BoxedExecutor, BoxedMessageStream, Executor, Message, PkIndicesRef, StreamChunk};

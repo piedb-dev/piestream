@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use futures::StreamExt;
-use risingwave_common::array::{DataChunk, RowRef};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
+use piestream_common::array::{DataChunk, RowRef};
+use piestream_common::catalog::Schema;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
 
 use crate::executor::join::chunked_data::{ChunkedData, RowId};
 use crate::executor::BoxedExecutor;

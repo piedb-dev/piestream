@@ -16,7 +16,7 @@ use std::ops::Bound::Unbounded;
 use std::sync::Arc;
 
 use futures::executor::block_on;
-use risingwave_hummock_sdk::key::user_key;
+use piestream_hummock_sdk::key::user_key;
 
 use crate::hummock::iterator::test_utils::{
     gen_iterator_test_sstable_base, iterator_test_key_of, iterator_test_value_of,

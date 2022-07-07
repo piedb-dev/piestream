@@ -16,28 +16,28 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use risingwave_batch::executor::monitor::BatchMetrics;
-use risingwave_batch::rpc::service::task_service::BatchServiceImpl;
-use risingwave_batch::task::{BatchEnvironment, BatchManager};
-use risingwave_common::config::ComputeNodeConfig;
-use risingwave_common::service::MetricsManager;
-use risingwave_common::util::addr::HostAddr;
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::stream_service::stream_service_server::StreamServiceServer;
-use risingwave_pb::task_service::exchange_service_server::ExchangeServiceServer;
-use risingwave_pb::task_service::task_service_server::TaskServiceServer;
-use risingwave_rpc_client::MetaClient;
-use risingwave_source::monitor::SourceMetrics;
-use risingwave_source::MemSourceManager;
-use risingwave_storage::hummock::compaction_executor::CompactionExecutor;
-use risingwave_storage::hummock::compactor::Compactor;
-use risingwave_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
-use risingwave_storage::monitor::{
+use piestream_batch::executor::monitor::BatchMetrics;
+use piestream_batch::rpc::service::task_service::BatchServiceImpl;
+use piestream_batch::task::{BatchEnvironment, BatchManager};
+use piestream_common::config::ComputeNodeConfig;
+use piestream_common::service::MetricsManager;
+use piestream_common::util::addr::HostAddr;
+use piestream_pb::common::WorkerType;
+use piestream_pb::stream_service::stream_service_server::StreamServiceServer;
+use piestream_pb::task_service::exchange_service_server::ExchangeServiceServer;
+use piestream_pb::task_service::task_service_server::TaskServiceServer;
+use piestream_rpc_client::MetaClient;
+use piestream_source::monitor::SourceMetrics;
+use piestream_source::MemSourceManager;
+use piestream_storage::hummock::compaction_executor::CompactionExecutor;
+use piestream_storage::hummock::compactor::Compactor;
+use piestream_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
+use piestream_storage::monitor::{
     monitor_cache, HummockMetrics, ObjectStoreMetrics, StateStoreMetrics,
 };
-use risingwave_storage::StateStoreImpl;
-use risingwave_stream::executor::monitor::StreamingMetrics;
-use risingwave_stream::task::{LocalStreamManager, StreamEnvironment};
+use piestream_storage::StateStoreImpl;
+use piestream_stream::executor::monitor::StreamingMetrics;
+use piestream_stream::task::{LocalStreamManager, StreamEnvironment};
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
@@ -47,7 +47,7 @@ use crate::rpc::service::stream_service::StreamServiceImpl;
 use crate::ComputeNodeOpts;
 
 fn load_config(opts: &ComputeNodeOpts) -> ComputeNodeConfig {
-    risingwave_common::config::load_config(&opts.config_path)
+    piestream_common::config::load_config(&opts.config_path)
 }
 
 fn get_compile_mode() -> &'static str {

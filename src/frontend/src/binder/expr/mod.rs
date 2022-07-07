@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use itertools::zip_eq;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::{
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::{
     BinaryOperator, DataType as AstDataType, DateTimeField, Expr, Query, StructField,
     TrimWhereField, UnaryOperator,
 };

@@ -22,11 +22,11 @@ pub mod test_relational_table;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{DataChunk, Row};
-use risingwave_common::buffer::{Bitmap, BitmapBuilder};
-use risingwave_common::catalog::Schema;
-use risingwave_common::types::VIRTUAL_NODE_COUNT;
+use piestream_common::array::column::Column;
+use piestream_common::array::{DataChunk, Row};
+use piestream_common::buffer::{Bitmap, BitmapBuilder};
+use piestream_common::catalog::Schema;
+use piestream_common::types::VIRTUAL_NODE_COUNT;
 
 use crate::error::StorageResult;
 use crate::table::storage_table::DEFAULT_VNODE;

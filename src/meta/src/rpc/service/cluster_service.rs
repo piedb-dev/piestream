@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::tonic_err;
-use risingwave_common::try_match_expand;
-use risingwave_pb::meta::cluster_service_server::ClusterService;
-use risingwave_pb::meta::{
+use piestream_common::error::tonic_err;
+use piestream_common::try_match_expand;
+use piestream_pb::meta::cluster_service_server::ClusterService;
+use piestream_pb::meta::{
     ActivateWorkerNodeRequest, ActivateWorkerNodeResponse, AddWorkerNodeRequest,
     AddWorkerNodeResponse, DeleteWorkerNodeRequest, DeleteWorkerNodeResponse, ListAllNodesRequest,
     ListAllNodesResponse,
@@ -90,7 +90,7 @@ where
         let worker_state = if req.include_starting_nodes {
             None
         } else {
-            Some(risingwave_pb::common::worker_node::State::Running)
+            Some(piestream_pb::common::worker_node::State::Running)
         };
         let node_list = self
             .cluster_manager

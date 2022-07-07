@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::error::Result;
-use risingwave_sqlparser::ast::{Statement, TableAlias};
+use piestream_common::error::Result;
+use piestream_sqlparser::ast::{Statement, TableAlias};
 
 pub mod bind_context;
 mod delete;

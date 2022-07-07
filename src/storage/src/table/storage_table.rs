@@ -24,15 +24,15 @@ use futures::{Stream, StreamExt};
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use log::trace;
-use risingwave_common::array::Row;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, Schema, TableId};
-use risingwave_common::error::RwError;
-use risingwave_common::types::{Datum, VirtualNode};
-use risingwave_common::util::hash_util::CRC32FastBuilder;
-use risingwave_common::util::ordered::*;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_hummock_sdk::key::{next_key, prefixed_range, range_of_prefix};
+use piestream_common::array::Row;
+use piestream_common::buffer::Bitmap;
+use piestream_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, Schema, TableId};
+use piestream_common::error::RwError;
+use piestream_common::types::{Datum, VirtualNode};
+use piestream_common::util::hash_util::CRC32FastBuilder;
+use piestream_common::util::ordered::*;
+use piestream_common::util::sort_util::OrderType;
+use piestream_hummock_sdk::key::{next_key, prefixed_range, range_of_prefix};
 
 use super::mem_table::RowOp;
 use super::{Distribution, TableIter};
@@ -564,11 +564,11 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
 
     /// `dedup_pk_iter` should be used when pk is not persisted as value in storage.
     /// It will attempt to decode pk from key instead of cell value.
-    /// Tracking issue: <https://github.com/singularity-data/risingwave/issues/588>
+    /// Tracking issue: <https://github.com/singularity-data/piestream/issues/588>
     pub async fn batch_dedup_pk_iter(
         &self,
         epoch: u64,
-        // TODO: remove this parameter: https://github.com/singularity-data/risingwave/issues/3203
+        // TODO: remove this parameter: https://github.com/singularity-data/piestream/issues/3203
         pk_descs: &[OrderedColumnDesc],
     ) -> StorageResult<BatchDedupPkIter<S>> {
         Ok(DedupPkCellBasedIter::new(

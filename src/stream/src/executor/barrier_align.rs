@@ -120,7 +120,7 @@ mod tests {
 
     use async_stream::try_stream;
     use futures::{Stream, TryStreamExt};
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
     use tokio::time::sleep;
 
     use super::*;

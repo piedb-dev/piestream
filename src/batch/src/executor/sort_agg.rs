@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{ArrayBuilderImpl, ArrayRef, DataChunk};
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
-use risingwave_expr::expr::{build_from_prost, BoxedExpression};
-use risingwave_expr::vector_op::agg::{
+use piestream_common::array::column::Column;
+use piestream_common::array::{ArrayBuilderImpl, ArrayRef, DataChunk};
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
+use piestream_expr::expr::{build_from_prost, BoxedExpression};
+use piestream_expr::vector_op::agg::{
     create_sorted_grouper, AggStateFactory, BoxedAggState, BoxedSortedGrouper, EqGroups,
 };
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -263,17 +263,17 @@ impl SortAggExecutor {
 mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
-    use risingwave_common::array::{Array as _, I64Array};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::build_from_prost;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::agg_call::{Arg, Type};
-    use risingwave_pb::expr::expr_node::RexNode;
-    use risingwave_pb::expr::expr_node::Type::InputRef;
-    use risingwave_pb::expr::{AggCall, ExprNode, InputRefExpr};
+    use piestream_common::array::{Array as _, I64Array};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::build_from_prost;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::agg_call::{Arg, Type};
+    use piestream_pb::expr::expr_node::RexNode;
+    use piestream_pb::expr::expr_node::Type::InputRef;
+    use piestream_pb::expr::{AggCall, ExprNode, InputRefExpr};
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;
@@ -314,7 +314,7 @@ mod tests {
         let prost = AggCall {
             r#type: Type::Count as i32,
             args: vec![],
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),
@@ -406,7 +406,7 @@ mod tests {
         let prost = AggCall {
             r#type: Type::Count as i32,
             args: vec![],
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),

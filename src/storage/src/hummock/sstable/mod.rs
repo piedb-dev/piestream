@@ -34,9 +34,9 @@ use fail::fail_point;
 pub use forward_sstable_iterator::*;
 mod backward_sstable_iterator;
 pub use backward_sstable_iterator::*;
-use risingwave_hummock_sdk::HummockSSTableId;
+use piestream_hummock_sdk::HummockSSTableId;
 #[cfg(test)]
-use risingwave_pb::hummock::{KeyRange, SstableInfo};
+use piestream_pb::hummock::{KeyRange, SstableInfo};
 
 pub mod group_builder;
 mod utils;

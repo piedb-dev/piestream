@@ -20,16 +20,16 @@ use futures_async_stream::try_stream;
 use iter_chunks::IterChunks;
 use itertools::Itertools;
 use madsim::collections::HashMap;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{StreamChunk, Vis};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::catalog::Schema;
-use risingwave_common::collection::evictable::EvictableHashMap;
-use risingwave_common::error::Result;
-use risingwave_common::hash::{HashCode, HashKey};
-use risingwave_common::util::hash_util::CRC32FastBuilder;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::column::Column;
+use piestream_common::array::{StreamChunk, Vis};
+use piestream_common::buffer::Bitmap;
+use piestream_common::catalog::Schema;
+use piestream_common::collection::evictable::EvictableHashMap;
+use piestream_common::error::Result;
+use piestream_common::hash::{HashCode, HashKey};
+use piestream_common::util::hash_util::CRC32FastBuilder;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use super::{
     expect_first_barrier, pk_input_arrays, Executor, PkDataTypes, PkIndicesRef,
@@ -441,17 +441,17 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use itertools::Itertools;
-    use risingwave_common::array::data_chunk_iter::Row;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::{Op, StreamChunk};
-    use risingwave_common::catalog::{Field, Schema, TableId};
-    use risingwave_common::error::Result;
-    use risingwave_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::*;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::table::state_table::StateTable;
-    use risingwave_storage::StateStore;
+    use piestream_common::array::data_chunk_iter::Row;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::{Op, StreamChunk};
+    use piestream_common::catalog::{Field, Schema, TableId};
+    use piestream_common::error::Result;
+    use piestream_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::*;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::state_table::StateTable;
+    use piestream_storage::StateStore;
 
     use crate::executor::aggregation::{generate_agg_schema, AggArgs, AggCall};
     use crate::executor::test_utils::global_simple_agg::generate_state_table;

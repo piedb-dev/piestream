@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_hummock_sdk::HummockSSTableId;
-use risingwave_pb::hummock::level_handler::SstTask;
-use risingwave_pb::hummock::SstableInfo;
+use piestream_hummock_sdk::HummockSSTableId;
+use piestream_pb::hummock::level_handler::SstTask;
+use piestream_pb::hummock::SstableInfo;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LevelHandler {
@@ -87,9 +87,9 @@ impl LevelHandler {
     }
 }
 
-impl From<&LevelHandler> for risingwave_pb::hummock::LevelHandler {
+impl From<&LevelHandler> for piestream_pb::hummock::LevelHandler {
     fn from(lh: &LevelHandler) -> Self {
-        risingwave_pb::hummock::LevelHandler {
+        piestream_pb::hummock::LevelHandler {
             level: lh.level,
             tasks: lh
                 .pending_tasks
@@ -104,8 +104,8 @@ impl From<&LevelHandler> for risingwave_pb::hummock::LevelHandler {
     }
 }
 
-impl From<&risingwave_pb::hummock::LevelHandler> for LevelHandler {
-    fn from(lh: &risingwave_pb::hummock::LevelHandler) -> Self {
+impl From<&piestream_pb::hummock::LevelHandler> for LevelHandler {
+    fn from(lh: &piestream_pb::hummock::LevelHandler) -> Self {
         let mut pending_tasks = vec![];
         let mut compacting_files = HashMap::new();
         for task in &lh.tasks {

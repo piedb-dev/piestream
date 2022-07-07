@@ -17,7 +17,7 @@ use std::collections::BinaryHeap;
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::Row;
+use piestream_common::array::Row;
 
 use super::PkAndRowStream;
 use crate::table::storage_table::StorageError;
@@ -84,7 +84,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures_async_stream::for_await;
-    use risingwave_common::types::ScalarImpl;
+    use piestream_common::types::ScalarImpl;
 
     use super::*;
     use crate::error::StorageResult;

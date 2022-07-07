@@ -18,7 +18,7 @@ use futures::future::{join_all, select, Either};
 use futures::{FutureExt, SinkExt, StreamExt};
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::catalog::Schema;
+use piestream_common::catalog::Schema;
 
 use super::error::StreamExecutorError;
 use super::*;
@@ -141,10 +141,10 @@ impl LookupUnionExecutor {
 #[cfg(test)]
 mod tests {
     use futures::TryStreamExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::StreamChunkTestExt;
-    use risingwave_common::types::DataType;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::StreamChunkTestExt;
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::executor::test_utils::MockSource;

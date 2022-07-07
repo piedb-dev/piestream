@@ -75,7 +75,7 @@ impl GrafanaService {
         std::fs::remove_dir_all(&config_dashboards_dir)?;
         std::fs::create_dir_all(&config_dashboards_dir)?;
         std::fs::write(
-            config_dashboards_dir.join("risingwave-dashboard.yaml"),
+            config_dashboards_dir.join("piestream-dashboard.yaml"),
             &GrafanaGen.gen_dashboard_yml(config, prefix_config, prefix_config)?,
         )?;
         // std::fs::write(

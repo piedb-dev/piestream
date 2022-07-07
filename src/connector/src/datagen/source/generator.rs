@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use bytes::Bytes;
-use risingwave_common::field_generator::FieldGeneratorImpl;
+use piestream_common::field_generator::FieldGeneratorImpl;
 use serde_json::{Map, Value};
 use tokio::time::{sleep, Duration, Instant};
 
@@ -108,7 +108,7 @@ mod tests {
         fields_map.insert(
             "v1".to_string(),
             FieldGeneratorImpl::with_sequence(
-                risingwave_common::types::DataType::Int32,
+                piestream_common::types::DataType::Int32,
                 Some("1".to_string()),
                 Some("10".to_string()),
                 split_index,
@@ -120,7 +120,7 @@ mod tests {
         fields_map.insert(
             "v2".to_string(),
             FieldGeneratorImpl::with_sequence(
-                risingwave_common::types::DataType::Float32,
+                piestream_common::types::DataType::Float32,
                 Some("1".to_string()),
                 Some("10".to_string()),
                 split_index,

@@ -14,17 +14,17 @@
 
 mod graph;
 use graph::*;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::stream_node::NodeBody;
 mod rewrite;
 
 use std::collections::HashSet;
 
 use derivative::Derivative;
 use itertools::Itertools;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::Result;
-use risingwave_pb::plan_common::JoinType;
-use risingwave_pb::stream_plan::{
+use piestream_common::catalog::TableId;
+use piestream_common::error::Result;
+use piestream_pb::plan_common::JoinType;
+use piestream_pb::stream_plan::{
     DispatchStrategy, DispatcherType, ExchangeNode, FragmentType,
     StreamFragmentGraph as StreamFragmentGraphProto, StreamNode,
 };
@@ -362,13 +362,13 @@ impl StreamFragmenter {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::catalog::{Table, Table as ProstTable};
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType;
-    use risingwave_pb::expr::agg_call::{Arg, Type};
-    use risingwave_pb::expr::{AggCall, InputRefExpr};
-    use risingwave_pb::plan_common::{ColumnCatalog, ColumnDesc};
-    use risingwave_pb::stream_plan::*;
+    use piestream_pb::catalog::{Table, Table as ProstTable};
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType;
+    use piestream_pb::expr::agg_call::{Arg, Type};
+    use piestream_pb::expr::{AggCall, InputRefExpr};
+    use piestream_pb::plan_common::{ColumnCatalog, ColumnDesc};
+    use piestream_pb::stream_plan::*;
 
     use super::*;
 

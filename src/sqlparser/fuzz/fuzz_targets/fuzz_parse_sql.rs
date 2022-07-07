@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use honggfuzz::fuzz;
-use risingwave_sqlparser::dialect::GenericDialect;
-use risingwave_sqlparser::parser::Parser;
+use piestream_sqlparser::dialect::GenericDialect;
+use piestream_sqlparser::parser::Parser;
 
 fn main() {
     loop {

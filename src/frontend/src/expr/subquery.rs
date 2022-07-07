@@ -14,7 +14,7 @@
 
 use std::hash::Hash;
 
-use risingwave_common::types::DataType;
+use piestream_common::types::DataType;
 
 use super::{Expr, ExprImpl, ExprType};
 use crate::binder::BoundQuery;
@@ -88,7 +88,7 @@ impl Expr for Subquery {
         }
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
         unreachable!("Subquery {:?} has not been unnested", self)
     }
 }

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use madsim::collections::HashMap;
 use parking_lot::{Mutex, MutexGuard};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::util::addr::HostAddr;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::util::addr::HostAddr;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::executor::Message;

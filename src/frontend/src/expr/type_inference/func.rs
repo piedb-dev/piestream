@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 
 use itertools::{iproduct, Itertools as _};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
 
 use super::{cast_ok_base, CastContext, DataTypeName};
 use crate::expr::{Expr as _, ExprImpl, ExprType};
@@ -614,7 +614,7 @@ mod tests {
                         DataType::Int64 => 1i64.into(),
                         DataType::Float32 => 1f32.into(),
                         DataType::Float64 => 1f64.into(),
-                        DataType::Decimal => risingwave_common::types::Decimal::NaN.into(),
+                        DataType::Decimal => piestream_common::types::Decimal::NaN.into(),
                         _ => unimplemented!(),
                     }),
                     t,

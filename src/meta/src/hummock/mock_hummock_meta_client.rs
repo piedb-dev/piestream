@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-use risingwave_hummock_sdk::{
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+use piestream_hummock_sdk::{
     HummockContextId, HummockEpoch, HummockSSTableId, HummockVersionId, LocalSstableInfo,
 };
-use risingwave_pb::hummock::{
+use piestream_pb::hummock::{
     CompactTask, CompactionGroup, HummockSnapshot, HummockVersion, SstableIdInfo,
     SubscribeCompactTasksResponse, VacuumTask,
 };
-use risingwave_rpc_client::error::{Result, RpcError};
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_rpc_client::error::{Result, RpcError};
+use piestream_rpc_client::HummockMetaClient;
 use tonic::Streaming;
 
 use crate::hummock::HummockManager;

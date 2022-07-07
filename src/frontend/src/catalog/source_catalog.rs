@@ -14,9 +14,9 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_pb::catalog::source::Info;
-use risingwave_pb::catalog::Source as ProstSource;
-use risingwave_pb::stream_plan::source_node::SourceType;
+use piestream_pb::catalog::source::Info;
+use piestream_pb::catalog::Source as ProstSource;
+use piestream_pb::stream_plan::source_node::SourceType;
 
 use super::column_catalog::ColumnCatalog;
 use super::{ColumnId, SourceId, TABLE_SOURCE_PK_COLID};

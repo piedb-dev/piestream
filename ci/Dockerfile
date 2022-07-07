@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS risingwave-build-env
+FROM ubuntu:22.04 AS piestream-build-env
 
 ENV LANG en_US.utf8
 
@@ -16,9 +16,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --no-mo
 RUN curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.4.0/buf-$(uname -s)-$(uname -m).tar.gz" | \
     tar -xvzf - -C /usr/local --strip-components 1
 
-RUN mkdir -p /risingwave
+RUN mkdir -p /piestream
 
-WORKDIR /risingwave
+WORKDIR /piestream
 
 ENV PATH /root/.cargo/bin/:$PATH
 

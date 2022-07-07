@@ -14,7 +14,7 @@
 
 use std::cmp;
 
-use risingwave_pb::hummock::KeyRange;
+use piestream_pb::hummock::KeyRange;
 
 use crate::key_range::KeyRangeCommon;
 use crate::{impl_key_range_common, key_range_cmp, VersionedComparator};
@@ -53,7 +53,7 @@ impl KeyRangeExt for KeyRange {
 mod tests {
     use std::cmp;
 
-    use risingwave_pb::hummock::KeyRange;
+    use piestream_pb::hummock::KeyRange;
 
     use crate::key::key_with_epoch;
     use crate::key_range::KeyRangeCommon;

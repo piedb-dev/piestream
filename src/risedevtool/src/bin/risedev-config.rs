@@ -124,13 +124,13 @@ you download Jaeger."
             }
             Self::Release => {
                 "
-Build RisingWave in release mode"
+Build piestream in release mode"
             }
             Self::AllInOne => {
                 "
 With this option enabled, RiseDev will help you create
-symlinks to `risingwave` all-in-one binary, so as to build
-and use `risingwave` in all-in-one mode."
+symlinks to `piestream` all-in-one binary, so as to build
+and use `piestream` in all-in-one mode."
             }
             Self::Sanitizer => {
                 "

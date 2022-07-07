@@ -16,7 +16,7 @@ use std::assert_matches::assert_matches;
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use risingwave_common::types::{
+use piestream_common::types::{
     Decimal, IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper, OrderedF32, OrderedF64,
 };
 

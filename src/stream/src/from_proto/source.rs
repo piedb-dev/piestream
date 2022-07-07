@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::{ColumnId, Field, Schema, TableId};
+use piestream_common::catalog::{ColumnId, Field, Schema, TableId};
 use tokio::sync::mpsc::unbounded_channel;
 
 use super::*;

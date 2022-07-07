@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use prost::Message;
-use risingwave_hummock_sdk::HummockCompactionTaskId;
-use risingwave_pb::hummock::CompactTaskAssignment;
+use piestream_hummock_sdk::HummockCompactionTaskId;
+use piestream_pb::hummock::CompactTaskAssignment;
 
 use crate::model::MetadataModel;
 
@@ -42,7 +42,7 @@ impl MetadataModel for CompactTaskAssignment {
         prost
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.compact_task.as_ref().unwrap().task_id)
     }
 }

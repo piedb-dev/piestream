@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
-use risingwave_sqlparser::ast::ObjectName;
+use piestream_common::error::Result;
+use piestream_sqlparser::ast::ObjectName;
 
 use crate::binder::Binder;
 use crate::catalog::CatalogError;

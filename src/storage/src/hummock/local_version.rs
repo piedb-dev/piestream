@@ -19,9 +19,9 @@ use std::sync::Arc;
 use itertools::Itertools;
 use parking_lot::lock_api::ArcRwLockReadGuard;
 use parking_lot::{RawRwLock, RwLock};
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::{CompactionGroupId, HummockEpoch, HummockVersionId};
-use risingwave_pb::hummock::{HummockVersion, Level};
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::{CompactionGroupId, HummockEpoch, HummockVersionId};
+use piestream_pb::hummock::{HummockVersion, Level};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::shared_buffer::SharedBuffer;

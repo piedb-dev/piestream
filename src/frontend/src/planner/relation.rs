@@ -15,9 +15,9 @@
 use std::rc::Rc;
 
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::ScalarImpl;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::ScalarImpl;
 
 use crate::binder::{
     BoundBaseTable, BoundJoin, BoundSource, BoundSystemTable, BoundTableFunction,

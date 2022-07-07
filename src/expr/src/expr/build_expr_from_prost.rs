@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::DataChunk;
-use risingwave_common::types::{DataType, ToOwnedDatum};
-use risingwave_pb::expr::expr_node::RexNode;
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::DataChunk;
+use piestream_common::types::{DataType, ToOwnedDatum};
+use piestream_pb::expr::expr_node::RexNode;
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::expr_binary_bytes::{
     new_ltrim_characters, new_repeat, new_rtrim_characters, new_substr_start, new_to_char,
@@ -259,11 +259,11 @@ pub fn build_to_char_expr(prost: &ExprNode) -> Result<BoxedExpression> {
 mod tests {
     use std::vec;
 
-    use risingwave_common::array::{ArrayImpl, Utf8Array};
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::expr_node::{RexNode, Type};
-    use risingwave_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
+    use piestream_common::array::{ArrayImpl, Utf8Array};
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::expr_node::{RexNode, Type};
+    use piestream_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
 
     use super::*;
 

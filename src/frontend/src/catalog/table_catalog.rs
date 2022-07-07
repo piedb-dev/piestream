@@ -15,13 +15,13 @@
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, OrderedColumnDesc, TableDesc};
-use risingwave_common::types::ParallelUnitId;
-use risingwave_common::util::compress::decompress_data;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::catalog::table::OptionalAssociatedSourceId;
-use risingwave_pb::catalog::Table as ProstTable;
-use risingwave_pb::plan_common::OrderType as ProstOrderType;
+use piestream_common::catalog::{ColumnDesc, OrderedColumnDesc, TableDesc};
+use piestream_common::types::ParallelUnitId;
+use piestream_common::util::compress::decompress_data;
+use piestream_common::util::sort_util::OrderType;
+use piestream_pb::catalog::table::OptionalAssociatedSourceId;
+use piestream_pb::catalog::Table as ProstTable;
+use piestream_pb::plan_common::OrderType as ProstOrderType;
 
 use super::column_catalog::ColumnCatalog;
 use super::{DatabaseId, SchemaId};
@@ -225,15 +225,15 @@ impl From<&ProstTable> for TableCatalog {
 mod tests {
     use std::collections::HashMap;
 
-    use risingwave_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
-    use risingwave_common::test_prelude::*;
-    use risingwave_common::types::*;
-    use risingwave_common::util::compress::compress_data;
-    use risingwave_common::util::sort_util::OrderType;
-    use risingwave_pb::catalog::table::OptionalAssociatedSourceId;
-    use risingwave_pb::catalog::Table as ProstTable;
-    use risingwave_pb::common::ParallelUnitMapping;
-    use risingwave_pb::plan_common::{
+    use piestream_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
+    use piestream_common::test_prelude::*;
+    use piestream_common::types::*;
+    use piestream_common::util::compress::compress_data;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_pb::catalog::table::OptionalAssociatedSourceId;
+    use piestream_pb::catalog::Table as ProstTable;
+    use piestream_pb::common::ParallelUnitMapping;
+    use piestream_pb::plan_common::{
         ColumnCatalog as ProstColumnCatalog, ColumnDesc as ProstColumnDesc,
     };
 
@@ -286,7 +286,7 @@ mod tests {
             optional_associated_source_id: OptionalAssociatedSourceId::AssociatedSourceId(233)
                 .into(),
             appendonly: false,
-            owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+            owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
             mapping: Some(ParallelUnitMapping {
                 table_id: 0,
                 original_indices,
@@ -340,7 +340,7 @@ mod tests {
                 }],
                 distribution_keys: vec![],
                 appendonly: false,
-                owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+                owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
                 vnode_mapping: Some(mapping),
                 properties: HashMap::from([(String::from("ttl"), String::from("300"))]),
             }

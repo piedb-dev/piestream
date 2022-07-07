@@ -14,8 +14,8 @@
 
 use std::convert::TryFrom;
 
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::expr::agg_call::Type;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::expr::agg_call::Type;
 
 /// Kind of aggregation function
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

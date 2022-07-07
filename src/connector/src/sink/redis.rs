@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
 
 use crate::sink::{Result, Sink};
 

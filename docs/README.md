@@ -1,16 +1,16 @@
 ## Overview
 
-This directory contains RisingWave design documents that are intended to be used by contributors to understand our development process, and how we design and implement RisingWave. To learn about how to use RisingWave, check out the [RisingWave user documentation](https://www.risingwave.dev).
+This directory contains piestream design documents that are intended to be used by contributors to understand our development process, and how we design and implement piestream. To learn about how to use piestream, check out the [piestream user documentation](https://www.piestream.dev).
 
 ## Developer guide
 
-After you learn about the basics of RisingWave, take a look at our [developer guide](developer-guide.md). It'll help you up to speed with the development process.
+After you learn about the basics of piestream, take a look at our [developer guide](developer-guide.md). It'll help you up to speed with the development process.
 
 ## Table of Contents
 
 * [Architecture Design](./architecture-design.md)
-* [An Overview of RisingWave Streaming Engine](./streaming-overview.md)
-* [An Overview of RisingWave State Store](./state-store-overview.md)
+* [An Overview of piestream Streaming Engine](./streaming-overview.md)
+* [An Overview of piestream State Store](./state-store-overview.md)
 * [Meta Service](./meta-service.md)
 * [Create MView on Top of MView](./mv-on-mv.md)
 * [Checkpoint](./checkpoint.md)

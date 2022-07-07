@@ -24,13 +24,13 @@ static GLOBAL: Jemalloc = Jemalloc;
 async fn main() {
     use clap::StructOpt;
 
-    let opts = risingwave_compute::ComputeNodeOpts::parse();
+    let opts = piestream_compute::ComputeNodeOpts::parse();
 
-    risingwave_rt::oneshot_common();
-    risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new(
+    piestream_rt::oneshot_common();
+    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new(
         opts.enable_jaeger_tracing,
         false,
     ));
 
-    risingwave_compute::start(opts).await
+    piestream_compute::start(opts).await
 }

@@ -15,9 +15,9 @@
 use std::collections::hash_map::Entry;
 use std::str::FromStr;
 
-use risingwave_common::catalog::{Field, DEFAULT_SCHEMA_NAME};
-use risingwave_common::error::{internal_error, ErrorCode, Result};
-use risingwave_sqlparser::ast::{Ident, ObjectName, TableAlias, TableFactor};
+use piestream_common::catalog::{Field, DEFAULT_SCHEMA_NAME};
+use piestream_common::error::{internal_error, ErrorCode, Result};
+use piestream_sqlparser::ast::{Ident, ObjectName, TableAlias, TableFactor};
 
 use super::bind_context::ColumnBinding;
 use crate::binder::Binder;

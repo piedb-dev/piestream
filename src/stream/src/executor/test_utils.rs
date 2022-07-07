@@ -14,8 +14,8 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::catalog::{Schema, TableId};
-use risingwave_storage::memory::MemoryStateStore;
+use piestream_common::catalog::{Schema, TableId};
+use piestream_storage::memory::MemoryStateStore;
 use tokio::sync::mpsc;
 
 use super::error::StreamExecutorError;
@@ -136,8 +136,8 @@ impl Executor for MockSource {
 macro_rules! row_nonnull {
     [$( $value:expr ),*] => {
         {
-            use risingwave_common::types::Scalar;
-            use risingwave_common::array::Row;
+            use piestream_common::types::Scalar;
+            use piestream_common::array::Row;
             Row(vec![$(Some($value.to_scalar_value()), )*])
         }
     };
@@ -243,13 +243,13 @@ pub mod global_simple_agg {
         )
     }
     use itertools::Itertools;
-    use risingwave_common::catalog::{ColumnDesc, ColumnId, Schema, TableId};
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::OrderType;
-    use risingwave_expr::expr::AggKind;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::table::state_table::StateTable;
-    use risingwave_storage::StateStore;
+    use piestream_common::catalog::{ColumnDesc, ColumnId, Schema, TableId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_expr::expr::AggKind;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::state_table::StateTable;
+    use piestream_storage::StateStore;
 
     use crate::executor::aggregation::{generate_agg_schema, AggCall};
     use crate::executor::{BoxedExecutor, Executor, GlobalSimpleAggExecutor, PkIndices};

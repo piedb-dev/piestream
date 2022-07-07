@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::Result;
 
@@ -50,7 +50,7 @@ pub fn translate(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::*;
 

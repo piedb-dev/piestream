@@ -14,8 +14,8 @@
 
 use futures_async_stream::for_await;
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
-use risingwave_sqlparser::ast::Statement;
+use piestream_common::error::Result;
+use piestream_sqlparser::ast::Statement;
 
 use crate::binder::Binder;
 use crate::handler::util::{to_pg_field, to_pg_rows};

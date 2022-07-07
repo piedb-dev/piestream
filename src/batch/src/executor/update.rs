@@ -15,14 +15,14 @@
 use futures::future::try_join_all;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{ArrayBuilder, DataChunk, Op, PrimitiveArrayBuilder, StreamChunk};
-use risingwave_common::catalog::{Field, Schema, TableId};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::DataType;
-use risingwave_expr::expr::{build_from_prost, BoxedExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_source::SourceManagerRef;
+use piestream_common::array::column::Column;
+use piestream_common::array::{ArrayBuilder, DataChunk, Op, PrimitiveArrayBuilder, StreamChunk};
+use piestream_common::catalog::{Field, Schema, TableId};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::DataType;
+use piestream_expr::expr::{build_from_prost, BoxedExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_source::SourceManagerRef;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -196,11 +196,11 @@ mod tests {
     use std::sync::Arc;
 
     use futures::StreamExt;
-    use risingwave_common::array::Array;
-    use risingwave_common::catalog::{schema_test_utils, ColumnDesc, ColumnId};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_expr::expr::InputRefExpression;
-    use risingwave_source::{MemSourceManager, SourceManager, StreamSourceReader};
+    use piestream_common::array::Array;
+    use piestream_common::catalog::{schema_test_utils, ColumnDesc, ColumnId};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_expr::expr::InputRefExpression;
+    use piestream_source::{MemSourceManager, SourceManager, StreamSourceReader};
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;

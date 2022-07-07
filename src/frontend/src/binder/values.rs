@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::Values;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::Values;
 
 use super::bind_context::Clause;
 use crate::binder::Binder;
@@ -86,7 +86,7 @@ impl Binder {
 mod tests {
 
     use itertools::zip_eq;
-    use risingwave_sqlparser::ast::{Expr, Value};
+    use piestream_sqlparser::ast::{Expr, Value};
 
     use super::*;
     use crate::binder::test_utils::mock_binder;

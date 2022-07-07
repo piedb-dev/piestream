@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_pb::hummock::{Level, SstableInfo};
+use piestream_pb::hummock::{Level, SstableInfo};
 
 use super::overlap_strategy::OverlapInfo;
 use super::CompactionPicker;
@@ -149,7 +149,7 @@ impl CompactionPicker for ManualCompactionPicker {
 pub mod tests {
     use std::collections::HashSet;
 
-    pub use risingwave_pb::hummock::{KeyRange, LevelType};
+    pub use piestream_pb::hummock::{KeyRange, LevelType};
 
     use super::*;
     use crate::hummock::compaction::overlap_strategy::RangeOverlapStrategy;

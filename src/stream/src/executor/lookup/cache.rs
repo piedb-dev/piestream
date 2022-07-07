@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use madsim::collections::BTreeSet;
-use risingwave_common::array::{Op, Row, StreamChunk};
-use risingwave_common::collection::evictable::EvictableHashMap;
+use piestream_common::array::{Op, Row, StreamChunk};
+use piestream_common::collection::evictable::EvictableHashMap;
 
 use crate::executor::JOIN_CACHE_SIZE;
 

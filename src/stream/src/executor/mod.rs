@@ -21,17 +21,17 @@ use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 use itertools::Itertools;
 use madsim::collections::{HashMap, HashSet};
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{ArrayImpl, ArrayRef, DataChunk, StreamChunk};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{Result, ToRwResult};
-use risingwave_common::types::DataType;
-use risingwave_connector::{ConnectorState, SplitImpl};
-use risingwave_pb::common::ActorInfo;
-use risingwave_pb::data::barrier::Mutation as ProstMutation;
-use risingwave_pb::data::stream_message::StreamMessage;
-use risingwave_pb::data::{
+use piestream_common::array::column::Column;
+use piestream_common::array::{ArrayImpl, ArrayRef, DataChunk, StreamChunk};
+use piestream_common::buffer::Bitmap;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{Result, ToRwResult};
+use piestream_common::types::DataType;
+use piestream_connector::{ConnectorState, SplitImpl};
+use piestream_pb::common::ActorInfo;
+use piestream_pb::data::barrier::Mutation as ProstMutation;
+use piestream_pb::data::stream_message::StreamMessage;
+use piestream_pb::data::{
     AddMutation, Barrier as ProstBarrier, DispatcherMutation, Epoch as ProstEpoch,
     SourceChangeSplitMutation, StopMutation, StreamMessage as ProstStreamMessage, UpdateMutation,
 };
@@ -93,7 +93,7 @@ pub use merge::MergeExecutor;
 pub use mview::*;
 pub use project::ProjectExecutor;
 pub use rearranged_chain::RearrangedChainExecutor;
-use risingwave_pb::source::{ConnectorSplit, ConnectorSplits};
+use piestream_pb::source::{ConnectorSplit, ConnectorSplits};
 use simple::{SimpleExecutor, SimpleExecutorWrapper};
 pub use source::*;
 pub use top_n::TopNExecutor;

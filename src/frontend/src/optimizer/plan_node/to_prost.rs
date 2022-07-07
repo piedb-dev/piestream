@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use paste::paste;
-use risingwave_pb::batch_plan::plan_node as pb_batch_node;
-use risingwave_pb::stream_plan::stream_node as pb_stream_node;
+use piestream_pb::batch_plan::plan_node as pb_batch_node;
+use piestream_pb::stream_plan::stream_node as pb_stream_node;
 
 use super::*;
 use crate::{

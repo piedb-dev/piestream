@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Field};
-use risingwave_common::error::Result;
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_pb::plan_common::{ColumnOrder, Field as ProstField};
-use risingwave_pb::stream_plan::lookup_node::ArrangementTableId;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{
+use piestream_common::catalog::{ColumnDesc, ColumnId, Field};
+use piestream_common::error::Result;
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_pb::plan_common::{ColumnOrder, Field as ProstField};
+use piestream_pb::stream_plan::lookup_node::ArrangementTableId;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{
     ArrangeNode, ArrangementInfo, DeltaIndexJoinNode, DispatchStrategy, DispatcherType,
     ExchangeNode, LookupNode, LookupUnionNode, StreamNode,
 };

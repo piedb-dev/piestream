@@ -16,9 +16,9 @@ use itertools::Itertools;
 use pgwire::pg_field_descriptor::{PgFieldDescriptor, TypeOid};
 use pgwire::pg_response::{PgResponse, StatementType};
 use pgwire::types::Row;
-use risingwave_common::catalog::ColumnDesc;
-use risingwave_common::error::Result;
-use risingwave_sqlparser::ast::{display_comma_separated, ObjectName};
+use piestream_common::catalog::ColumnDesc;
+use piestream_common::error::Result;
+use piestream_sqlparser::ast::{display_comma_separated, ObjectName};
 
 use crate::binder::Binder;
 use crate::catalog::table_catalog::TableCatalog;

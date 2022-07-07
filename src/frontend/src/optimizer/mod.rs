@@ -25,8 +25,8 @@ mod rule;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools as _;
 use property::Order;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::Result;
+use piestream_common::catalog::Schema;
+use piestream_common::error::Result;
 
 use self::heuristic::{ApplyOrder, HeuristicOptimizer};
 use self::plan_node::{BatchProject, Convention, LogicalProject, StreamMaterialize};
@@ -314,8 +314,8 @@ impl PlanRoot {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::Field;
-    use risingwave_common::types::DataType;
+    use piestream_common::catalog::Field;
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::optimizer::plan_node::LogicalValues;

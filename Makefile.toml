@@ -29,9 +29,9 @@ else
 end
 
 if ${is_all_in_one_enabled}
-  set_env RISEDEV_CARGO_BUILD_CRATE "risingwave_cmd_all"
+  set_env RISEDEV_CARGO_BUILD_CRATE "piestream_cmd_all"
 else
-  set_env RISEDEV_CARGO_BUILD_CRATE "risingwave_cmd"
+  set_env RISEDEV_CARGO_BUILD_CRATE "piestream_cmd"
 end
 ''',
 ]
@@ -45,7 +45,7 @@ skip_crate_env_info = true
 
 [tasks.clean-full]
 category = "Misc"
-description = "Clean all downloaded binaries by deleting .risingwave folder"
+description = "Clean all downloaded binaries by deleting .piestream folder"
 script = '''
 #!@duckscript
 rm -rf "${PREFIX}"
@@ -136,14 +136,14 @@ script = '''
 #!@shell
 set -e
 
-rm -rf "${PREFIX_BIN}/risingwave"
-mkdir -p "${PREFIX_BIN}/risingwave"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/meta-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/compute-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/frontend-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/compactor"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/risectl"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_BIN}/risingwave/playground"
+rm -rf "${PREFIX_BIN}/piestream"
+mkdir -p "${PREFIX_BIN}/piestream"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/meta-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/compute-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/frontend-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/compactor"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/risectl"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/playground"
 '''
 
 [tasks.link-user-bin]
@@ -156,14 +156,14 @@ set -e
 
 rm -rf "${PREFIX_USR_BIN}"
 mkdir -p "${PREFIX_USR_BIN}"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_USR_BIN}/meta-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_USR_BIN}/compute-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_USR_BIN}/frontend-node"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_USR_BIN}/risectl"
-ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/risingwave" "${PREFIX_USR_BIN}/playground"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/meta-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/compute-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/frontend-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/risectl"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/playground"
 '''
 
-[tasks.post-build-risingwave]
+[tasks.post-build-piestream]
 category = "RiseDev - Build"
 description = "Copy RisngWave binaries to bin"
 condition = { env_set = ["ENABLE_BUILD_RUST"] }
@@ -174,10 +174,10 @@ dependencies = [
 ]
 
 [tasks.b]
-alias = "build-risingwave"
+alias = "build-piestream"
 
 [tasks.build]
-alias = "build-risingwave"
+alias = "build-piestream"
 
 [tasks.extract-dashboard-artifact]
 category = "RiseDev - Build"
@@ -208,7 +208,7 @@ cd dashboard && npm run build-static
 cd .. && ln -s "$(pwd)/dashboard/out" "${PREFIX_UI}"
 """
 
-[tasks.build-risingwave]
+[tasks.build-piestream]
 category = "RiseDev - Build"
 description = "Build Rust components"
 condition = { env_set = ["ENABLE_BUILD_RUST"] }
@@ -216,13 +216,13 @@ script = '''
 #!@shell
 
 set -e
-echo "$(tput setaf 4)$(tput bold)[Reminder]$(tput sgr0) risedev will only build $(tput setaf 4)risingwave_cmd(_all) and risedev$(tput sgr0) crates."
+echo "$(tput setaf 4)$(tput bold)[Reminder]$(tput sgr0) risedev will only build $(tput setaf 4)piestream_cmd(_all) and risedev$(tput sgr0) crates."
 
 export RUSTFLAGS="${RISEDEV_RUSTFLAGS}"
 echo + RUSTFLAGS="$RUSTFLAGS"
 set -xe
 cargo build -p ${RISEDEV_CARGO_BUILD_CRATE} -p risedev \
-            --profile "${RISINGWAVE_BUILD_PROFILE}" \
+            --profile "${piestream_BUILD_PROFILE}" \
             ${RISEDEV_CARGO_BUILD_EXTRA_ARGS}
 '''
 
@@ -256,7 +256,7 @@ script = '''
 
 set -e
 
-cp "src/config/risingwave.toml" "${PREFIX_CONFIG}/risingwave.toml"
+cp "src/config/piestream.toml" "${PREFIX_CONFIG}/piestream.toml"
 cp "src/risedevtool/run_command.sh" "${PREFIX_BIN}/run_command.sh"
 cp "src/risedevtool/welcome.sh" "${PREFIX_BIN}/welcome.sh"
 '''
@@ -272,8 +272,8 @@ dependencies = [
   "download-prometheus",
   "download-jaeger",
   "download-kafka",
-  "build-risingwave",
-  "post-build-risingwave",
+  "build-piestream",
+  "post-build-piestream",
   "extract-dashboard-artifact",
   "export-dashboard-v2",
   "prepare-config",
@@ -284,7 +284,7 @@ alias = "playground"
 
 [tasks.playground]
 category = "RiseDev - Start"
-description = "Start a lite RisingWave playground using risingwave all-in-one binary"
+description = "Start a lite piestream playground using piestream all-in-one binary"
 script = '''
 #!@shell
 
@@ -294,7 +294,7 @@ echo "Use \`./risedev d\` instead if you want to start a full cluster."
 
 set -ex
 
-RUST_BACKTRACE=1 RW_NODE=playground cargo run --bin risingwave --profile "${RISINGWAVE_BUILD_PROFILE}"
+RUST_BACKTRACE=1 RW_NODE=playground cargo run --bin piestream --profile "${piestream_BUILD_PROFILE}"
 '''
 
 [tasks.ctl]
@@ -312,7 +312,7 @@ fi
 
 source "${RC_ENV_FILE}"
 
-cargo run --bin risectl --profile "${RISINGWAVE_BUILD_PROFILE}" -- "$@"
+cargo run --bin risectl --profile "${piestream_BUILD_PROFILE}" -- "$@"
 test $? -eq 0 || exit 1
 '''
 
@@ -324,17 +324,17 @@ category = "RiseDev - Start"
 dependencies = ["pre-start-playground"]
 command = "target/${BUILD_MODE_DIR}/risedev-playground"
 args = ["${@}"]
-description = "Start a full RisingWave dev cluster using risedev-playground"
+description = "Start a full piestream dev cluster using risedev-playground"
 
 [tasks.kafka]
 category = "RiseDev - Start"
-description = "Start a RisingWave dev cluster alongside with a Kafka instance"
+description = "Start a piestream dev cluster alongside with a Kafka instance"
 command = "./risedev"
 args = ["dev", "ci-kafka"]
 
 [tasks.kill-risedev]
 category = "RiseDev - Stop"
-description = "Kill RisingWave dev cluster"
+description = "Kill piestream dev cluster"
 script = '''
 #!/bin/bash
 
@@ -351,7 +351,7 @@ alias = "kill-risedev"
 
 [tasks.down]
 category = "RiseDev - Stop"
-description = "Kill RisingWave dev cluster and clean the data"
+description = "Kill piestream dev cluster and clean the data"
 dependencies = ["k", "clean-data"]
 
 [tasks.fill-kafka]
@@ -550,7 +550,7 @@ category = "RiseDev - CI"
 dependencies = ["clean-data", "pre-start-playground"]
 command = "target/${BUILD_MODE_DIR}/risedev-playground"
 args = ["${@}"]
-description = "Clean data and start a full RisingWave dev cluster using risedev-playground"
+description = "Clean data and start a full piestream dev cluster using risedev-playground"
 
 [tasks.ci-kill]
 category = "RiseDev - CI"
@@ -600,12 +600,12 @@ script = '''
 #!@shell
 set -e
 
-.risingwave/rw-docker/deploy.sh "$@"
+.piestream/rw-docker/deploy.sh "$@"
 
 echo
 echo "Deploy finished!"
 
-cat .risingwave/rw-docker/_message.partial.sh
+cat .piestream/rw-docker/_message.partial.sh
 '''
 
 [tasks.apply-compose-docker]
@@ -615,5 +615,5 @@ script = '''
 #!@shell
 set -e
 
-cp -a .risingwave/rw-docker/* docker
+cp -a .piestream/rw-docker/* docker
 '''

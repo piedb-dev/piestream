@@ -16,15 +16,15 @@ use std::sync::Arc;
 
 use parking_lot::lock_api::ArcRwLockReadGuard;
 use parking_lot::{RawRwLock, RwLock};
-use risingwave_common::catalog::{CatalogVersion, TableId};
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::catalog::{
+use piestream_common::catalog::{CatalogVersion, TableId};
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_pb::catalog::{
     Database as ProstDatabase, Schema as ProstSchema, Sink as ProstSink, Source as ProstSource,
     Table as ProstTable,
 };
-use risingwave_pb::stream_plan::StreamFragmentGraph;
-use risingwave_rpc_client::MetaClient;
+use piestream_pb::stream_plan::StreamFragmentGraph;
+use piestream_rpc_client::MetaClient;
 use tokio::sync::watch::Receiver;
 
 use super::root_catalog::Catalog;

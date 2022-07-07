@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::HashJoinNode;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::HashJoinNode;
 
 use super::{
     EqJoinPredicate, LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, ToBatchProst,

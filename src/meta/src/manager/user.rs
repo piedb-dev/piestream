@@ -15,12 +15,12 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
-use risingwave_common::catalog::{DEFAULT_SUPPER_USER, DEFAULT_SUPPER_USER_FOR_PG};
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
-use risingwave_pb::user::grant_privilege::{ActionWithGrantOption, Object};
-use risingwave_pb::user::{GrantPrivilege, UserInfo};
+use piestream_common::catalog::{DEFAULT_SUPPER_USER, DEFAULT_SUPPER_USER_FOR_PG};
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_pb::meta::subscribe_response::{Info, Operation};
+use piestream_pb::user::grant_privilege::{ActionWithGrantOption, Object};
+use piestream_pb::user::{GrantPrivilege, UserInfo};
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::manager::{MetaSrvEnv, NotificationVersion};
@@ -531,7 +531,7 @@ impl<S: MetaStore> UserManager<S> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::user::grant_privilege::Action;
+    use piestream_pb::user::grant_privilege::Action;
 
     use super::*;
 

@@ -21,8 +21,8 @@ use std::sync::Arc;
 
 use memcomparable::Error as MemComparableError;
 use prost::Message;
-use risingwave_pb::common::Status;
-use risingwave_pb::ProstFieldNotFound;
+use piestream_pb::common::Status;
+use piestream_pb::ProstFieldNotFound;
 use thiserror::Error;
 use tokio::task::JoinError;
 use tonic::metadata::{MetadataMap, MetadataValue};
@@ -32,7 +32,7 @@ use crate::array::ArrayError;
 use crate::util::value_encoding::error::ValueEncodingError;
 
 /// Header used to store serialized [`RwError`] in grpc status.
-pub const RW_ERROR_GRPC_HEADER: &str = "risingwave-error-bin";
+pub const RW_ERROR_GRPC_HEADER: &str = "piestream-error-bin";
 
 pub trait Error = std::error::Error + Send + Sync + 'static;
 pub type BoxedError = Box<dyn Error>;
@@ -69,7 +69,7 @@ impl Display for TrackingIssue {
         match self.0 {
             Some(id) => write!(
                 f,
-                "Tracking issue: https://github.com/singularity-data/risingwave/issues/{}",
+                "Tracking issue: https://github.com/singularity-data/piestream/issues/{}",
                 id
             ),
             None => write!(f, "No tracking issue"),
@@ -200,7 +200,7 @@ impl From<RwError> for tonic::Status {
 }
 
 impl RwError {
-    /// Converting to risingwave's status.
+    /// Converting to piestream's status.
     ///
     /// We can't use grpc/tonic's library directly because we need to customized error code and
     /// information.

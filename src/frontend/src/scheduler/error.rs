@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{ErrorCode, RwError, TrackingIssue};
-use risingwave_rpc_client::error::RpcError;
+use piestream_common::error::{ErrorCode, RwError, TrackingIssue};
+use piestream_rpc_client::error::RpcError;
 use thiserror::Error;
 
 use crate::scheduler::plan_fragmenter::QueryId;

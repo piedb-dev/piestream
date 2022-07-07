@@ -14,8 +14,8 @@
 
 //! For expression that accept 3 arguments + 1 bytes writer as input.
 
-use risingwave_common::array::{I32Array, Utf8Array};
-use risingwave_common::types::DataType;
+use piestream_common::array::{I32Array, Utf8Array};
+use piestream_common::types::DataType;
 
 use crate::expr::template::TernaryBytesExpression;
 use crate::expr::BoxedExpression;
@@ -94,8 +94,8 @@ pub fn new_split_part_expr(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{DataChunk, Row};
-    use risingwave_common::types::{Datum, ScalarImpl};
+    use piestream_common::array::{DataChunk, Row};
+    use piestream_common::types::{Datum, ScalarImpl};
 
     use super::*;
     use crate::expr::LiteralExpression;

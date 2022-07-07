@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::catalog::Field;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::{DataType, Scalar, ScalarImpl};
-use risingwave_expr::expr::AggKind;
-use risingwave_sqlparser::ast::{Expr, Ident};
+use piestream_common::catalog::Field;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::{DataType, Scalar, ScalarImpl};
+use piestream_expr::expr::AggKind;
+use piestream_sqlparser::ast::{Expr, Ident};
 
 use crate::binder::bind_context::ColumnBinding;
 use crate::binder::Binder;

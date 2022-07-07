@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::Op;
-use risingwave_common::error::ErrorCode::ProtocolError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::Datum;
+use piestream_common::array::Op;
+use piestream_common::error::ErrorCode::ProtocolError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::Datum;
 use serde_json::Value;
 
 use crate::parser::common::json_parse_value;
@@ -48,9 +48,9 @@ impl SourceParser for JSONParser {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::ColumnId;
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_expr::vector_op::cast::{str_to_date, str_to_timestamp};
+    use piestream_common::catalog::ColumnId;
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_expr::vector_op::cast::{str_to_date, str_to_timestamp};
 
     use crate::{JSONParser, SourceColumnDesc, SourceParser};
 

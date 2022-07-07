@@ -18,10 +18,10 @@ use std::time::Duration;
 
 #[cfg(any(test, feature = "test"))]
 use prost::Message;
-use risingwave_pb::meta::MetaLeaderInfo;
+use piestream_pb::meta::MetaLeaderInfo;
 #[cfg(any(test, feature = "test"))]
-use risingwave_pb::meta::MetaLeaseInfo;
-use risingwave_rpc_client::{StreamClientPool, StreamClientPoolRef};
+use piestream_pb::meta::MetaLeaseInfo;
+use piestream_rpc_client::{StreamClientPool, StreamClientPoolRef};
 
 use super::{HashMappingManager, HashMappingManagerRef};
 use crate::manager::{

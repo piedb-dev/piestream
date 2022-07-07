@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_common::catalog::PG_CATALOG_SCHEMA_NAME;
-use risingwave_pb::catalog::{Database as ProstDatabase, Schema as ProstSchema};
+use piestream_common::catalog::PG_CATALOG_SCHEMA_NAME;
+use piestream_pb::catalog::{Database as ProstDatabase, Schema as ProstSchema};
 
 use crate::catalog::schema_catalog::SchemaCatalog;
 use crate::catalog::{DatabaseId, SchemaId};

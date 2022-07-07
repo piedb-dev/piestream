@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::types::DataType;
-use risingwave_pb::stream_plan::stream_node;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::types::DataType;
+use piestream_pb::stream_plan::stream_node;
 
 use super::*;
 use crate::executor::HopWindowExecutor;

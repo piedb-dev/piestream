@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::for_all_variants;
+use piestream_common::for_all_variants;
 use tracing::event;
 
 use crate::executor::error::StreamExecutorError;
@@ -56,8 +56,8 @@ pub async fn schema_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
 
                 macro_rules! check_schema {
                     ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
-                        use risingwave_common::array::ArrayBuilderImpl;
-                        use risingwave_common::array::ArrayImpl;
+                        use piestream_common::array::ArrayBuilderImpl;
+                        use piestream_common::array::ArrayImpl;
 
                         match (array, &builder) {
                             $( (Some(ArrayImpl::$variant_name(_)), Some(ArrayBuilderImpl::$variant_name(_))) => {} ),*
@@ -79,10 +79,10 @@ pub async fn schema_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
 mod tests {
     use assert_matches::assert_matches;
     use futures::{pin_mut, StreamExt};
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::executor::test_utils::MockSource;

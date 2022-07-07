@@ -15,10 +15,10 @@
 use enum_as_inner::EnumAsInner;
 use fixedbitset::FixedBitSet;
 use paste::paste;
-use risingwave_common::error::Result;
-use risingwave_common::types::{DataType, Scalar};
-use risingwave_expr::expr::AggKind;
-use risingwave_pb::expr::ExprNode;
+use piestream_common::error::Result;
+use piestream_common::types::{DataType, Scalar};
+use piestream_expr::expr::AggKind;
+use piestream_pb::expr::ExprNode;
 
 mod agg_call;
 mod correlated_input_ref;
@@ -39,7 +39,7 @@ pub use input_ref::{as_alias_display, input_ref_to_column_indices, InputRef, Inp
 pub use literal::Literal;
 pub use subquery::{Subquery, SubqueryKind};
 
-pub type ExprType = risingwave_pb::expr::expr_node::Type;
+pub type ExprType = piestream_pb::expr::expr_node::Type;
 
 pub use expr_rewriter::ExprRewriter;
 pub use expr_visitor::ExprVisitor;

@@ -19,10 +19,10 @@ use std::sync::Arc;
 pub use debezium::*;
 pub use json_parser::*;
 pub use protobuf_parser::*;
-use risingwave_common::array::Op;
-use risingwave_common::error::ErrorCode::ProtocolError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::Datum;
+use piestream_common::array::Op;
+use piestream_common::error::ErrorCode::ProtocolError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::Datum;
 
 use crate::parser::avro_parser::AvroParser;
 use crate::{SourceColumnDesc, SourceFormat};

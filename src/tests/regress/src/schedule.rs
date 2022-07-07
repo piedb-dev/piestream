@@ -133,15 +133,15 @@ impl Schedule {
 
         if !different_tests.is_empty() {
             info!(
-                "Risingwave regress tests failed, these tests are different from expected output: {:?}",
+                "piestream regress tests failed, these tests are different from expected output: {:?}",
                 different_tests
             );
             bail!(
-                "Risingwave regress tests failed, these tests are different from expected output: {:?}",
+                "piestream regress tests failed, these tests are different from expected output: {:?}",
                 different_tests
             )
         } else {
-            info!("Risingwave regress tests passed.");
+            info!("piestream regress tests passed.");
             Ok(())
         }
     }
@@ -217,7 +217,7 @@ impl TestCase {
 
         command.env(
             "PGAPPNAME",
-            format!("risingwave_regress/{}", self.test_name),
+            format!("piestream_regress/{}", self.test_name),
         );
         command.stdin(input_file);
         command.stdout(

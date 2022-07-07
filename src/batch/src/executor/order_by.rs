@@ -20,15 +20,15 @@ use std::vec::Vec;
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, DataChunk};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
-use risingwave_common::util::encoding_for_comparison::{encode_chunk, is_type_encodable};
-use risingwave_common::util::sort_util::{compare_two_row, HeapElem, OrderPair};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::column::Column;
+use piestream_common::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, DataChunk};
+use piestream_common::catalog::Schema;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
+use piestream_common::util::encoding_for_comparison::{encode_chunk, is_type_encodable};
+use piestream_common::util::sort_util::{compare_two_row, HeapElem, OrderPair};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -276,11 +276,11 @@ impl OrderByExecutor {
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array::DataChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::OrderType;
+    use piestream_common::array::DataChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;

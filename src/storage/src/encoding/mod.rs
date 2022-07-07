@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::Result;
-use risingwave_common::types::VirtualNode;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::Result;
+use piestream_common::types::VirtualNode;
 
 pub mod cell_based_row_deserializer;
 pub mod cell_based_row_serializer;

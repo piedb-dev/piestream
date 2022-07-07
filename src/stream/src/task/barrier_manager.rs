@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use madsim::collections::{HashMap, HashSet};
-use risingwave_common::error::Result;
-use risingwave_pb::stream_service::barrier_complete_response::CreateMviewProgress as ProstCreateMviewProgress;
+use piestream_common::error::Result;
+use piestream_pb::stream_service::barrier_complete_response::CreateMviewProgress as ProstCreateMviewProgress;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 

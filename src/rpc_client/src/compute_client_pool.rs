@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use moka::future::Cache;
-use risingwave_common::util::addr::HostAddr;
+use piestream_common::util::addr::HostAddr;
 
 use crate::error::Result;
 use crate::ComputeClient;

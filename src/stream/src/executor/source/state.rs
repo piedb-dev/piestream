@@ -17,11 +17,11 @@ use std::fmt::Debug;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use log::error;
-use risingwave_common::error::{internal_error, Result as RwResult};
-use risingwave_connector::{SplitImpl, SplitMetaData};
-use risingwave_storage::storage_value::StorageValue;
-use risingwave_storage::store::WriteOptions;
-use risingwave_storage::{Keyspace, StateStore};
+use piestream_common::error::{internal_error, Result as RwResult};
+use piestream_connector::{SplitImpl, SplitMetaData};
+use piestream_storage::storage_value::StorageValue;
+use piestream_storage::store::WriteOptions;
+use piestream_storage::{Keyspace, StateStore};
 
 /// `SourceState` Represents an abstraction of state,
 /// e.g. if the Kafka Source state consists of `topic` `partition_id` and `offset`.
@@ -121,8 +121,8 @@ impl<S: StateStore> SourceStateHandler<S> {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use risingwave_common::catalog::TableId;
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_common::catalog::TableId;
+    use piestream_storage::memory::MemoryStateStore;
     use serde::{Deserialize, Serialize};
 
     use super::*;

@@ -19,14 +19,14 @@ mod utils;
 
 use clap::Parser;
 use operations::*;
-use risingwave_common::config::StorageConfig;
-use risingwave_common::monitor::Print;
-use risingwave_meta::hummock::test_utils::setup_compute_env;
-use risingwave_meta::hummock::MockHummockMetaClient;
-use risingwave_storage::hummock::compaction_executor::CompactionExecutor;
-use risingwave_storage::hummock::compactor::{get_remote_sstable_id_generator, CompactorContext};
-use risingwave_storage::monitor::{ObjectStoreMetrics, StateStoreMetrics};
-use risingwave_storage::{dispatch_state_store, StateStoreImpl};
+use piestream_common::config::StorageConfig;
+use piestream_common::monitor::Print;
+use piestream_meta::hummock::test_utils::setup_compute_env;
+use piestream_meta::hummock::MockHummockMetaClient;
+use piestream_storage::hummock::compaction_executor::CompactionExecutor;
+use piestream_storage::hummock::compactor::{get_remote_sstable_id_generator, CompactorContext};
+use piestream_storage::monitor::{ObjectStoreMetrics, StateStoreMetrics};
+use piestream_storage::{dispatch_state_store, StateStoreImpl};
 
 #[derive(Parser, Debug)]
 pub(crate) struct Opts {

@@ -28,7 +28,7 @@ Please keep the types that apply to your changes, and remove those that do not a
 * Installation and deployment 
 * Connector (sources & sinks)
 * SQL commands, functions, and operators
-* RisingWave cluster configuration changes
+* piestream cluster configuration changes
 * Other (please specify in the release note below)
 
 ### Release note

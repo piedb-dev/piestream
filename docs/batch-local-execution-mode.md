@@ -2,7 +2,7 @@
 
 ## Background
 
-The query engine of RisingWave supports two types of queries: highly concurrent point queries and ad-hoc queries. The characteristics of these two different kinds of queries are summarized as follows:
+The query engine of piestream supports two types of queries: highly concurrent point queries and ad-hoc queries. The characteristics of these two different kinds of queries are summarized as follows:
 
 | 	              | Point Queries	 | Adhoc Queries	        |
 |----------------|----------------|-----------------------|

@@ -14,17 +14,17 @@
 
 use std::collections::{HashMap, HashSet};
 
-use risingwave_common::catalog::CatalogVersion;
-use risingwave_common::error::{tonic_err, ErrorCode, Result as RwResult};
-use risingwave_common::util::compress::compress_data;
-use risingwave_pb::catalog::table::OptionalAssociatedSourceId;
-use risingwave_pb::catalog::*;
-use risingwave_pb::common::{ParallelUnitMapping, ParallelUnitType};
-use risingwave_pb::ddl_service::ddl_service_server::DdlService;
-use risingwave_pb::ddl_service::*;
-use risingwave_pb::plan_common::TableRefId;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{StreamFragmentGraph, StreamNode};
+use piestream_common::catalog::CatalogVersion;
+use piestream_common::error::{tonic_err, ErrorCode, Result as RwResult};
+use piestream_common::util::compress::compress_data;
+use piestream_pb::catalog::table::OptionalAssociatedSourceId;
+use piestream_pb::catalog::*;
+use piestream_pb::common::{ParallelUnitMapping, ParallelUnitType};
+use piestream_pb::ddl_service::ddl_service_server::DdlService;
+use piestream_pb::ddl_service::*;
+use piestream_pb::plan_common::TableRefId;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{StreamFragmentGraph, StreamNode};
 use tonic::{Request, Response, Status};
 
 use crate::cluster::ClusterManagerRef;
@@ -333,7 +333,7 @@ where
         &self,
         request: Request<DropMaterializedViewRequest>,
     ) -> Result<Response<DropMaterializedViewResponse>, Status> {
-        use risingwave_common::catalog::TableId;
+        use piestream_common::catalog::TableId;
 
         self.env.idle_manager().record_activity();
 
@@ -420,7 +420,7 @@ where
         id: TableId,
         mut ctx: CreateMaterializedViewContext,
     ) -> RwResult<Vec<Table>> {
-        use risingwave_common::catalog::TableId;
+        use piestream_common::catalog::TableId;
 
         // Fill in the correct mview id for stream node.
         fn fill_mview_id(stream_node: &mut StreamNode, mview_id: TableId) -> usize {
@@ -522,7 +522,7 @@ where
 
         // Fill in the correct source id for stream node.
         fn fill_source_id(stream_node: &mut StreamNode, source_id: u32) -> usize {
-            use risingwave_common::catalog::TableId;
+            use piestream_common::catalog::TableId;
             let mut source_count = 0;
             if let NodeBody::Source(source_node) = stream_node.node_body.as_mut().unwrap() {
                 // TODO: refactor using source id.
@@ -602,7 +602,7 @@ where
         source_id: SourceId,
         table_id: TableId,
     ) -> RwResult<CatalogVersion> {
-        use risingwave_common::catalog::TableId;
+        use piestream_common::catalog::TableId;
 
         // 1. Drop materialized source in catalog, source_id will be checked if it is
         // associated_source_id in mview.

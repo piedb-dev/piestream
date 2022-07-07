@@ -7,7 +7,7 @@ date="$(date +%Y%m%d)"
 ghcraddr="ghcr.io/singularity-data"
 
 components=(
-  "risingwave"
+  "piestream"
   "compute-node"
   "meta-node"
   "frontend-node"

@@ -17,14 +17,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
-use risingwave_common::config::StorageConfig;
-use risingwave_rpc_client::MetaClient;
-use risingwave_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
-use risingwave_storage::hummock::HummockStorage;
-use risingwave_storage::monitor::{
+use piestream_common::config::StorageConfig;
+use piestream_rpc_client::MetaClient;
+use piestream_storage::hummock::hummock_meta_client::MonitoredHummockMetaClient;
+use piestream_storage::hummock::HummockStorage;
+use piestream_storage::monitor::{
     HummockMetrics, MonitoredStateStore, ObjectStoreMetrics, StateStoreMetrics,
 };
-use risingwave_storage::StateStoreImpl;
+use piestream_storage::StateStoreImpl;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
@@ -59,7 +59,7 @@ impl HummockServiceOpts {
                 url
             }
             Err(_) => {
-                bail!("env variable `RW_HUMMOCK_URL` not found, please do one of the following:\n* use `./risedev ctl` to start risectl.\n* `source .risingwave/config/risectl-env` or `source ~/risingwave-deploy/risectl-env` before running risectl.\n* manually set `RW_HUMMOCK_URL` in env variable.\nPlease also remember to add `use: minio` to risedev config.");
+                bail!("env variable `RW_HUMMOCK_URL` not found, please do one of the following:\n* use `./risedev ctl` to start risectl.\n* `source .piestream/config/risectl-env` or `source ~/piestream-deploy/risectl-env` before running risectl.\n* manually set `RW_HUMMOCK_URL` in env variable.\nPlease also remember to add `use: minio` to risedev config.");
             }
         };
         Ok(Self {

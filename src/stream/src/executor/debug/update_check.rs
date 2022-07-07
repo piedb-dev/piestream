@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::Op;
+use piestream_common::array::Op;
 
 use crate::executor::error::StreamExecutorError;
 use crate::executor::{ExecutorInfo, Message, MessageStream};
@@ -57,8 +57,8 @@ pub async fn update_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
 #[cfg(test)]
 mod tests {
     use futures::{pin_mut, StreamExt};
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
 
     use super::*;
     use crate::executor::test_utils::MockSource;

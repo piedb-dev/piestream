@@ -15,11 +15,11 @@
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-use risingwave_pb::meta::list_table_fragments_response::{
+use piestream_pb::meta::list_table_fragments_response::{
     ActorInfo, FragmentInfo, TableFragmentInfo,
 };
-use risingwave_pb::meta::stream_manager_service_server::StreamManagerService;
-use risingwave_pb::meta::*;
+use piestream_pb::meta::stream_manager_service_server::StreamManagerService;
+use piestream_pb::meta::*;
 use tonic::{Request, Response, Status};
 
 use crate::barrier::BarrierManagerRef;

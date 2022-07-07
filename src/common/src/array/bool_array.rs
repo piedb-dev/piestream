@@ -14,7 +14,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use risingwave_pb::data::{Array as ProstArray, ArrayType};
+use piestream_pb::data::{Array as ProstArray, ArrayType};
 
 use super::{Array, ArrayBuilder, ArrayIterator, ArrayMeta, ArrayResult, NULL_VAL_FOR_HASH};
 use crate::array::ArrayBuilderImpl;

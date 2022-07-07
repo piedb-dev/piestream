@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_sqlparser"
+name = "piestream_sqlparser"
 version = "0.1.10"
 license = "Apache-2.0"
 include = [
@@ -20,7 +20,7 @@ json_example = ["serde_json", "serde"]
 [dependencies]
 itertools = "0.10"
 log = "0.4"
-risingwave_common = { path = "../common" }
+piestream_common = { path = "../common" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 # serde_json is only used in examples/cli, but we have to put it outside
 # of dev-dependencies because of

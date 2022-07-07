@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::types::DataType;
-use risingwave_pb::plan_common::JoinType;
+use piestream_common::types::DataType;
+use piestream_pb::plan_common::JoinType;
 
 use super::{BoxedRule, Rule};
 use crate::expr::{Expr, ExprImpl, ExprType, FunctionCall, InputRef};

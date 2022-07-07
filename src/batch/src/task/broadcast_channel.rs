@@ -14,11 +14,11 @@
 
 use std::future::Future;
 
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, ToRwResult};
-use risingwave_pb::batch_plan::exchange_info::BroadcastInfo;
-use risingwave_pb::batch_plan::*;
+use piestream_common::array::DataChunk;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, ToRwResult};
+use piestream_pb::batch_plan::exchange_info::BroadcastInfo;
+use piestream_pb::batch_plan::*;
 use tokio::sync::mpsc;
 
 use crate::task::channel::{ChanReceiver, ChanReceiverImpl, ChanSender, ChanSenderImpl};

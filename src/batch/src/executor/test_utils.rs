@@ -18,10 +18,10 @@ use std::future::Future;
 use assert_matches::assert_matches;
 use futures_async_stream::{for_await, try_stream};
 use itertools::Itertools;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::batch_plan::ExchangeSource as ProstExchangeSource;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{Result, RwError};
+use piestream_pb::batch_plan::ExchangeSource as ProstExchangeSource;
 
 use crate::exchange_source::{ExchangeSource, ExchangeSourceImpl};
 use crate::executor::{BoxedDataChunkStream, BoxedExecutor, CreateSource, Executor};

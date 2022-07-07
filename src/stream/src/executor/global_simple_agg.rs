@@ -15,12 +15,12 @@
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::Result;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::column::Column;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::Result;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use super::*;
 use crate::executor::aggregation::{
@@ -275,11 +275,11 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
 mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::catalog::{Field, TableId};
-    use risingwave_common::types::*;
-    use risingwave_expr::expr::*;
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::catalog::{Field, TableId};
+    use piestream_common::types::*;
+    use piestream_expr::expr::*;
+    use piestream_storage::memory::MemoryStateStore;
 
     use crate::executor::aggregation::{AggArgs, AggCall};
     use crate::executor::test_utils::*;

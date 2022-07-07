@@ -15,13 +15,13 @@
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::util::select_all;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::ExchangeSource as ProstExchangeSource;
-use risingwave_pb::plan_common::Field as NodeField;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{Result, RwError};
+use piestream_common::util::select_all;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::ExchangeSource as ProstExchangeSource;
+use piestream_pb::plan_common::Field as NodeField;
 
 use crate::exchange_source::ExchangeSourceImpl;
 use crate::execution::grpc_exchange::GrpcExchangeSource;
@@ -179,10 +179,10 @@ mod tests {
 
     use futures::StreamExt;
     use rand::Rng;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::{DataChunk, I32Array};
-    use risingwave_common::array_nonnull;
-    use risingwave_common::types::DataType;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::{DataChunk, I32Array};
+    use piestream_common::array_nonnull;
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::executor::test_utils::{FakeCreateSource, FakeExchangeSource};

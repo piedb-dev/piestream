@@ -15,9 +15,9 @@
 use std::collections::HashSet;
 use std::marker::PhantomData;
 
-use risingwave_common::array::*;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::*;
+use piestream_common::array::*;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::*;
 
 use crate::vector_op::agg::aggregator::Aggregator;
 use crate::vector_op::agg::functions::RTFn;
@@ -240,8 +240,8 @@ impl_aggregator! { I64Array, Int64, DecimalArray, Decimal }
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array::column::Column;
-    use risingwave_common::types::Decimal;
+    use piestream_common::array::column::Column;
+    use piestream_common::types::Decimal;
 
     use super::*;
     use crate::expr::AggKind;

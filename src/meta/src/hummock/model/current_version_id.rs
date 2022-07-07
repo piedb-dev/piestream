@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::Result;
-use risingwave_hummock_sdk::{HummockVersionId, FIRST_VERSION_ID};
+use piestream_common::error::Result;
+use piestream_hummock_sdk::{HummockVersionId, FIRST_VERSION_ID};
 
 use crate::hummock::model::HUMMOCK_DEFAULT_CF_NAME;
 use crate::model::MetadataModel;

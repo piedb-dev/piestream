@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use risingwave_pb::hummock::{Level, SstableInfo};
+use piestream_pb::hummock::{Level, SstableInfo};
 
 use super::CompactionPicker;
 use crate::hummock::compaction::overlap_strategy::OverlapStrategy;
@@ -186,7 +186,7 @@ impl CompactionPicker for MinOverlappingPicker {
 
 #[cfg(test)]
 pub mod tests {
-    pub use risingwave_pb::hummock::{KeyRange, LevelType};
+    pub use piestream_pb::hummock::{KeyRange, LevelType};
 
     use super::*;
     use crate::hummock::compaction::overlap_strategy::RangeOverlapStrategy;

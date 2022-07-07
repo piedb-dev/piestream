@@ -15,10 +15,10 @@
 use std::convert::TryFrom;
 use std::ops::Index;
 
-use risingwave_common::array::{ArrayRef, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::{ArrayRef, DataChunk, Row};
+use piestream_common::types::{DataType, Datum};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::Expression;
 use crate::{bail, ensure, ExprError, Result};
@@ -75,8 +75,8 @@ impl<'a> TryFrom<&'a ExprNode> for InputRefExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::Row;
-    use risingwave_common::types::{DataType, Datum};
+    use piestream_common::array::Row;
+    use piestream_common::types::{DataType, Datum};
 
     use crate::expr::{Expression, InputRefExpression};
 

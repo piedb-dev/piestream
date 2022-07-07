@@ -16,9 +16,9 @@ use std::fmt;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::plan_common::JoinType;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::plan_common::JoinType;
 
 use super::{
     BatchProject, ColPrunable, CollectInputRef, LogicalProject, PlanBase, PlanRef,
@@ -829,9 +829,9 @@ impl ToStream for LogicalJoin {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::catalog::Field;
-    use risingwave_common::types::{DataType, Datum};
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::catalog::Field;
+    use piestream_common::types::{DataType, Datum};
+    use piestream_pb::expr::expr_node::Type;
 
     use super::*;
     use crate::expr::{assert_eq_input_ref, FunctionCall, InputRef, Literal};

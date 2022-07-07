@@ -15,9 +15,9 @@
 use std::convert::Into;
 use std::sync::Arc;
 
-use risingwave_pb::batch_plan::TaskOutputId;
-use risingwave_pb::task_service::task_service_server::TaskService;
-use risingwave_pb::task_service::{
+use piestream_pb::batch_plan::TaskOutputId;
+use piestream_pb::task_service::task_service_server::TaskService;
+use piestream_pb::task_service::{
     AbortTaskRequest, AbortTaskResponse, CreateTaskRequest, CreateTaskResponse, ExecuteRequest,
     GetDataResponse, GetTaskInfoRequest, GetTaskInfoResponse, RemoveTaskRequest,
     RemoveTaskResponse,

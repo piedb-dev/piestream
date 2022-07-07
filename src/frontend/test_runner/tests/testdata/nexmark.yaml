@@ -339,14 +339,14 @@
       WHERE A.id = B.auction AND B.dateTime BETWEEN A.dateTime AND A.expires
     )
     WHERE rownum <= 1;
-  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q10
   before:
     - create_tables
   sql: |
     SELECT auction, bidder, price, dateTime, DATE_FORMAT(dateTime, 'yyyy-MM-dd'), DATE_FORMAT(dateTime, 'HH:mm')
     FROM bid;
-  binder_error: 'Feature is not yet implemented: unsupported function: "date_format", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "date_format", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q11
   before:
     - create_tables
@@ -358,7 +358,7 @@
         SESSION_END(B.dateTime, INTERVAL '10' SECOND) as endtime
     FROM bid B
     GROUP BY B.bidder, SESSION(B.dateTime, INTERVAL '10' SECOND);
-  binder_error: 'Feature is not yet implemented: unsupported function: "session", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "session", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q12
   before:
     - create_tables
@@ -370,7 +370,7 @@
         TUMBLE_END(B.p_time, INTERVAL '10' SECOND) as endtime
     FROM (SELECT *, PROCTIME() as p_time FROM bid) B
     GROUP BY B.bidder, TUMBLE(B.p_time, INTERVAL '10' SECOND);
-  binder_error: 'Feature is not yet implemented: unsupported function: "proctime", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "proctime", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q13
   before:
     - create_tables
@@ -390,7 +390,7 @@
   before:
     - create_tables
   sql: "SELECT \n    auction,\n    bidder,\n    0.908 * price as price,\n    CASE\n        WHEN HOUR(dateTime) >= 8 AND HOUR(dateTime) <= 18 THEN 'dayTime'\n        WHEN HOUR(dateTime) <= 6 OR HOUR(dateTime) >= 20 THEN 'nightTime'\n        ELSE 'otherTime'\n    END AS bidTimeType,\n    dateTime,\n    extra,\n    count_char(extra, 'c') AS c_counts\nFROM bid\nWHERE 0.908 * price > 1000000 AND 0.908 * price < 50000000;\n"
-  binder_error: 'Feature is not yet implemented: unsupported function: "hour", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "hour", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q15
   before:
     - create_tables
@@ -445,7 +445,7 @@
     FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY bidder, auction ORDER BY dateTime DESC) AS rank_number
           FROM bid)
     WHERE rank_number <= 1;
-  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q19
   before:
     - create_tables
@@ -453,7 +453,7 @@
     SELECT * FROM
     (SELECT *, ROW_NUMBER() OVER (PARTITION BY auction ORDER BY price DESC) AS rank_number FROM bid)
     WHERE rank_number <= 10;
-  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "row_number", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q20
   before:
     - create_tables
@@ -484,7 +484,7 @@
         AS channel_id FROM bid
         where REGEXP_EXTRACT(url, '(&|^)channel_id=([^&]*)', 2) is not null or
               lower(channel) in ('apple', 'google', 'facebook', 'baidu');
-  binder_error: 'Feature is not yet implemented: unsupported function: "regexp_extract", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "regexp_extract", Tracking issue: https://github.com/singularity-data/piestream/issues/112'
 - id: nexmark_q22
   before:
     - create_tables
@@ -494,4 +494,4 @@
         SPLIT_INDEX(url, '/', 3) as dir1,
         SPLIT_INDEX(url, '/', 4) as dir2,
         SPLIT_INDEX(url, '/', 5) as dir3 FROM bid;
-  binder_error: 'Feature is not yet implemented: unsupported function: "split_index", Tracking issue: https://github.com/singularity-data/risingwave/issues/112'
+  binder_error: 'Feature is not yet implemented: unsupported function: "split_index", Tracking issue: https://github.com/singularity-data/piestream/issues/112'

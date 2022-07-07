@@ -15,14 +15,14 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use risingwave_common::buffer::BitmapBuilder;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{internal_error, Result};
-use risingwave_common::types::VIRTUAL_NODE_COUNT;
-use risingwave_common::util::compress::compress_data;
-use risingwave_pb::common::{ActorInfo, ParallelUnit, ParallelUnitMapping, ParallelUnitType};
-use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
-use risingwave_pb::meta::table_fragments::Fragment;
+use piestream_common::buffer::BitmapBuilder;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{internal_error, Result};
+use piestream_common::types::VIRTUAL_NODE_COUNT;
+use piestream_common::util::compress::compress_data;
+use piestream_pb::common::{ActorInfo, ParallelUnit, ParallelUnitMapping, ParallelUnitType};
+use piestream_pb::meta::table_fragments::fragment::FragmentDistributionType;
+use piestream_pb::meta::table_fragments::Fragment;
 
 use super::record_table_vnode_mappings;
 use crate::cluster::{ClusterManagerRef, WorkerId, WorkerLocations};
@@ -300,13 +300,13 @@ mod test {
     use std::time::Duration;
 
     use itertools::Itertools;
-    use risingwave_common::buffer::Bitmap;
-    use risingwave_common::types::VIRTUAL_NODE_COUNT;
-    use risingwave_pb::common::{HostAddress, WorkerType};
-    use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
-    use risingwave_pb::plan_common::TableRefId;
-    use risingwave_pb::stream_plan::stream_node::NodeBody;
-    use risingwave_pb::stream_plan::{MaterializeNode, StreamActor, StreamNode, TopNNode};
+    use piestream_common::buffer::Bitmap;
+    use piestream_common::types::VIRTUAL_NODE_COUNT;
+    use piestream_pb::common::{HostAddress, WorkerType};
+    use piestream_pb::meta::table_fragments::fragment::FragmentDistributionType;
+    use piestream_pb::plan_common::TableRefId;
+    use piestream_pb::stream_plan::stream_node::NodeBody;
+    use piestream_pb::stream_plan::{MaterializeNode, StreamActor, StreamNode, TopNNode};
 
     use super::*;
     use crate::cluster::{ClusterManager, DEFAULT_WORK_NODE_PARALLEL_DEGREE};

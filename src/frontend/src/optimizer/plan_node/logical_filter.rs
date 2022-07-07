@@ -23,7 +23,7 @@ use super::{
 };
 use crate::expr::{assert_input_ref, ExprImpl};
 use crate::optimizer::plan_node::{BatchFilter, StreamFilter};
-use crate::risingwave_common::error::Result;
+use crate::piestream_common::error::Result;
 use crate::utils::{ColIndexMapping, Condition};
 
 /// `LogicalFilter` iterates over its input and returns elements for which `predicate` evaluates to
@@ -175,9 +175,9 @@ impl ToStream for LogicalFilter {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
+    use piestream_pb::expr::expr_node::Type;
 
     use super::*;
     use crate::expr::{assert_eq_input_ref, FunctionCall, InputRef, Literal};

@@ -17,12 +17,12 @@
 use std::marker::PhantomData;
 
 use itertools::Itertools;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::*;
-use risingwave_common::bail;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::error::{ErrorCode, RwError};
-use risingwave_common::types::{Datum, Scalar, ScalarRef};
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::*;
+use piestream_common::bail;
+use piestream_common::buffer::Bitmap;
+use piestream_common::error::{ErrorCode, RwError};
+use piestream_common::types::{Datum, Scalar, ScalarRef};
 
 use super::{StreamingAggFunction, StreamingAggState, StreamingAggStateImpl};
 use crate::executor::error::{StreamExecutorError, StreamExecutorResult};
@@ -403,9 +403,9 @@ impl_fold_agg! { F64Array, Float64, F32Array }
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::I64Array;
-    use risingwave_common::types::OrderedF64;
-    use risingwave_common::{array, array_nonnull};
+    use piestream_common::array::I64Array;
+    use piestream_common::types::OrderedF64;
+    use piestream_common::{array, array_nonnull};
 
     use super::*;
 

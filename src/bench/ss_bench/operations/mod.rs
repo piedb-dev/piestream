@@ -18,10 +18,10 @@ use std::sync::Arc;
 use bytes::Bytes;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use risingwave_meta::hummock::MockHummockMetaClient;
-use risingwave_storage::hummock::compactor::CompactorContext;
-use risingwave_storage::hummock::local_version_manager::LocalVersionManager;
-use risingwave_storage::StateStore;
+use piestream_meta::hummock::MockHummockMetaClient;
+use piestream_storage::hummock::compactor::CompactorContext;
+use piestream_storage::hummock::local_version_manager::LocalVersionManager;
+use piestream_storage::StateStore;
 
 use crate::utils::display_stats::*;
 use crate::utils::latency_stat::LatencyStat;

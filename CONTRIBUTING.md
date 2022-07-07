@@ -1,12 +1,12 @@
 # Contribution guidelines
 
-Thanks for your interest in contributing to RisingWave! We welcome and appreciate contributions.
+Thanks for your interest in contributing to piestream! We welcome and appreciate contributions.
 
-This document describes how to submit your code changes. To learn about the development process, see the [developer guide](docs/developer-guide.md). To understand the design and implementation of RisingWave, refer to the design docs listed in [docs/README.md](docs/README.md).
+This document describes how to submit your code changes. To learn about the development process, see the [developer guide](docs/developer-guide.md). To understand the design and implementation of piestream, refer to the design docs listed in [docs/README.md](docs/README.md).
 
-If you have questions, you can search for existing discussions or start a new discussion in the [Discussions forum of RisingWave](https://github.com/singularity-data/risingwave/discussions), or ask in the RisingWave Community channel on Slack. Please use the [invitation link](https://join.slack.com/t/risingwave-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw) to join the channel.
+If you have questions, you can search for existing discussions or start a new discussion in the [Discussions forum of piestream](https://github.com/singularity-data/piestream/discussions), or ask in the piestream Community channel on Slack. Please use the [invitation link](https://join.slack.com/t/piestream-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw) to join the channel.
 
-To report bugs, create a [GitHub issue](https://github.com/singularity-data/risingwave/issues/new/choose).
+To report bugs, create a [GitHub issue](https://github.com/singularity-data/piestream/issues/new/choose).
 
 
 ## Table of contents
@@ -35,7 +35,7 @@ As described in [here](https://github.com/commitizen/conventional-commit-types/b
 - `perf`: A code change that improves performance
 - `test`: Adding missing tests or correcting existing tests
 - `build`: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
-- `ci`: Changes to RisingWave CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
+- `ci`: Changes to piestream CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
 - `chore`: Other changes that don't modify src or test files
 - `revert`: Reverts a previous commit
 
@@ -44,7 +44,7 @@ For example, a PR title could be:
 - `refactor: modify executor protobuf package path`
 - `feat(execution): enable comparison between nullable data arrays`, where `(execution)` means that this PR mainly focuses on the execution component.
 
-You may also check out previous PRs in the [PR list](https://github.com/singularity-data/risingwave/pulls).
+You may also check out previous PRs in the [PR list](https://github.com/singularity-data/piestream/pulls).
 
 ### Pull Request description
 

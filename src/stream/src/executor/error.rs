@@ -14,10 +14,10 @@
 
 use std::backtrace::Backtrace;
 
-use risingwave_common::array::ArrayError;
-use risingwave_common::error::{BoxedError, Error, ErrorCode, RwError, TrackingIssue};
-use risingwave_expr::ExprError;
-use risingwave_storage::error::StorageError;
+use piestream_common::array::ArrayError;
+use piestream_common::error::{BoxedError, Error, ErrorCode, RwError, TrackingIssue};
+use piestream_expr::ExprError;
+use piestream_storage::error::StorageError;
 
 use super::Barrier;
 
@@ -162,7 +162,7 @@ pub type StreamExecutorResult<T> = std::result::Result<T, StreamExecutorError>;
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::bail;
+    use piestream_common::bail;
 
     use super::*;
 

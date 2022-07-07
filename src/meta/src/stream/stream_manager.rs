@@ -16,18 +16,18 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{internal_error, Result};
-use risingwave_common::types::{ParallelUnitId, VIRTUAL_NODE_COUNT};
-use risingwave_pb::catalog::Source;
-use risingwave_pb::common::{ActorInfo, ParallelUnitMapping, WorkerType};
-use risingwave_pb::meta::table_fragments::{ActorState, ActorStatus};
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{ActorMapping, DispatcherType, StreamNode};
-use risingwave_pb::stream_service::{
+use piestream_common::catalog::TableId;
+use piestream_common::error::{internal_error, Result};
+use piestream_common::types::{ParallelUnitId, VIRTUAL_NODE_COUNT};
+use piestream_pb::catalog::Source;
+use piestream_pb::common::{ActorInfo, ParallelUnitMapping, WorkerType};
+use piestream_pb::meta::table_fragments::{ActorState, ActorStatus};
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{ActorMapping, DispatcherType, StreamNode};
+use piestream_pb::stream_service::{
     BroadcastActorInfoTableRequest, BuildActorsRequest, HangingChannel, UpdateActorsRequest,
 };
-use risingwave_rpc_client::StreamClientPoolRef;
+use piestream_rpc_client::StreamClientPoolRef;
 use uuid::Uuid;
 
 use super::ScheduledLocations;
@@ -301,7 +301,7 @@ where
             .cluster_manager
             .list_worker_node(
                 WorkerType::ComputeNode,
-                Some(risingwave_pb::common::worker_node::State::Running),
+                Some(piestream_pb::common::worker_node::State::Running),
             )
             .await;
         if nodes.is_empty() {
@@ -674,17 +674,17 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use risingwave_common::catalog::TableId;
-    use risingwave_common::error::tonic_err;
-    use risingwave_pb::common::{HostAddress, WorkerType};
-    use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
-    use risingwave_pb::meta::table_fragments::Fragment;
-    use risingwave_pb::plan_common::TableRefId;
-    use risingwave_pb::stream_plan::*;
-    use risingwave_pb::stream_service::stream_service_server::{
+    use piestream_common::catalog::TableId;
+    use piestream_common::error::tonic_err;
+    use piestream_pb::common::{HostAddress, WorkerType};
+    use piestream_pb::meta::table_fragments::fragment::FragmentDistributionType;
+    use piestream_pb::meta::table_fragments::Fragment;
+    use piestream_pb::plan_common::TableRefId;
+    use piestream_pb::stream_plan::*;
+    use piestream_pb::stream_service::stream_service_server::{
         StreamService, StreamServiceServer,
     };
-    use risingwave_pb::stream_service::{
+    use piestream_pb::stream_service::{
         BroadcastActorInfoTableResponse, BuildActorsResponse, DropActorsRequest,
         DropActorsResponse, InjectBarrierRequest, InjectBarrierResponse, UpdateActorsResponse, *,
     };
@@ -947,10 +947,10 @@ mod tests {
             .map(|i| StreamActor {
                 actor_id: i,
                 // A dummy node to avoid panic.
-                nodes: Some(risingwave_pb::stream_plan::StreamNode {
+                nodes: Some(piestream_pb::stream_plan::StreamNode {
                     node_body: Some(
-                        risingwave_pb::stream_plan::stream_node::NodeBody::Materialize(
-                            risingwave_pb::stream_plan::MaterializeNode {
+                        piestream_pb::stream_plan::stream_node::NodeBody::Materialize(
+                            piestream_pb::stream_plan::MaterializeNode {
                                 table_ref_id: Some(table_ref_id.clone()),
                                 ..Default::default()
                             },
@@ -1046,10 +1046,10 @@ mod tests {
             .map(|i| StreamActor {
                 actor_id: i,
                 // A dummy node to avoid panic.
-                nodes: Some(risingwave_pb::stream_plan::StreamNode {
+                nodes: Some(piestream_pb::stream_plan::StreamNode {
                     node_body: Some(
-                        risingwave_pb::stream_plan::stream_node::NodeBody::Materialize(
-                            risingwave_pb::stream_plan::MaterializeNode {
+                        piestream_pb::stream_plan::stream_node::NodeBody::Materialize(
+                            piestream_pb::stream_plan::MaterializeNode {
                                 table_ref_id: Some(table_ref_id.clone()),
                                 ..Default::default()
                             },
@@ -1178,10 +1178,10 @@ mod tests {
             .map(|i| StreamActor {
                 actor_id: i,
                 // A dummy node to avoid panic.
-                nodes: Some(risingwave_pb::stream_plan::StreamNode {
+                nodes: Some(piestream_pb::stream_plan::StreamNode {
                     node_body: Some(
-                        risingwave_pb::stream_plan::stream_node::NodeBody::Materialize(
-                            risingwave_pb::stream_plan::MaterializeNode {
+                        piestream_pb::stream_plan::stream_node::NodeBody::Materialize(
+                            piestream_pb::stream_plan::MaterializeNode {
                                 table_ref_id: Some(table_ref_id.clone()),
                                 ..Default::default()
                             },

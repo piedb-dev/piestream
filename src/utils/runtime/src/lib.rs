@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Configures the RisingWave binary, including logging, locks, panic handler, etc.
+//! Configures the piestream binary, including logging, locks, panic handler, etc.
 
 #![feature(let_chains)]
 
@@ -25,34 +25,34 @@ use tracing_subscriber::filter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::prelude::*;
 
-/// Configure log targets for all `RisingWave` crates. When new crates are added and TRACE level
+/// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
 /// logs are needed, add them here.
-fn configure_risingwave_targets_jaeger(targets: filter::Targets) -> filter::Targets {
+fn configure_piestream_targets_jaeger(targets: filter::Targets) -> filter::Targets {
     targets
         // enable trace for most modules
-        .with_target("risingwave_stream", Level::TRACE)
-        .with_target("risingwave_batch", Level::TRACE)
-        .with_target("risingwave_storage", Level::TRACE)
-        .with_target("risingwave_sqlparser", Level::INFO)
+        .with_target("piestream_stream", Level::TRACE)
+        .with_target("piestream_batch", Level::TRACE)
+        .with_target("piestream_storage", Level::TRACE)
+        .with_target("piestream_sqlparser", Level::INFO)
         // disable events that are too verbose
         // if you want to enable any of them, find the target name and set it to `TRACE`
         // .with_target("events::stream::mview::scan", Level::TRACE)
         .with_target("events", Level::ERROR)
 }
 
-/// Configure log targets for all `RisingWave` crates. When new crates are added and TRACE level
+/// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
 /// logs are needed, add them here.
-fn configure_risingwave_targets_fmt(targets: filter::Targets) -> filter::Targets {
+fn configure_piestream_targets_fmt(targets: filter::Targets) -> filter::Targets {
     targets
         // enable trace for most modules
-        .with_target("risingwave_stream", Level::DEBUG)
-        .with_target("risingwave_batch", Level::DEBUG)
-        .with_target("risingwave_storage", Level::DEBUG)
-        .with_target("risingwave_sqlparser", Level::INFO)
-        .with_target("risingwave_source", Level::INFO)
-        .with_target("risingwave_connector", Level::INFO)
-        .with_target("risingwave_frontend", Level::INFO)
-        .with_target("risingwave_meta", Level::INFO)
+        .with_target("piestream_stream", Level::DEBUG)
+        .with_target("piestream_batch", Level::DEBUG)
+        .with_target("piestream_storage", Level::DEBUG)
+        .with_target("piestream_sqlparser", Level::INFO)
+        .with_target("piestream_source", Level::INFO)
+        .with_target("piestream_connector", Level::INFO)
+        .with_target("piestream_frontend", Level::INFO)
+        .with_target("piestream_meta", Level::INFO)
         .with_target("pgwire", Level::ERROR)
         // disable events that are too verbose
         // if you want to enable any of them, find the target name and set it to `TRACE`
@@ -101,8 +101,8 @@ pub fn set_panic_abort() {
     }));
 }
 
-/// Init logger for RisingWave binaries.
-pub fn init_risingwave_logger(settings: LoggerSettings) {
+/// Init logger for piestream binaries.
+pub fn init_piestream_logger(settings: LoggerSettings) {
     use isahc::config::Configurable;
 
     let fmt_layer = {
@@ -120,10 +120,10 @@ pub fn init_risingwave_logger(settings: LoggerSettings) {
             .with_target("isahc", Level::WARN)
             .with_target("console_subscriber", Level::WARN);
 
-        // Configure RisingWave's own crates to log at TRACE level, uncomment the following line if
+        // Configure piestream's own crates to log at TRACE level, uncomment the following line if
         // needed.
 
-        let filter = configure_risingwave_targets_fmt(filter);
+        let filter = configure_piestream_targets_fmt(filter);
 
         // Enable DEBUG level for all other crates
         // TODO: remove this in release mode
@@ -149,10 +149,10 @@ pub fn init_risingwave_logger(settings: LoggerSettings) {
 
         let opentelemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-        // Configure RisingWave's own crates to log at TRACE level, and ignore all third-party
+        // Configure piestream's own crates to log at TRACE level, and ignore all third-party
         // crates
         let filter = filter::Targets::new();
-        let filter = configure_risingwave_targets_jaeger(filter);
+        let filter = configure_piestream_targets_jaeger(filter);
 
         Some(opentelemetry_layer.with_filter(filter))
     } else {
@@ -228,7 +228,7 @@ pub fn enable_parking_lot_deadlock_detection() {
     });
 }
 
-/// Common set-up for all RisingWave binaries. Currently, this includes:
+/// Common set-up for all piestream binaries. Currently, this includes:
 ///
 /// * Set panic hook to abort the whole process.
 pub fn oneshot_common() {

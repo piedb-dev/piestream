@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use futures_async_stream::try_stream;
-use risingwave_common::array::ArrayImpl::Bool;
-use risingwave_common::array::{Array, DataChunk};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::util::chunk_coalesce::{DataChunkBuilder, SlicedDataChunk};
-use risingwave_expr::expr::{build_from_prost, BoxedExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::ArrayImpl::Bool;
+use piestream_common::array::{Array, DataChunk};
+use piestream_common::catalog::Schema;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::{DataChunkBuilder, SlicedDataChunk};
+use piestream_expr::expr::{build_from_prost, BoxedExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -131,15 +131,15 @@ impl FilterExecutor {
 mod tests {
     use assert_matches::assert_matches;
     use futures::stream::StreamExt;
-    use risingwave_common::array::{Array, DataChunk};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::build_from_prost;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::expr::expr_node::Type::InputRef;
-    use risingwave_pb::expr::expr_node::{RexNode, Type};
-    use risingwave_pb::expr::{ExprNode, FunctionCall, InputRefExpr};
+    use piestream_common::array::{Array, DataChunk};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::build_from_prost;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::expr::expr_node::Type::InputRef;
+    use piestream_pb::expr::expr_node::{RexNode, Type};
+    use piestream_pb::expr::{ExprNode, FunctionCall, InputRefExpr};
 
     use crate::executor::test_utils::MockExecutor;
     use crate::executor::{Executor, FilterExecutor};
@@ -190,8 +190,8 @@ mod tests {
         let function_call = FunctionCall {
             children: vec![lhs, rhs],
         };
-        let return_type = risingwave_pb::data::DataType {
-            type_name: risingwave_pb::data::data_type::TypeName::Boolean as i32,
+        let return_type = piestream_pb::data::DataType {
+            type_name: piestream_pb::data::data_type::TypeName::Boolean as i32,
             ..Default::default()
         };
         ExprNode {
@@ -204,7 +204,7 @@ mod tests {
     fn make_inputref(idx: i32) -> ExprNode {
         ExprNode {
             expr_type: InputRef as i32,
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int32 as i32,
                 ..Default::default()
             }),

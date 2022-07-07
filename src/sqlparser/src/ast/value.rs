@@ -15,7 +15,7 @@ use alloc::string::String;
 use core::fmt;
 use core::str::FromStr;
 
-use risingwave_common::error::{ErrorCode, RwError};
+use piestream_common::error::{ErrorCode, RwError};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

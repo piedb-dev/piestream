@@ -23,14 +23,14 @@ use futures::future::try_join_all;
 use itertools::Itertools;
 use log::debug;
 use prometheus::HistogramTimer;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::util::epoch::{Epoch, INVALID_EPOCH};
-use risingwave_hummock_sdk::{HummockEpoch, LocalSstableInfo};
-use risingwave_pb::common::worker_node::State::Running;
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::data::Barrier;
-use risingwave_pb::stream_service::{
+use piestream_common::catalog::TableId;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::util::epoch::{Epoch, INVALID_EPOCH};
+use piestream_hummock_sdk::{HummockEpoch, LocalSstableInfo};
+use piestream_pb::common::worker_node::State::Running;
+use piestream_pb::common::WorkerType;
+use piestream_pb::data::Barrier;
+use piestream_pb::stream_service::{
     BarrierCompleteRequest, BarrierCompleteResponse, InjectBarrierRequest,
 };
 use smallvec::SmallVec;
@@ -140,7 +140,7 @@ impl ScheduledBarriers {
 
 /// [`crate::barrier::GlobalBarrierManager`] sends barriers to all registered compute nodes and
 /// collect them, with monotonic increasing epoch numbers. On compute nodes, `LocalBarrierManager`
-/// in `risingwave_stream` crate will serve these requests and dispatch them to source actors.
+/// in `piestream_stream` crate will serve these requests and dispatch them to source actors.
 ///
 /// Configuration change in our system is achieved by the mutation in the barrier. Thus,
 /// [`crate::barrier::GlobalBarrierManager`] provides a set of interfaces like a state machine,
@@ -497,7 +497,7 @@ where
                 let mutation = mutation.clone();
                 let request_id = Uuid::new_v4().to_string();
                 let barrier = Barrier {
-                    epoch: Some(risingwave_pb::data::Epoch {
+                    epoch: Some(piestream_pb::data::Epoch {
                         curr: command_context.curr_epoch.0,
                         prev: command_context.prev_epoch.0,
                     }),
@@ -637,7 +637,7 @@ where
                 Ok(resps) => {
                     // We must ensure all epochs are committed in ascending order,
                     // because the storage engine will
-                    // query from new to old in the order in which the L0 layer files are generated. see https://github.com/singularity-data/risingwave/issues/1251
+                    // query from new to old in the order in which the L0 layer files are generated. see https://github.com/singularity-data/piestream/issues/1251
                     let synced_ssts: Vec<LocalSstableInfo> = resps
                         .iter()
                         .flat_map(|resp| resp.sycned_sstables.clone())

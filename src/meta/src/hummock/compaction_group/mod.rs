@@ -18,10 +18,10 @@ use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-pub use risingwave_common::catalog::TableOption;
-use risingwave_hummock_sdk::compaction_group::StateTableId;
-use risingwave_hummock_sdk::CompactionGroupId;
-use risingwave_pb::hummock::CompactionConfig;
+pub use piestream_common::catalog::TableOption;
+use piestream_hummock_sdk::compaction_group::StateTableId;
+use piestream_hummock_sdk::CompactionGroupId;
+use piestream_pb::hummock::CompactionConfig;
 
 use crate::model::MetadataModel;
 
@@ -60,8 +60,8 @@ impl CompactionGroup {
     }
 }
 
-impl From<&risingwave_pb::hummock::CompactionGroup> for CompactionGroup {
-    fn from(compaction_group: &risingwave_pb::hummock::CompactionGroup) -> Self {
+impl From<&piestream_pb::hummock::CompactionGroup> for CompactionGroup {
+    fn from(compaction_group: &piestream_pb::hummock::CompactionGroup) -> Self {
         Self {
             group_id: compaction_group.id,
             member_table_ids: compaction_group.member_table_ids.iter().cloned().collect(),
@@ -79,7 +79,7 @@ impl From<&risingwave_pb::hummock::CompactionGroup> for CompactionGroup {
     }
 }
 
-impl From<&CompactionGroup> for risingwave_pb::hummock::CompactionGroup {
+impl From<&CompactionGroup> for piestream_pb::hummock::CompactionGroup {
     fn from(compaction_group: &CompactionGroup) -> Self {
         Self {
             id: compaction_group.group_id,
@@ -102,7 +102,7 @@ const HUMMOCK_COMPACTION_GROUP_CF_NAME: &str = "cf/hummock_compaction_group";
 
 impl MetadataModel for CompactionGroup {
     type KeyType = CompactionGroupId;
-    type ProstType = risingwave_pb::hummock::CompactionGroup;
+    type ProstType = piestream_pb::hummock::CompactionGroup;
 
     fn cf_name() -> String {
         String::from(HUMMOCK_COMPACTION_GROUP_CF_NAME)
@@ -116,7 +116,7 @@ impl MetadataModel for CompactionGroup {
         prost.borrow().into()
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.group_id)
     }
 }

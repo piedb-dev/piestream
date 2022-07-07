@@ -20,21 +20,21 @@ mod tests {
 
     use bytes::Bytes;
     use rand::Rng;
-    use risingwave_common::catalog::TableId;
-    use risingwave_common::config::constant::hummock::CompactionFilterFlag;
-    use risingwave_common::config::StorageConfig;
-    use risingwave_common::util::epoch::Epoch;
-    use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-    use risingwave_hummock_sdk::key::get_table_id;
-    use risingwave_meta::hummock::compaction::ManualCompactionOption;
-    use risingwave_meta::hummock::test_utils::{
+    use piestream_common::catalog::TableId;
+    use piestream_common::config::constant::hummock::CompactionFilterFlag;
+    use piestream_common::config::StorageConfig;
+    use piestream_common::util::epoch::Epoch;
+    use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_hummock_sdk::key::get_table_id;
+    use piestream_meta::hummock::compaction::ManualCompactionOption;
+    use piestream_meta::hummock::test_utils::{
         register_table_ids_to_compaction_group, setup_compute_env,
         unregister_table_ids_from_compaction_group,
     };
-    use risingwave_meta::hummock::MockHummockMetaClient;
-    use risingwave_pb::hummock::{HummockVersion, TableOption};
-    use risingwave_rpc_client::HummockMetaClient;
+    use piestream_meta::hummock::MockHummockMetaClient;
+    use piestream_pb::hummock::{HummockVersion, TableOption};
+    use piestream_rpc_client::HummockMetaClient;
 
     use crate::hummock::compaction_group_client::DummyCompactionGroupClient;
     use crate::hummock::compactor::{get_remote_sstable_id_generator, Compactor, CompactorContext};

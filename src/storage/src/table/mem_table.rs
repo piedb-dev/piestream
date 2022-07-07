@@ -15,7 +15,7 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::ops::RangeBounds;
 
-use risingwave_common::array::Row;
+use piestream_common::array::Row;
 
 #[derive(Clone)]
 pub enum RowOp {

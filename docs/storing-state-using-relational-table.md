@@ -12,7 +12,7 @@
 
 ## Cell-based Encoding
 
-RisingWave adapts a relational data model. Relational tables, including tables and materialized views, consist of a list of named, strong-typed columns. All streaming executors store their data into a KV state store, which is backed by a service called Hummock. There are two choices to save a relational row into key-value pairs: cell-based format and row-based format. We choose cell-based format for these two reasons:
+piestream adapts a relational data model. Relational tables, including tables and materialized views, consist of a list of named, strong-typed columns. All streaming executors store their data into a KV state store, which is backed by a service called Hummock. There are two choices to save a relational row into key-value pairs: cell-based format and row-based format. We choose cell-based format for these two reasons:
 
 1. **Reduce the Overhead of DMLs**.
 Cell-based encoding can significantly reduce write amplification since we can partially update some fields in a row. Considering the following streaming aggregation query: 
@@ -24,7 +24,7 @@ select sum(a), count(b), min(c), string_agg(d order by e) from t
 - `string_agg(d order by e)` is more difficult. we must keep all the `d` as well as their sort key `e`, and support random inserts or deletes. Again, a flatten list saved in a row would be a bad choice.
 
 
-2. **Better support Semi-structured Data**. RisingWave may support semi-structured data in the future. Semi-structured data consists of nested structures and arrays, which are hard to flatten into row format, but much more simple under cell-based format, simply replace the `column id` to the JSONPath to such field.
+2. **Better support Semi-structured Data**. piestream may support semi-structured data in the future. Semi-structured data consists of nested structures and arrays, which are hard to flatten into row format, but much more simple under cell-based format, simply replace the `column id` to the JSONPath to such field.
 
 We implement a relational table layer as the bridge between stateful executors and KV state store, which provides the interfaces accessing KV data in relational semantics. As the executor state's key encoding is very similar to a cell-based table, each kind of state is stored as a cell-based relational table first. In short, a cell instead of a whole row is stored as a key-value pair. For example, encoding of some stateful executors in cell-based format is as follows:
 | state | key | value |
@@ -36,7 +36,7 @@ We implement a relational table layer as the bridge between stateful executors a
 
 <!-- Todo: link cconsistence hash doc and state table agg doc -->
 ## Relational Table Layer
-[source code](https://github.com/singularity-data/risingwave/blob/main/src/storage/src/table/state_table.rs)
+[source code](https://github.com/singularity-data/piestream/blob/main/src/storage/src/table/state_table.rs)
 
 In this part, we will introduce how stateful executors interact with KV state store through the relational table layer.
 

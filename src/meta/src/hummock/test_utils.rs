@@ -16,14 +16,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-use risingwave_hummock_sdk::key::key_with_epoch;
-use risingwave_hummock_sdk::{
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+use piestream_hummock_sdk::key::key_with_epoch;
+use piestream_hummock_sdk::{
     CompactionGroupId, HummockContextId, HummockEpoch, HummockSSTableId, LocalSstableInfo,
 };
-use risingwave_pb::common::{HostAddress, WorkerNode, WorkerType};
-use risingwave_pb::hummock::{HummockVersion, KeyRange, SstableInfo};
+use piestream_pb::common::{HostAddress, WorkerNode, WorkerType};
+use piestream_pb::hummock::{HummockVersion, KeyRange, SstableInfo};
 
 use crate::cluster::{ClusterManager, ClusterManagerRef};
 use crate::hummock::compaction::compaction_config::CompactionConfigBuilder;

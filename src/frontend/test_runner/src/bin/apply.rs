@@ -19,7 +19,7 @@ use std::thread::available_parallelism;
 use anyhow::{anyhow, Context, Result};
 use console::style;
 use futures::StreamExt;
-use risingwave_frontend_test_runner::{resolve_testcase_id, TestCase};
+use piestream_frontend_test_runner::{resolve_testcase_id, TestCase};
 
 #[tokio::main]
 async fn main() -> Result<()> {

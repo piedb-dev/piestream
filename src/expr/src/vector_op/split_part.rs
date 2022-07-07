@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::{ExprError, Result};
 
@@ -67,7 +67,7 @@ pub fn split_part(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::split_part;
 

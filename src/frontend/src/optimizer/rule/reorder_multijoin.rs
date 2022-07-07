@@ -38,10 +38,10 @@ impl ReorderMultiJoinRule {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
-    use risingwave_pb::expr::expr_node::Type;
-    use risingwave_pb::plan_common::JoinType;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
+    use piestream_pb::expr::expr_node::Type;
+    use piestream_pb::plan_common::JoinType;
 
     use super::*;
     use crate::expr::{ExprImpl, FunctionCall, InputRef};

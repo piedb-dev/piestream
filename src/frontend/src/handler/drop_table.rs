@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::stream_plan::source_node::SourceType;
-use risingwave_sqlparser::ast::ObjectName;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::stream_plan::source_node::SourceType;
+use piestream_sqlparser::ast::ObjectName;
 
 use crate::binder::Binder;
 use crate::catalog::catalog_service::CatalogReader;
@@ -76,7 +76,7 @@ pub async fn handle_drop_table(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+    use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
 
     use crate::test_utils::LocalFrontend;
 
