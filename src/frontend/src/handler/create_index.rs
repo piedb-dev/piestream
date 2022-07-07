@@ -23,8 +23,9 @@ use risingwave_pb::catalog::Table as ProstTable;
 use risingwave_sqlparser::ast::{ObjectName, OrderByExpr};
 
 use crate::binder::Binder;
+use crate::catalog::check_schema_writable;
 use crate::optimizer::plan_node::{LogicalScan, StreamTableScan};
-use crate::optimizer::property::{Distribution, FieldOrder, Order};
+use crate::optimizer::property::{FieldOrder, Order, RequiredDist};
 use crate::optimizer::{PlanRef, PlanRoot};
 use crate::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
 use crate::stream_fragmenter::StreamFragmenter;
@@ -101,9 +102,9 @@ pub(crate) fn gen_create_index_plan(
             table_desc.columns.iter().map(|c| c.name.clone()).collect();
         out_names.remove(0);
 
-        let scan_node = StreamTableScan::new(LogicalScan::new(
+        let scan_node = StreamTableScan::new(LogicalScan::create(
             table_name,
-            (0..table_desc.columns.len()).into_iter().collect(),
+            false,
             table_desc,
             // indexes are only used by DeltaJoin rule, and we don't need to provide them here.
             vec![],
@@ -112,7 +113,7 @@ pub(crate) fn gen_create_index_plan(
 
         PlanRoot::new(
             scan_node.into(),
-            Distribution::AnyShard,
+            RequiredDist::AnyShard,
             Order::new(
                 arrange_keys
                     .iter()
@@ -126,6 +127,7 @@ pub(crate) fn gen_create_index_plan(
     };
 
     let (index_schema_name, index_table_name) = Binder::resolve_table_name(index_name)?;
+    check_schema_writable(&index_schema_name)?;
     let (index_database_id, index_schema_id) = session
         .env()
         .catalog_reader()

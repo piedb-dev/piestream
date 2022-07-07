@@ -11,22 +11,36 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
 
-use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use risingwave_common::catalog::Schema;
+use tokio::sync::mpsc::Receiver;
+use tokio_stream::wrappers::ReceiverStream;
 
+use super::{ActorContextRef, OperatorInfoStatus};
+use crate::executor::monitor::StreamingMetrics;
 use crate::executor::{
     BoxedMessageStream, Executor, ExecutorInfo, Message, PkIndices, PkIndicesRef,
 };
-
+use crate::task::ActorId;
 /// `ReceiverExecutor` is used along with a channel. After creating a mpsc channel,
 /// there should be a `ReceiverExecutor` running in the background, so as to push
 /// messages down to the executors.
 pub struct ReceiverExecutor {
     receiver: Receiver<Message>,
+
     /// Logical Operator Info
     info: ExecutorInfo,
+
+    /// Actor operator context
+    status: OperatorInfoStatus,
+
+    // Actor id,
+    actor_id: ActorId,
+
+    /// Metrics
+    metrics: Arc<StreamingMetrics>,
 }
 
 impl std::fmt::Debug for ReceiverExecutor {
@@ -39,7 +53,15 @@ impl std::fmt::Debug for ReceiverExecutor {
 }
 
 impl ReceiverExecutor {
-    pub fn new(schema: Schema, pk_indices: PkIndices, receiver: Receiver<Message>) -> Self {
+    pub fn new(
+        schema: Schema,
+        pk_indices: PkIndices,
+        receiver: Receiver<Message>,
+        actor_context: ActorContextRef,
+        receiver_id: u64,
+        actor_id: ActorId,
+        metrics: Arc<StreamingMetrics>,
+    ) -> Self {
         Self {
             receiver,
             info: ExecutorInfo {
@@ -47,13 +69,33 @@ impl ReceiverExecutor {
                 pk_indices,
                 identity: "ReceiverExecutor".to_string(),
             },
+            status: OperatorInfoStatus::new(actor_context, receiver_id),
+            actor_id,
+            metrics,
         }
     }
 }
 
 impl Executor for ReceiverExecutor {
     fn execute(self: Box<Self>) -> BoxedMessageStream {
-        self.receiver.map(Ok).boxed()
+        let mut status = self.status;
+        let metrics = self.metrics.clone();
+        let actor_id_str = self.actor_id.to_string();
+        ReceiverStream::new(self.receiver)
+            .map(move |msg| {
+                match &msg {
+                    Message::Chunk(chunk) => {
+                        metrics
+                            .actor_in_record_cnt
+                            .with_label_values(&[&actor_id_str])
+                            .inc_by(chunk.cardinality() as _);
+                    }
+                    Message::Barrier(_) => {}
+                };
+                status.next_message(&msg);
+                Ok(msg)
+            })
+            .boxed()
     }
 
     fn schema(&self) -> &Schema {

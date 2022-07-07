@@ -19,7 +19,7 @@ use super::select::LogicalFilter;
 use super::Planner;
 use crate::binder::BoundUpdate;
 use crate::optimizer::plan_node::LogicalUpdate;
-use crate::optimizer::property::{Distribution, Order};
+use crate::optimizer::property::{Order, RequiredDist};
 use crate::optimizer::{PlanRef, PlanRoot};
 
 impl Planner {
@@ -34,14 +34,13 @@ impl Planner {
         };
         let plan: PlanRef = LogicalUpdate::create(input, name, source_id, update.exprs)?.into();
 
-        let order = Order::any().clone();
         // For update, frontend will only schedule one task so do not need this to be single.
-        let dist = Distribution::Any;
+        let dist = RequiredDist::Any;
         let mut out_fields = FixedBitSet::with_capacity(plan.schema().len());
         out_fields.insert_range(..);
         let out_names = plan.schema().names();
 
-        let root = PlanRoot::new(plan, dist, order, out_fields, out_names);
+        let root = PlanRoot::new(plan, dist, Order::any(), out_fields, out_names);
         Ok(root)
     }
 }

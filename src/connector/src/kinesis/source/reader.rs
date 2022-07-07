@@ -32,7 +32,7 @@ use crate::base::{SourceMessage, SplitReader};
 use crate::kinesis::source::message::KinesisMessage;
 use crate::kinesis::split::{KinesisOffset, KinesisSplit};
 use crate::kinesis::{build_client, KinesisProperties};
-use crate::{Column, ConnectorStateV2, SplitImpl};
+use crate::{Column, ConnectorState, SplitImpl};
 
 pub struct KinesisMultiSplitReader {
     /// splits are not allowed to be empty, otherwise connector source should create
@@ -150,13 +150,11 @@ impl KinesisSplitReader {
     async fn get_records(
         &mut self,
     ) -> core::result::Result<GetRecordsOutput, SdkError<GetRecordsError>> {
-        let resp = self
-            .client
+        self.client
             .get_records()
             .set_shard_iterator(self.shard_iter.take())
             .send()
-            .await;
-        resp
+            .await
     }
 }
 
@@ -180,18 +178,13 @@ impl SplitReader for KinesisMultiSplitReader {
 
     async fn new(
         properties: KinesisProperties,
-        state: ConnectorStateV2,
+        state: ConnectorState,
         _columns: Option<Vec<Column>>,
     ) -> Result<Self>
     where
         Self: Sized,
     {
-        let splits = match state {
-            ConnectorStateV2::Splits(s) => s,
-            ConnectorStateV2::State(_) => todo!("ConnectorStateV2::State is to be removed later"),
-            ConnectorStateV2::None => unreachable!(),
-        };
-
+        let splits = state.unwrap();
         Ok(Self {
             splits: splits
                 .iter()
@@ -280,7 +273,7 @@ mod tests {
             stream_region: "cn-northwest-1".to_string(),
             endpoint: None,
             session_token: None,
-            assume_role_externeal_id: None,
+            assume_role_external_id: None,
         };
 
         let mut trim_horizen_reader = KinesisSplitReader::new(
@@ -331,7 +324,7 @@ mod tests {
             stream_region: "cn-northwest-1".to_string(),
             endpoint: None,
             session_token: None,
-            assume_role_externeal_id: None,
+            assume_role_external_id: None,
         };
 
         let splits = vec!["shardId-000000000000", "shardId-000000000001"]
@@ -345,9 +338,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let mut reader =
-            KinesisMultiSplitReader::new(properties, ConnectorStateV2::Splits(splits), None)
-                .await?;
+        let mut reader = KinesisMultiSplitReader::new(properties, Some(splits), None).await?;
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         println!("1: {:?}", reader.next().await);
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;

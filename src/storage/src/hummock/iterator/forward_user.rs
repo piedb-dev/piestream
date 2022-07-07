@@ -18,17 +18,36 @@ use std::sync::Arc;
 use risingwave_hummock_sdk::key::{get_epoch, key_with_epoch, user_key as to_user_key, Epoch};
 
 use super::{ForwardHummockIterator, MergeIterator};
-use crate::hummock::iterator::BackwardUserIterator;
+use crate::hummock::iterator::merge_inner::UnorderedMergeIteratorInner;
+use crate::hummock::iterator::{
+    BackwardUserIterator, BoxedHummockIterator, Forward, HummockIteratorDirection,
+};
 use crate::hummock::local_version::PinnedVersion;
 use crate::hummock::value::HummockValue;
 use crate::hummock::HummockResult;
+use crate::monitor::StateStoreMetrics;
 
 pub enum DirectedUserIterator {
     Forward(UserIterator),
     Backward(BackwardUserIterator),
 }
 
+pub trait DirectedUserIteratorBuilder {
+    type Direction: HummockIteratorDirection;
+    /// Initialize an `DirectedUserIterator`.
+    /// The `key_range` should be from smaller key to larger key.
+    fn create(
+        iterator_iter: impl IntoIterator<Item = BoxedHummockIterator<Self::Direction>>,
+        stats: Arc<StateStoreMetrics>,
+        key_range: (Bound<Vec<u8>>, Bound<Vec<u8>>),
+        read_epoch: u64,
+        min_epoch: u64,
+        version: Option<Arc<PinnedVersion>>,
+    ) -> DirectedUserIterator;
+}
+
 impl DirectedUserIterator {
+    #[inline(always)]
     pub async fn next(&mut self) -> HummockResult<()> {
         match self {
             Self::Forward(ref mut iter) => iter.next().await,
@@ -52,6 +71,7 @@ impl DirectedUserIterator {
         }
     }
 
+    #[inline(always)]
     pub async fn rewind(&mut self) -> HummockResult<()> {
         match self {
             Self::Forward(ref mut iter) => iter.rewind().await,
@@ -59,7 +79,7 @@ impl DirectedUserIterator {
         }
     }
 
-    #[allow(dead_code)]
+    #[inline(always)]
     pub async fn seek(&mut self, user_key: &[u8]) -> HummockResult<()> {
         match self {
             Self::Forward(ref mut iter) => iter.seek(user_key).await,
@@ -96,6 +116,9 @@ pub struct UserIterator {
     /// Only reads values if `ts <= self.read_epoch`.
     read_epoch: Epoch,
 
+    /// Only reads values if `ts > self.min_epoch`. use for ttl
+    min_epoch: Epoch,
+
     /// Ensures the SSTs needed by `iterator` won't be vacuumed.
     _version: Option<Arc<PinnedVersion>>,
 }
@@ -108,7 +131,17 @@ impl UserIterator {
         iterator: MergeIterator,
         key_range: (Bound<Vec<u8>>, Bound<Vec<u8>>),
     ) -> Self {
-        Self::new(iterator, key_range, Epoch::MAX, None)
+        Self::new(iterator, key_range, Epoch::MAX, 0, None)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test_with_epoch(
+        iterator: MergeIterator,
+        key_range: (Bound<Vec<u8>>, Bound<Vec<u8>>),
+        read_epoch: u64,
+        min_epoch: u64,
+    ) -> Self {
+        Self::new(iterator, key_range, read_epoch, min_epoch, None)
     }
 
     /// Create [`UserIterator`] with given `read_epoch`.
@@ -116,6 +149,7 @@ impl UserIterator {
         iterator: MergeIterator,
         key_range: (Bound<Vec<u8>>, Bound<Vec<u8>>),
         read_epoch: u64,
+        min_epoch: u64,
         version: Option<Arc<PinnedVersion>>,
     ) -> Self {
         Self {
@@ -125,6 +159,7 @@ impl UserIterator {
             last_key: Vec::new(),
             last_val: Vec::new(),
             read_epoch,
+            min_epoch,
             _version: version,
         }
     }
@@ -142,7 +177,9 @@ impl UserIterator {
             let key = to_user_key(full_key);
 
             // handle multi-version
-            if self.last_key.as_slice() != key && epoch <= self.read_epoch {
+            if self.last_key.as_slice() != key
+                && (epoch > self.min_epoch && epoch <= self.read_epoch)
+            {
                 self.last_key.clear();
                 self.last_key.extend_from_slice(key);
 
@@ -158,6 +195,7 @@ impl UserIterator {
                             Excluded(end_key) => self.out_of_range = key >= end_key.as_slice(),
                             Unbounded => {}
                         };
+
                         return Ok(());
                     }
                     // It means that the key is deleted from the storage.
@@ -232,8 +270,8 @@ impl UserIterator {
         // Handle multi-version
         self.last_key.clear();
         // Handle range scan when key > end_key
-        let res = self.next().await;
-        res
+
+        self.next().await
     }
 
     /// Indicates whether the iterator can be used.
@@ -241,6 +279,24 @@ impl UserIterator {
         // Handle range scan
         // key >= begin_key is guaranteed by seek/rewind function
         (!self.out_of_range) && self.iterator.is_valid()
+    }
+}
+
+impl DirectedUserIteratorBuilder for UserIterator {
+    type Direction = Forward;
+
+    fn create(
+        iterator_iter: impl IntoIterator<Item = BoxedHummockIterator<Forward>>,
+        stats: Arc<StateStoreMetrics>,
+        key_range: (Bound<Vec<u8>>, Bound<Vec<u8>>),
+        read_epoch: u64,
+        min_epoch: u64,
+        version: Option<Arc<PinnedVersion>>,
+    ) -> DirectedUserIterator {
+        let iterator = UnorderedMergeIteratorInner::<Forward>::new(iterator_iter, stats);
+        DirectedUserIterator::Forward(Self::new(
+            iterator, key_range, read_epoch, min_epoch, version,
+        ))
     }
 }
 
@@ -254,11 +310,12 @@ mod tests {
     use super::*;
     use crate::hummock::iterator::test_utils::{
         default_builder_opt_for_test, gen_iterator_test_sstable_base,
-        gen_iterator_test_sstable_from_kv_pair, iterator_test_key_of, iterator_test_key_of_epoch,
-        iterator_test_value_of, mock_sstable_store, TEST_KEYS_COUNT,
+        gen_iterator_test_sstable_from_kv_pair, gen_iterator_test_sstable_with_incr_epoch,
+        iterator_test_key_of, iterator_test_key_of_epoch, iterator_test_value_of,
+        mock_sstable_store, TEST_KEYS_COUNT,
     };
     use crate::hummock::iterator::{BoxedForwardHummockIterator, ReadOptions};
-    use crate::hummock::sstable::SSTableIterator;
+    use crate::hummock::sstable::{SSTableIterator, SSTableIteratorType};
     use crate::hummock::test_utils::create_small_table_cache;
     use crate::hummock::value::HummockValue;
     use crate::monitor::StateStoreMetrics;
@@ -293,17 +350,17 @@ mod tests {
         .await;
         let cache = create_small_table_cache();
         let iters: Vec<BoxedForwardHummockIterator> = vec![
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table0.id, table0.id, 1, Box::new(table0)),
                 sstable_store.clone(),
                 read_options.clone(),
             )),
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table1.id, table1.id, 1, Box::new(table1)),
                 sstable_store.clone(),
                 read_options.clone(),
             )),
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table2.id, table2.id, 1, Box::new(table2)),
                 sstable_store,
                 read_options.clone(),
@@ -360,17 +417,17 @@ mod tests {
         let read_options = Arc::new(ReadOptions::default());
         let cache = create_small_table_cache();
         let iters: Vec<BoxedForwardHummockIterator> = vec![
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table0.id, table0.id, 1, Box::new(table0)),
                 sstable_store.clone(),
                 read_options.clone(),
             )),
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table1.id, table1.id, 1, Box::new(table1)),
                 sstable_store.clone(),
                 read_options.clone(),
             )),
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table2.id, table2.id, 1, Box::new(table2)),
                 sstable_store,
                 read_options,
@@ -449,17 +506,18 @@ mod tests {
         let read_options = Arc::new(ReadOptions::default());
         let cache = create_small_table_cache();
         let iters: Vec<BoxedForwardHummockIterator> = vec![
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table0.id, table0.id, 1, Box::new(table0)),
                 sstable_store.clone(),
                 read_options.clone(),
             )),
-            Box::new(SSTableIterator::new(
+            Box::new(SSTableIterator::create(
                 cache.insert(table1.id, table1.id, 1, Box::new(table1)),
                 sstable_store.clone(),
                 read_options,
             )),
         ];
+
         let mi = MergeIterator::new(iters, Arc::new(StateStoreMetrics::unused()));
         let mut ui = UserIterator::for_test(mi, (Unbounded, Unbounded));
         ui.rewind().await.unwrap();
@@ -500,7 +558,7 @@ mod tests {
             gen_iterator_test_sstable_from_kv_pair(0, kv_pairs, sstable_store.clone()).await;
         let cache = create_small_table_cache();
         let read_options = Arc::new(ReadOptions::default());
-        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::new(
+        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::create(
             cache.insert(table.id, table.id, 1, Box::new(table)),
             sstable_store,
             read_options,
@@ -583,7 +641,7 @@ mod tests {
             gen_iterator_test_sstable_from_kv_pair(0, kv_pairs, sstable_store.clone()).await;
         let cache = create_small_table_cache();
         let read_options = Arc::new(ReadOptions::default());
-        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::new(
+        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::create(
             cache.insert(table.id, table.id, 1, Box::new(table)),
             sstable_store,
             read_options,
@@ -667,7 +725,7 @@ mod tests {
             gen_iterator_test_sstable_from_kv_pair(0, kv_pairs, sstable_store.clone()).await;
         let cache = create_small_table_cache();
         let read_options = Arc::new(ReadOptions::default());
-        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::new(
+        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::create(
             cache.insert(table.id, table.id, 1, Box::new(table)),
             sstable_store,
             read_options,
@@ -753,7 +811,7 @@ mod tests {
             gen_iterator_test_sstable_from_kv_pair(0, kv_pairs, sstable_store.clone()).await;
         let cache = create_small_table_cache();
         let read_options = Arc::new(ReadOptions::default());
-        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::new(
+        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::create(
             cache.insert(table.id, table.id, 1, Box::new(table)),
             sstable_store,
             read_options,
@@ -816,5 +874,45 @@ mod tests {
             .await
             .unwrap();
         assert!(!ui.is_valid());
+    }
+
+    #[tokio::test]
+    async fn test_min_epoch() {
+        let sstable_store = mock_sstable_store();
+        let read_options = Arc::new(ReadOptions::default());
+        let table0 = gen_iterator_test_sstable_with_incr_epoch(
+            0,
+            default_builder_opt_for_test(),
+            |x| x * 3,
+            sstable_store.clone(),
+            TEST_KEYS_COUNT,
+            1,
+        )
+        .await;
+        let cache = create_small_table_cache();
+        let iters: Vec<BoxedForwardHummockIterator> = vec![Box::new(SSTableIterator::create(
+            cache.insert(table0.id, table0.id, 1, Box::new(table0)),
+            sstable_store.clone(),
+            read_options.clone(),
+        ))];
+
+        let min_epoch = (TEST_KEYS_COUNT / 5) as u64;
+        let mi = MergeIterator::new(iters, Arc::new(StateStoreMetrics::unused()));
+        let mut ui =
+            UserIterator::for_test_with_epoch(mi, (Unbounded, Unbounded), u64::MAX, min_epoch);
+        ui.rewind().await.unwrap();
+
+        let mut i = 0;
+        while ui.is_valid() {
+            let key = ui.key();
+            let key_epoch = get_epoch(key);
+            assert!(key_epoch > min_epoch);
+
+            i += 1;
+            ui.next().await.unwrap();
+        }
+
+        let expect_count = TEST_KEYS_COUNT - min_epoch as usize;
+        assert_eq!(i, expect_count);
     }
 }

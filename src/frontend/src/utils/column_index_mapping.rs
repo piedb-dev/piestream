@@ -19,7 +19,7 @@ use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 
 use crate::expr::{Expr, ExprImpl, ExprRewriter, InputRef};
-use crate::optimizer::property::{Distribution, FieldOrder, Order};
+use crate::optimizer::property::{Distribution, FieldOrder, Order, RequiredDist};
 
 /// `ColIndexMapping` is a partial mapping from usize to usize.
 ///
@@ -218,6 +218,21 @@ impl ColIndexMapping {
         Self::with_target_size(map, self.source_size())
     }
 
+    /// inverse the mapping with required columns in the source, if a target corresponds more than
+    /// one source, it will choose the required columns.
+    #[must_use]
+    pub fn inverse_with_required(&self, required: &FixedBitSet) -> Self {
+        let mut map = vec![None; self.target_size()];
+        for (src, dst) in self.mapping_pairs() {
+            if let Some(other_src) = map[dst] && required.contains(other_src) {
+                // do nothing
+            } else {
+                map[dst] = Some(src);
+            }
+        }
+        Self::with_target_size(map, self.source_size())
+    }
+
     /// return iter of (src, dst) order by src
     pub fn mapping_pairs(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         self.map
@@ -291,7 +306,7 @@ impl ColIndexMapping {
     /// Rewrite the provided distribution's field index. It will try its best to give the most
     /// accurate distribution.
     /// HashShard(0,1,2), with mapping(0->1,1->0,2->2) will be rewritten to HashShard(1,0,2).
-    /// HashShard(0,1,2), with mapping(0->1,2->0) will be rewritten to `AnyShard`.
+    /// HashShard(0,1,2), with mapping(0->1,2->0) will be rewritten to `SomeShard`.
     pub fn rewrite_provided_distribution(&self, dist: &Distribution) -> Distribution {
         match dist {
             Distribution::HashShard(col_idxes) => {
@@ -301,7 +316,7 @@ impl ColIndexMapping {
                     .collect::<Option<Vec<_>>>();
                 match mapped_dist {
                     Some(col_idx) => Distribution::HashShard(col_idx),
-                    None => Distribution::AnyShard,
+                    None => Distribution::SomeShard,
                 }
             }
             _ => dist.clone(),
@@ -310,16 +325,33 @@ impl ColIndexMapping {
 
     /// Rewrite the required distribution's field index. if it can't give a corresponding
     /// required distribution after the column index mapping, it will return None.
-    /// HashShard(0,1,2), with mapping(0->1,1->0,2->2) will be rewritten to HashShard(1,0,2).
-    /// HashShard(0,1,2), with mapping(0->1,2->0) will return None.
-    pub fn rewrite_required_distribution(&self, dist: &Distribution) -> Option<Distribution> {
+    /// ShardByKey(0,1,2), with mapping(0->1,1->0,2->2) will be rewritten to ShardByKey(1,0,2).
+    /// ShardByKey(0,1,2), with mapping(0->1,2->0) will return ShardByKey(1,0).
+    /// ShardByKey(0,1), with mapping(2->0) will return `Any`.
+    pub fn rewrite_required_distribution(&self, dist: &RequiredDist) -> RequiredDist {
         match dist {
-            Distribution::HashShard(col_idxes) => col_idxes
-                .iter()
-                .map(|col_idx| self.try_map(*col_idx))
-                .collect::<Option<Vec<_>>>()
-                .map(Distribution::HashShard),
-            _ => Some(dist.clone()),
+            RequiredDist::ShardByKey(keys) => {
+                let keys = self.rewrite_bitset(keys);
+                if keys.count_ones(..) == 0 {
+                    RequiredDist::Any
+                } else {
+                    RequiredDist::ShardByKey(keys)
+                }
+            }
+            RequiredDist::PhysicalDist(dist) => match dist {
+                Distribution::HashShard(keys) => {
+                    let keys = keys
+                        .iter()
+                        .map(|key| self.try_map(*key))
+                        .collect::<Option<Vec<_>>>();
+                    match keys {
+                        Some(keys) => RequiredDist::PhysicalDist(Distribution::HashShard(keys)),
+                        None => RequiredDist::Any,
+                    }
+                }
+                _ => RequiredDist::PhysicalDist(dist.clone()),
+            },
+            _ => dist.clone(),
         }
     }
 

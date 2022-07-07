@@ -35,7 +35,6 @@ pub struct ComputeNodeConfig {
     pub provide_jaeger: Option<Vec<JaegerConfig>>,
     pub provide_compactor: Option<Vec<CompactorConfig>>,
     pub user_managed: bool,
-    pub enable_in_memory_kv_state_backend: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -59,6 +58,7 @@ pub struct MetaNodeConfig {
 
     pub enable_dashboard_v2: bool,
     pub unsafe_disable_recovery: bool,
+    pub max_idle_secs_to_exit: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -138,6 +138,8 @@ pub struct EtcdConfig {
 
     pub peer_port: u16,
     pub unsafe_no_fsync: bool,
+
+    pub exporter_port: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -157,6 +159,8 @@ pub struct PrometheusConfig {
     pub provide_meta_node: Option<Vec<MetaNodeConfig>>,
     pub provide_minio: Option<Vec<MinioConfig>>,
     pub provide_compactor: Option<Vec<CompactorConfig>>,
+    pub provide_etcd: Option<Vec<EtcdConfig>>,
+    pub provide_redpanda: Option<Vec<RedPandaConfig>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

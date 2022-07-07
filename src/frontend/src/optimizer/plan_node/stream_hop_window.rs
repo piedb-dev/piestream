@@ -32,11 +32,14 @@ impl StreamHopWindow {
         let pk_indices = logical.base.pk_indices.to_vec();
         let input = logical.input();
 
+        let i2o = logical.i2o_col_mapping();
+        let dist = i2o.rewrite_provided_distribution(input.distribution());
+
         let base = PlanBase::new_stream(
             ctx,
             logical.schema().clone(),
             pk_indices,
-            input.distribution().clone(),
+            dist,
             logical.input().append_only(),
         );
         Self { base, logical }
@@ -67,6 +70,12 @@ impl ToStreamProst for StreamHopWindow {
             time_col: Some(self.logical.time_col.to_proto()),
             window_slide: Some(self.logical.window_slide.into()),
             window_size: Some(self.logical.window_size.into()),
+            output_indices: self
+                .logical
+                .output_indices
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
         })
     }
 }

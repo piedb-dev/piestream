@@ -14,12 +14,10 @@
 
 use std::fmt;
 
-use risingwave_pb::expr::InputRefExpr;
-use risingwave_pb::plan_common::ColumnOrder;
 use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
 use super::{LogicalTopN, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
-use crate::optimizer::property::Distribution;
+use crate::optimizer::property::{Distribution, FieldOrder};
 
 /// `StreamTopN` implements [`super::LogicalTopN`] to find the top N elements with a heap
 #[derive(Debug, Clone)]
@@ -32,7 +30,6 @@ impl StreamTopN {
     pub fn new(logical: LogicalTopN) -> Self {
         let ctx = logical.base.ctx.clone();
         let dist = match logical.input().distribution() {
-            Distribution::Any => Distribution::Any,
             Distribution::Single => Distribution::Single,
             _ => panic!(),
         };
@@ -50,13 +47,17 @@ impl StreamTopN {
 
 impl fmt::Display for StreamTopN {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "StreamTopN {{ order: {}, limit: {}, offset: {} }}",
-            self.logical.topn_order(),
-            self.logical.limit(),
-            self.logical.offset(),
-        )
+        let mut builder = if self.input().append_only() {
+            f.debug_struct("StreamAppendOnlyTopN")
+        } else {
+            f.debug_struct("StreamTopN")
+        };
+
+        builder
+            .field("order", &format_args!("{}", self.logical.topn_order()))
+            .field("limit", &format_args!("{}", self.logical.limit()))
+            .field("offset", &format_args!("{}", self.logical.offset()))
+            .finish()
     }
 }
 
@@ -80,19 +81,21 @@ impl ToStreamProst for StreamTopN {
             .topn_order()
             .field_order
             .iter()
-            .map(|f| ColumnOrder {
-                order_type: f.direct.to_protobuf() as i32,
-                input_ref: Some(InputRefExpr {
-                    column_idx: f.index as i32,
-                }),
-                return_type: Some(self.input().schema()[f.index].data_type().to_protobuf()),
-            })
+            .map(FieldOrder::to_protobuf)
             .collect();
-        ProstStreamNode::TopN(TopNNode {
+
+        let topn_node = TopNNode {
             column_orders,
             limit: self.logical.limit() as u64,
             offset: self.logical.offset() as u64,
             distribution_keys: vec![], // TODO: seems unnecessary
-        })
+            ..Default::default()
+        };
+
+        if self.input().append_only() {
+            ProstStreamNode::AppendOnlyTopN(topn_node)
+        } else {
+            ProstStreamNode::TopN(topn_node)
+        }
     }
 }

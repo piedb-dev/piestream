@@ -20,10 +20,12 @@ mod utils;
 use clap::Parser;
 use operations::*;
 use risingwave_common::config::StorageConfig;
+use risingwave_common::monitor::Print;
 use risingwave_meta::hummock::test_utils::setup_compute_env;
 use risingwave_meta::hummock::MockHummockMetaClient;
+use risingwave_storage::hummock::compaction_executor::CompactionExecutor;
 use risingwave_storage::hummock::compactor::{get_remote_sstable_id_generator, CompactorContext};
-use risingwave_storage::monitor::{ObjectStoreMetrics, Print, StateStoreMetrics};
+use risingwave_storage::monitor::{ObjectStoreMetrics, StateStoreMetrics};
 use risingwave_storage::{dispatch_state_store, StateStoreImpl};
 
 #[derive(Parser, Debug)]
@@ -153,6 +155,8 @@ async fn main() {
         disable_remote_compactor: true,
         enable_local_spill: false,
         local_object_store: "memory".to_string(),
+        share_buffer_compaction_worker_threads_number: 1,
+        share_buffer_upload_concurrency: 4,
     });
 
     let (_env, hummock_manager_ref, _cluster_manager_ref, worker_node) =
@@ -176,14 +180,17 @@ async fn main() {
             Arc::new(CompactorContext {
                 options: config.clone(),
                 hummock_meta_client: mock_hummock_meta_client.clone(),
-                sstable_store: hummock.inner().sstable_store(),
+                sstable_store: hummock.sstable_store(),
                 stats: state_store_stats.clone(),
                 is_share_buffer_compact: false,
                 sstable_id_generator: get_remote_sstable_id_generator(
                     mock_hummock_meta_client.clone(),
                 ),
+                compaction_executor: Some(Arc::new(CompactionExecutor::new(Some(
+                    config.share_buffer_compaction_worker_threads_number as usize,
+                )))),
             }),
-            hummock.inner().local_version_manager().clone(),
+            hummock.local_version_manager(),
         ));
     }
 

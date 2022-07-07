@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::convert::From;
 use std::any::type_name;
 use std::fmt::Debug;
 
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
+use risingwave_common::array::{ListRef, StructRef};
+
+use crate::{ExprError, Result};
 
 fn general_cmp<T1, T2, T3, F>(l: T1, r: T2, cmp: F) -> Result<bool>
 where
@@ -27,20 +27,12 @@ where
     F: FnOnce(T3, T3) -> bool,
 {
     // TODO: We need to improve the error message
-    let l: T3 = l.try_into().map_err(|_| {
-        RwError::from(InternalError(format!(
-            "Can't convert {} to {}",
-            type_name::<T1>(),
-            type_name::<T3>()
-        )))
-    })?;
-    let r: T3 = r.try_into().map_err(|_| {
-        RwError::from(InternalError(format!(
-            "Can't convert {} to {}",
-            type_name::<T2>(),
-            type_name::<T3>()
-        )))
-    })?;
+    let l: T3 = l
+        .try_into()
+        .map_err(|_| ExprError::Cast(type_name::<T1>(), type_name::<T3>()))?;
+    let r: T3 = r
+        .try_into()
+        .map_err(|_| ExprError::Cast(type_name::<T2>(), type_name::<T3>()))?;
     Ok(cmp(l, r))
 }
 
@@ -117,48 +109,58 @@ where
         (None, None) => Ok(Some(false)),
     }
 }
+#[derive(Clone, Copy, Debug)]
+pub enum Comparison {
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+pub(crate) static EQ: Comparison = Comparison::Eq;
+pub(crate) static NE: Comparison = Comparison::Ne;
+pub(crate) static LT: Comparison = Comparison::Lt;
+pub(crate) static GT: Comparison = Comparison::Gt;
+pub(crate) static LE: Comparison = Comparison::Le;
+pub(crate) static GE: Comparison = Comparison::Ge;
 
 #[inline(always)]
-fn str_cmp<F>(l: &str, r: &str, func: F) -> Result<bool>
-where
-    F: FnOnce(&str, &str) -> bool,
-{
-    Ok(func(l, r))
+pub fn gen_struct_cmp(op: Comparison) -> fn(StructRef, StructRef) -> Result<bool> {
+    use crate::gen_cmp;
+    gen_cmp!(op)
 }
 
 #[inline(always)]
-pub fn str_eq(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a == b)
+pub fn gen_list_cmp(op: Comparison) -> fn(ListRef, ListRef) -> Result<bool> {
+    use crate::gen_cmp;
+    gen_cmp!(op)
 }
 
 #[inline(always)]
-pub fn str_ne(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a != b)
+pub fn gen_str_cmp(op: Comparison) -> fn(&str, &str) -> Result<bool> {
+    use crate::gen_cmp;
+    gen_cmp!(op)
 }
 
-#[inline(always)]
-pub fn str_ge(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a >= b)
-}
-
-#[inline(always)]
-pub fn str_gt(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a > b)
-}
-
-#[inline(always)]
-pub fn str_le(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a <= b)
-}
-
-#[inline(always)]
-pub fn str_lt(l: &str, r: &str) -> Result<bool> {
-    str_cmp(l, r, |a, b| a < b)
+#[macro_export]
+macro_rules! gen_cmp {
+    ($op:expr) => {
+        match $op {
+            Comparison::Eq => |l, r| Ok(l == r),
+            Comparison::Ne => |l, r| Ok(l != r),
+            Comparison::Lt => |l, r| Ok(l < r),
+            Comparison::Gt => |l, r| Ok(l > r),
+            Comparison::Le => |l, r| Ok(l <= r),
+            Comparison::Ge => |l, r| Ok(l >= r),
+        }
+    };
 }
 
 pub fn str_is_distinct_from(l: Option<&str>, r: Option<&str>) -> Result<Option<bool>> {
     match (l, r) {
-        (Some(lv), Some(rv)) => Ok(str_ne(lv, rv).ok()),
+        (Some(lv), Some(rv)) => Ok(Some(lv != rv)),
         (Some(_), None) => Ok(Some(true)),
         (None, Some(_)) => Ok(Some(true)),
         (None, None) => Ok(Some(false)),

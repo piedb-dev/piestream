@@ -26,7 +26,7 @@ use crate::binder::{Binder, Relation};
 use crate::catalog::check_valid_column_name;
 use crate::expr::{Expr as _, ExprImpl, InputRef};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoundSelect {
     pub distinct: bool,
     pub select_items: Vec<ExprImpl>,
@@ -50,6 +50,18 @@ impl BoundSelect {
             .chain(self.group_by.iter())
             .chain(self.where_clause.iter())
             .any(|expr| expr.has_correlated_input_ref())
+    }
+
+    pub fn collect_correlated_indices(&self) -> Vec<usize> {
+        let mut correlated_indices = vec![];
+        self.select_items
+            .iter()
+            .chain(self.group_by.iter())
+            .chain(self.where_clause.iter())
+            .for_each(|expr| {
+                correlated_indices.extend(expr.collect_correlated_indices());
+            });
+        correlated_indices
     }
 }
 

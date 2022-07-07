@@ -15,15 +15,13 @@
 use async_trait::async_trait;
 use madsim::collections::HashSet;
 use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Schema};
-use risingwave_common::error::Result;
+use risingwave_common::catalog::{Schema, TableId};
 use risingwave_common::types::DataType;
 use risingwave_common::util::ordered::{OrderedRow, OrderedRowDeserializer};
 use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_storage::cell_based_row_deserializer::CellBasedRowDeserializer;
-use risingwave_storage::{Keyspace, StateStore};
+use risingwave_storage::StateStore;
 
-use super::error::{StreamExecutorError, StreamExecutorResult};
+use super::error::StreamExecutorResult;
 use super::managed_state::top_n::variants::{TOP_N_MAX, TOP_N_MIN};
 use super::managed_state::top_n::{ManagedTopNBottomNState, ManagedTopNState};
 use super::top_n_executor::{generate_output, TopNExecutorBase, TopNExecutorWrapper};
@@ -40,12 +38,15 @@ impl<S: StateStore> TopNExecutor<S> {
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, Option<usize>),
         pk_indices: PkIndices,
-        keyspace: Keyspace<S>,
+        store: S,
+        table_id_l: TableId,
+        table_id_m: TableId,
+        table_id_h: TableId,
         cache_size: Option<usize>,
         total_count: (usize, usize, usize),
         executor_id: u64,
         key_indices: Vec<usize>,
-    ) -> Result<Self> {
+    ) -> StreamExecutorResult<Self> {
         let info = input.info();
         let schema = input.schema().clone();
 
@@ -57,7 +58,10 @@ impl<S: StateStore> TopNExecutor<S> {
                 order_pairs,
                 offset_and_limit,
                 pk_indices,
-                keyspace,
+                store,
+                table_id_l,
+                table_id_m,
+                table_id_h,
                 cache_size,
                 total_count,
                 executor_id,
@@ -140,12 +144,15 @@ impl<S: StateStore> InnerTopNExecutor<S> {
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, Option<usize>),
         pk_indices: PkIndices,
-        keyspace: Keyspace<S>,
+        store: S,
+        table_id_l: TableId,
+        table_id_m: TableId,
+        table_id_h: TableId,
         cache_size: Option<usize>,
         total_count: (usize, usize, usize),
         executor_id: u64,
         key_indices: Vec<usize>,
-    ) -> Result<Self> {
+    ) -> StreamExecutorResult<Self> {
         let (internal_key_indices, internal_key_data_types, internal_key_order_types) =
             generate_internal_key(&order_pairs, &pk_indices, &schema);
 
@@ -157,40 +164,33 @@ impl<S: StateStore> InnerTopNExecutor<S> {
             .iter()
             .map(|field| field.data_type.clone())
             .collect::<Vec<_>>();
-        let table_column_descs = row_data_types
-            .iter()
-            .enumerate()
-            .map(|(id, data_type)| {
-                ColumnDesc::unnamed(ColumnId::from(id as i32), data_type.clone())
-            })
-            .collect::<Vec<_>>();
-        let cell_based_row_deserializer = CellBasedRowDeserializer::new(table_column_descs);
-        let lower_sub_keyspace = keyspace.append_u8(b'l');
-        let middle_sub_keyspace = keyspace.append_u8(b'm');
-        let higher_sub_keyspace = keyspace.append_u8(b'h');
+
         let managed_lowest_state = ManagedTopNState::<S, TOP_N_MAX>::new(
             cache_size,
             total_count.0,
-            lower_sub_keyspace,
+            store.clone(),
+            table_id_l,
             row_data_types.clone(),
             ordered_row_deserializer.clone(),
-            cell_based_row_deserializer.clone(),
+            internal_key_indices.clone(),
         );
         let managed_middle_state = ManagedTopNBottomNState::new(
             cache_size,
             total_count.1,
-            middle_sub_keyspace,
+            store.clone(),
+            table_id_m,
             row_data_types.clone(),
             ordered_row_deserializer.clone(),
-            cell_based_row_deserializer.clone(),
+            internal_key_indices.clone(),
         );
         let managed_highest_state = ManagedTopNState::<S, TOP_N_MIN>::new(
             cache_size,
             total_count.2,
-            higher_sub_keyspace,
+            store,
+            table_id_h,
             row_data_types,
             ordered_row_deserializer,
-            cell_based_row_deserializer,
+            internal_key_indices.clone(),
         );
         Ok(Self {
             info: ExecutorInfo {
@@ -213,18 +213,9 @@ impl<S: StateStore> InnerTopNExecutor<S> {
     }
 
     async fn flush_inner(&mut self, epoch: u64) -> StreamExecutorResult<()> {
-        self.managed_highest_state
-            .flush(epoch)
-            .await
-            .map_err(StreamExecutorError::top_n_state_error)?;
-        self.managed_middle_state
-            .flush(epoch)
-            .await
-            .map_err(StreamExecutorError::top_n_state_error)?;
-        self.managed_lowest_state
-            .flush(epoch)
-            .await
-            .map_err(StreamExecutorError::top_n_state_error)
+        self.managed_highest_state.flush(epoch).await?;
+        self.managed_middle_state.flush(epoch).await?;
+        self.managed_lowest_state.flush(epoch).await
     }
 }
 
@@ -254,18 +245,9 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
         epoch: u64,
     ) -> StreamExecutorResult<StreamChunk> {
         if self.first_execution {
-            self.managed_lowest_state
-                .fill_in_cache(epoch)
-                .await
-                .map_err(StreamExecutorError::top_n_state_error)?;
-            self.managed_middle_state
-                .fill_in_cache(epoch)
-                .await
-                .map_err(StreamExecutorError::top_n_state_error)?;
-            self.managed_highest_state
-                .fill_in_cache(epoch)
-                .await
-                .map_err(StreamExecutorError::top_n_state_error)?;
+            self.managed_lowest_state.fill_in_cache(epoch).await?;
+            self.managed_middle_state.fill_in_cache(epoch).await?;
+            self.managed_highest_state.fill_in_cache(epoch).await?;
             self.first_execution = false;
         }
 
@@ -285,8 +267,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                         // we ignored it for now as it is not in the result set.
                         self.managed_lowest_state
                             .insert(ordered_pk_row, row, epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?;
+                            .await?;
                         continue;
                     }
 
@@ -300,13 +281,11 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                         let res = self
                             .managed_lowest_state
                             .pop_top_element(epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?
+                            .await?
                             .unwrap();
                         self.managed_lowest_state
                             .insert(ordered_pk_row, row, epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?;
+                            .await?;
                         res
                     } else {
                         (ordered_pk_row, row)
@@ -331,8 +310,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                         let res = self
                             .managed_middle_state
                             .pop_top_element(epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?
+                            .await?
                             .unwrap();
                         new_ops.push(Op::Delete);
                         new_rows.push(res.1.clone());
@@ -356,8 +334,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                             element_to_compare_with_highest.1,
                             epoch,
                         )
-                        .await
-                        .map_err(StreamExecutorError::top_n_state_error)?;
+                        .await?;
                 }
                 Op::Delete | Op::UpdateDelete => {
                     // The extra care we need to take for deletion is that when we delete an element
@@ -371,18 +348,16 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                     {
                         // The current element in in the range of `[offset+limit, +inf)`
                         self.managed_highest_state
-                            .delete(&ordered_pk_row, epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?;
+                            .delete(&ordered_pk_row, row.clone(), epoch)
+                            .await?;
                     } else if self.managed_lowest_state.total_count() == self.offset
                         && (self.offset == 0
                             || ordered_pk_row > *self.managed_lowest_state.top_element().unwrap().0)
                     {
                         // The current element in in the range of `[offset, offset+limit)`
                         self.managed_middle_state
-                            .delete(&ordered_pk_row, epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?;
+                            .delete(&ordered_pk_row, row.clone(), epoch)
+                            .await?;
                         new_ops.push(Op::Delete);
                         new_rows.push(row.clone());
                         // We need to bring one, if any, from highest to lowest.
@@ -390,8 +365,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                             let smallest_element_from_highest_state = self
                                 .managed_highest_state
                                 .pop_top_element(epoch)
-                                .await
-                                .map_err(StreamExecutorError::top_n_state_error)?
+                                .await?
                                 .unwrap();
                             new_ops.push(Op::Insert);
                             new_rows.push(smallest_element_from_highest_state.1.clone());
@@ -405,16 +379,14 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                     } else {
                         // The current element in in the range of `[0, offset)`
                         self.managed_lowest_state
-                            .delete(&ordered_pk_row, epoch)
-                            .await
-                            .map_err(StreamExecutorError::top_n_state_error)?;
+                            .delete(&ordered_pk_row, row.clone(), epoch)
+                            .await?;
                         // We need to bring one, if any, from middle to lowest.
                         if self.managed_middle_state.total_count() > 0 {
                             let smallest_element_from_middle_state = self
                                 .managed_middle_state
                                 .pop_bottom_element(epoch)
-                                .await
-                                .map_err(StreamExecutorError::top_n_state_error)?
+                                .await?
                                 .unwrap();
                             new_ops.push(Op::Delete);
                             new_rows.push(smallest_element_from_middle_state.1.clone());
@@ -424,8 +396,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                                     smallest_element_from_middle_state.1,
                                     epoch,
                                 )
-                                .await
-                                .map_err(StreamExecutorError::top_n_state_error)?;
+                                .await?;
                         }
                         // We check whether we need to/can bring one from highest to middle.
                         // We remark that if `self.limit` is Some, it cannot be 0 as this should be
@@ -436,8 +407,7 @@ impl<S: StateStore> TopNExecutorBase for InnerTopNExecutor<S> {
                             let smallest_element_from_highest_state = self
                                 .managed_highest_state
                                 .pop_top_element(epoch)
-                                .await
-                                .map_err(StreamExecutorError::top_n_state_error)?
+                                .await?
                                 .unwrap();
                             new_ops.push(Op::Insert);
                             new_rows.push(smallest_element_from_highest_state.1.clone());
@@ -480,9 +450,10 @@ mod tests {
     use risingwave_common::catalog::Field;
     use risingwave_common::types::DataType;
     use risingwave_common::util::sort_util::OrderType;
+    use risingwave_storage::memory::MemoryStateStore;
 
     use super::*;
-    use crate::executor::test_utils::{create_in_memory_keyspace, MockSource};
+    use crate::executor::test_utils::MockSource;
     use crate::executor::{Barrier, Message};
 
     fn create_stream_chunks() -> Vec<StreamChunk> {
@@ -556,18 +527,20 @@ mod tests {
         ))
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_top_n_executor_with_offset() {
         let order_types = create_order_pairs();
         let source = create_source();
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             TopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_types,
                 (3, None),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
+                TableId::from(0x2335),
                 Some(2),
                 (0, 0, 0),
                 1,
@@ -652,18 +625,20 @@ mod tests {
         );
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_top_n_executor_with_limit() {
         let order_types = create_order_pairs();
         let source = create_source();
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             TopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_types,
                 (0, Some(4)),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
+                TableId::from(0x2335),
                 Some(2),
                 (0, 0, 0),
                 1,
@@ -757,18 +732,20 @@ mod tests {
         );
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_top_n_executor_with_offset_and_limit() {
         let order_types = create_order_pairs();
         let source = create_source();
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             TopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_types,
                 (3, Some(4)),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
+                TableId::from(0x2335),
                 Some(2),
                 (0, 0, 0),
                 1,
@@ -831,7 +808,6 @@ mod tests {
             top_n_executor.next().await.unwrap().unwrap(),
             Message::Barrier(_)
         );
-
         let res = top_n_executor.next().await.unwrap().unwrap();
         assert_eq!(
             *res.as_chunk().unwrap(),

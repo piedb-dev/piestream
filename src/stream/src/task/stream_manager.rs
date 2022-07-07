@@ -12,26 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::time::Duration;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use futures::channel::mpsc::{channel, Receiver};
 use itertools::Itertools;
 use madsim::collections::{HashMap, HashSet};
-use madsim::task::JoinHandle;
 use parking_lot::Mutex;
+use risingwave_common::buffer::Bitmap;
 use risingwave_common::config::StreamingConfig;
 use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::try_match_expand;
 use risingwave_common::util::addr::{is_local_address, HostAddr};
 use risingwave_common::util::compress::decompress_data;
+use risingwave_hummock_sdk::LocalSstableInfo;
 use risingwave_pb::common::ActorInfo;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
 use risingwave_pb::{stream_plan, stream_service};
-use risingwave_storage::{dispatch_state_store, StateStore, StateStoreImpl};
-use tokio::sync::oneshot;
+use risingwave_rpc_client::ComputeClientPool;
+use risingwave_storage::{
+    dispatch_hummock_state_store, dispatch_state_store, StateStore, StateStoreImpl,
+};
+use tokio::sync::mpsc::{channel, Receiver};
+use tokio::task::JoinHandle;
 
-use super::{unique_executor_id, unique_operator_id, CollectResult, ComputeClientPool};
+use super::{unique_executor_id, unique_operator_id, CollectResult};
 use crate::executor::dispatch::*;
 use crate::executor::merge::RemoteInput;
 use crate::executor::monitor::StreamingMetrics;
@@ -63,6 +66,9 @@ pub struct LocalStreamManagerCore {
     /// Stores all actor information, taken after actor built.
     actors: HashMap<ActorId, stream_plan::StreamActor>,
 
+    /// Stores all actor tokio runtime montioring tasks.
+    actor_monitor_tasks: HashMap<ActorId, JoinHandle<()>>,
+
     /// Mock source, `actor_id = 0`.
     /// TODO: remove this
     mock_source: ConsumableChannelPair,
@@ -71,7 +77,7 @@ pub struct LocalStreamManagerCore {
     state_store: StateStoreImpl,
 
     /// Metrics of the stream manager
-    streaming_metrics: Arc<StreamingMetrics>,
+    pub(crate) streaming_metrics: Arc<StreamingMetrics>,
 
     /// The pool of compute clients.
     ///
@@ -109,7 +115,14 @@ pub struct ExecutorParams {
     /// Id of the actor.
     pub actor_id: ActorId,
 
+    /// Metrics
     pub executor_stats: Arc<StreamingMetrics>,
+
+    // Actor context
+    pub actor_context: ActorContextRef,
+
+    // Vnodes owned by this executor. Represented in bitmap.
+    pub vnode_bitmap: Option<Bitmap>,
 }
 
 impl Debug for ExecutorParams {
@@ -151,51 +164,56 @@ impl LocalStreamManager {
         Self::with_core(LocalStreamManagerCore::for_test())
     }
 
-    /// Broadcast a barrier to all senders. Returns a receiver which will get notified when this
-    /// barrier is finished.
-    fn send_barrier(
+    /// Broadcast a barrier to all senders. Save a receiver in barrier manager
+    pub fn send_barrier(
         &self,
         barrier: &Barrier,
         actor_ids_to_send: impl IntoIterator<Item = ActorId>,
         actor_ids_to_collect: impl IntoIterator<Item = ActorId>,
-    ) -> Result<oneshot::Receiver<CollectResult>> {
+    ) -> Result<()> {
         let core = self.core.lock();
         let mut barrier_manager = core.context.lock_barrier_manager();
-        let rx = barrier_manager
-            .send_barrier(barrier, actor_ids_to_send, actor_ids_to_collect)?
-            .expect("no rx for local mode");
-        Ok(rx)
+        barrier_manager.send_barrier(barrier, actor_ids_to_send, actor_ids_to_collect)?;
+        Ok(())
     }
 
-    /// Broadcast a barrier to all senders. Returns when the barrier is fully collected.
-    pub async fn send_and_collect_barrier(
-        &self,
-        barrier: &Barrier,
-        actor_ids_to_send: impl IntoIterator<Item = ActorId>,
-        actor_ids_to_collect: impl IntoIterator<Item = ActorId>,
-        need_sync: bool,
-    ) -> Result<CollectResult> {
-        let rx = self.send_barrier(barrier, actor_ids_to_send, actor_ids_to_collect)?;
+    /// drain collect rx less than `prev_epoch` in barrier manager.
+    pub fn drain_collect_rx(&self, prev_epoch: u64) {
+        let core = self.core.lock();
+        let mut barrier_manager = core.context.lock_barrier_manager();
+        barrier_manager.drain_collect_rx(prev_epoch);
+    }
 
+    /// Use `epoch` to find collect rx. And wait for all actor to be collected before
+    /// returning.
+    pub async fn collect_barrier(&self, epoch: u64) -> CollectResult {
+        let rx = {
+            let core = self.core.lock();
+            let mut barrier_manager = core.context.lock_barrier_manager();
+            barrier_manager.remove_collect_rx(epoch)
+        };
         // Wait for all actors finishing this barrier.
-        let collect_result = rx.await.unwrap();
+        rx.await.unwrap()
+    }
 
-        // Sync states from shared buffer to S3 before telling meta service we've done.
-        if need_sync {
-            dispatch_state_store!(self.state_store(), store, {
-                match store.sync(Some(barrier.epoch.prev)).await {
-                    Ok(_) => {}
-                    // TODO: Handle sync failure by propagating it
-                    // back to global barrier manager
-                    Err(e) => panic!(
-                        "Failed to sync state store after receiving barrier {:?} due to {}",
-                        barrier, e
-                    ),
-                }
-            });
-        }
+    pub async fn sync_epoch(&self, epoch: u64) -> Vec<LocalSstableInfo> {
+        dispatch_state_store!(self.state_store(), store, {
+            match store.sync(Some(epoch)).await {
+                Ok(_) => store.get_uncommitted_ssts(epoch),
+                // TODO: Handle sync failure by propagating it
+                // back to global barrier manager
+                Err(e) => panic!(
+                    "Failed to sync state store after receiving barrier prev_epoch {:?} due to {}",
+                    epoch, e
+                ),
+            }
+        })
+    }
 
-        Ok(collect_result)
+    pub async fn clear_storage_buffer(&self) {
+        dispatch_state_store!(self.state_store(), store, {
+            store.clear_shared_buffer().await.unwrap();
+        });
     }
 
     /// Broadcast a barrier to all senders. Returns immediately, and caller won't be notified when
@@ -208,6 +226,7 @@ impl LocalStreamManager {
         let mut barrier_manager = core.context.lock_barrier_manager();
         assert!(barrier_manager.is_local_mode());
         barrier_manager.send_barrier(barrier, empty(), empty())?;
+        barrier_manager.remove_collect_rx(barrier.epoch.prev);
         Ok(())
     }
 
@@ -231,14 +250,17 @@ impl LocalStreamManager {
         if actor_ids_to_send.is_empty() || actor_ids_to_collect.is_empty() {
             return Ok(());
         }
-        let barrier = Barrier {
+        let barrier = &Barrier {
             epoch,
             mutation: Some(Arc::new(Mutation::Stop(actor_ids_to_collect.clone()))),
             span: tracing::Span::none(),
         };
 
-        self.send_and_collect_barrier(&barrier, actor_ids_to_send, actor_ids_to_collect, false)
-            .await?;
+        self.drain_collect_rx(barrier.epoch.prev);
+        self.send_barrier(barrier, actor_ids_to_send, actor_ids_to_collect)?;
+        self.collect_barrier(barrier.epoch.prev).await;
+        // Clear shared buffer in storage to release memory
+        self.clear_storage_buffer().await;
         self.core.lock().drop_all_actors();
 
         Ok(())
@@ -262,7 +284,7 @@ impl LocalStreamManager {
     pub async fn wait_all(self) -> Result<()> {
         let handles = self.core.lock().take_all_handles()?;
         for (_id, handle) in handles {
-            handle.await;
+            handle.await.unwrap();
         }
         Ok(())
     }
@@ -271,7 +293,7 @@ impl LocalStreamManager {
     pub async fn wait_actors(&self, actor_ids: &[ActorId]) -> Result<()> {
         let handles = self.core.lock().remove_actor_handles(actor_ids)?;
         for handle in handles {
-            handle.await;
+            handle.await.unwrap();
         }
         Ok(())
     }
@@ -288,13 +310,17 @@ impl LocalStreamManager {
 
     /// This function could only be called once during the lifecycle of `LocalStreamManager` for
     /// now.
-    pub fn build_actors(&self, actors: &[ActorId], env: StreamEnvironment) -> Result<()> {
+    pub async fn build_actors(&self, actors: &[ActorId], env: StreamEnvironment) -> Result<()> {
+        // Ensure compaction group mapping is available locally.
+        dispatch_hummock_state_store!(self.state_store(), store, {
+            store.update_compaction_group_cache().await?;
+        });
         let mut core = self.core.lock();
         core.build_actors(actors, env)
     }
 
     #[cfg(test)]
-    pub fn take_source(&self) -> futures::channel::mpsc::Sender<Message> {
+    pub fn take_source(&self) -> tokio::sync::mpsc::Sender<Message> {
         let mut core = self.core.lock();
         core.mock_source.0.take().unwrap()
     }
@@ -343,10 +369,11 @@ impl LocalStreamManagerCore {
             context: Arc::new(context),
             actor_infos: HashMap::new(),
             actors: HashMap::new(),
+            actor_monitor_tasks: HashMap::new(),
             mock_source: (Some(tx), Some(rx)),
             state_store,
             streaming_metrics,
-            compute_client_pool: ComputeClientPool::new(1024),
+            compute_client_pool: ComputeClientPool::new(u64::MAX),
             config,
         }
     }
@@ -389,7 +416,13 @@ impl LocalStreamManagerCore {
                 .iter()
                 .map(|down_id| {
                     let downstream_addr = self.get_actor_info(down_id)?.get_host()?.into();
-                    new_output(&self.context, downstream_addr, actor_id, *down_id)
+                    new_output(
+                        &self.context,
+                        downstream_addr,
+                        actor_id,
+                        *down_id,
+                        self.streaming_metrics.clone(),
+                    )
                 })
                 .collect::<Result<Vec<_>>>()?;
 
@@ -435,10 +468,12 @@ impl LocalStreamManagerCore {
             dispatcher_impls,
             actor_id,
             self.context.clone(),
+            self.streaming_metrics.clone(),
         ))
     }
 
     /// Create a chain(tree) of nodes, with given `store`.
+    #[allow(clippy::too_many_arguments)]
     fn create_nodes_inner(
         &mut self,
         fragment_id: u32,
@@ -447,6 +482,8 @@ impl LocalStreamManagerCore {
         input_pos: usize,
         env: StreamEnvironment,
         store: impl StateStore,
+        actor_context: &ActorContextRef,
+        vnode_bitmap: Option<Bitmap>,
     ) -> Result<BoxedExecutor> {
         let op_info = node.get_identity().clone();
         // Create the input executor before creating itself
@@ -463,6 +500,8 @@ impl LocalStreamManagerCore {
                     input_pos,
                     env.clone(),
                     store.clone(),
+                    actor_context,
+                    vnode_bitmap.clone(),
                 )
             })
             .try_collect()?;
@@ -487,12 +526,15 @@ impl LocalStreamManagerCore {
             input,
             actor_id,
             executor_stats: self.streaming_metrics.clone(),
+            actor_context: actor_context.clone(),
+            vnode_bitmap,
         };
 
         let executor = create_executor(executor_params, self, node, store)?;
         let executor = Self::wrap_executor_for_debug(
             executor,
             actor_id,
+            executor_id,
             input_pos,
             self.streaming_metrics.clone(),
         );
@@ -506,19 +548,38 @@ impl LocalStreamManagerCore {
         actor_id: ActorId,
         node: &stream_plan::StreamNode,
         env: StreamEnvironment,
+        actor_context: &ActorContextRef,
+        vnode_bitmap: Option<Bitmap>,
     ) -> Result<BoxedExecutor> {
         dispatch_state_store!(self.state_store.clone(), store, {
-            self.create_nodes_inner(fragment_id, actor_id, node, 0, env, store)
+            self.create_nodes_inner(
+                fragment_id,
+                actor_id,
+                node,
+                0,
+                env,
+                store,
+                actor_context,
+                vnode_bitmap,
+            )
         })
     }
 
     fn wrap_executor_for_debug(
         executor: BoxedExecutor,
         actor_id: ActorId,
+        executor_id: u64,
         input_pos: usize,
         streaming_metrics: Arc<StreamingMetrics>,
     ) -> BoxedExecutor {
-        DebugExecutor::new(executor, input_pos, actor_id, streaming_metrics).boxed()
+        DebugExecutor::new(
+            executor,
+            input_pos,
+            actor_id,
+            executor_id,
+            streaming_metrics,
+        )
+        .boxed()
     }
 
     pub(crate) fn get_receive_message(
@@ -544,13 +605,14 @@ impl LocalStreamManagerCore {
                         let up_id = *up_id;
 
                         let pool = self.compute_client_pool.clone();
-
-                        madsim::task::spawn(async move {
+                        let metrics = self.streaming_metrics.clone();
+                        tokio::spawn(async move {
                             let init_client = async move {
                                 let remote_input = RemoteInput::create(
                                     pool.get_client_for_addr(upstream_addr).await?,
                                     (up_id, actor_id),
                                     sender,
+                                    metrics,
                                 )
                                 .await?;
                                 Ok::<_, RwError>(remote_input)
@@ -561,8 +623,7 @@ impl LocalStreamManagerCore {
                                     error!("Spawn remote input fails:{}", e);
                                 }
                             }
-                        })
-                        .detach();
+                        });
                     }
                     Ok::<_, RwError>(self.context.take_receiver(&(*up_id, actor_id))?)
                 }
@@ -585,18 +646,93 @@ impl LocalStreamManagerCore {
         for actor_id in actors {
             let actor_id = *actor_id;
             let actor = self.actors.remove(&actor_id).unwrap();
-            let executor =
-                self.create_nodes(actor.fragment_id, actor_id, actor.get_nodes()?, env.clone())?;
+            let actor_context = Arc::new(Mutex::new(ActorContext::default()));
+            let vnode_bitmap = actor
+                .get_vnode_bitmap()
+                .ok()
+                .map(|b| b.try_into())
+                .transpose()?;
+
+            let executor = self.create_nodes(
+                actor.fragment_id,
+                actor_id,
+                actor.get_nodes()?,
+                env.clone(),
+                &actor_context,
+                vnode_bitmap,
+            )?;
 
             let dispatcher = self.create_dispatcher(executor, &actor.dispatcher, actor_id)?;
-            let actor = Actor::new(dispatcher, actor_id, self.context.clone());
+            let actor = Actor::new(
+                dispatcher,
+                actor_id,
+                self.context.clone(),
+                self.streaming_metrics.clone(),
+                actor_context,
+            );
+            let monitor = tokio_metrics::TaskMonitor::new();
+
             self.handles.insert(
                 actor_id,
-                madsim::task::spawn(async move {
+                tokio::spawn(monitor.instrument(async move {
                     // unwrap the actor result to panic on error
                     actor.run().await.expect("actor failed");
-                }),
+                })),
             );
+
+            let actor_id_str = actor_id.to_string();
+
+            let metrics = self.streaming_metrics.clone();
+            let task = tokio::spawn(async move {
+                loop {
+                    metrics
+                        .actor_execution_time
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_poll_duration.as_secs_f64());
+                    metrics
+                        .actor_fast_poll_duration
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_fast_poll_duration.as_secs_f64());
+                    metrics
+                        .actor_fast_poll_cnt
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_fast_poll_count as i64);
+                    metrics
+                        .actor_slow_poll_duration
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_slow_poll_duration.as_secs_f64());
+                    metrics
+                        .actor_slow_poll_cnt
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_slow_poll_count as i64);
+                    metrics
+                        .actor_poll_duration
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_poll_duration.as_secs_f64());
+                    metrics
+                        .actor_poll_cnt
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_poll_count as i64);
+                    metrics
+                        .actor_idle_duration
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_idle_duration.as_secs_f64());
+                    metrics
+                        .actor_idle_cnt
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_idled_count as i64);
+                    metrics
+                        .actor_scheduled_duration
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_scheduled_duration.as_secs_f64());
+                    metrics
+                        .actor_scheduled_cnt
+                        .with_label_values(&[&actor_id_str])
+                        .set(monitor.cumulative().total_scheduled_count as i64);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
+            self.actor_monitor_tasks.insert(actor_id, task);
         }
 
         Ok(())
@@ -640,9 +776,9 @@ impl LocalStreamManagerCore {
     /// `drop_actor` is invoked by meta node via RPC once the stop barrier arrives at the
     /// sink. All the actors in the actors should stop themselves before this method is invoked.
     fn drop_actor(&mut self, actor_id: ActorId) {
-        let mut handle = self.handles.remove(&actor_id).unwrap();
+        let handle = self.handles.remove(&actor_id).unwrap();
         self.context.retain(|&(up_id, _)| up_id != actor_id);
-
+        self.actor_monitor_tasks.remove(&actor_id).unwrap().abort();
         self.actor_infos.remove(&actor_id);
         self.actors.remove(&actor_id);
         // Task should have already stopped when this method is invoked.
@@ -652,52 +788,14 @@ impl LocalStreamManagerCore {
     /// `drop_all_actors` is invoked by meta node via RPC once the stop barrier arrives at all the
     /// sink. All the actors in the actors should stop themselves before this method is invoked.
     fn drop_all_actors(&mut self) {
-        for (actor_id, mut handle) in self.handles.drain() {
+        for (actor_id, handle) in self.handles.drain() {
             self.context.retain(|&(up_id, _)| up_id != actor_id);
+            self.actor_monitor_tasks.remove(&actor_id).unwrap().abort();
             self.actors.remove(&actor_id);
             // Task should have already stopped when this method is invoked.
             handle.abort();
         }
         self.actor_infos.clear();
-    }
-
-    fn build_channel_for_chain_node(
-        &self,
-        actor_id: ActorId,
-        stream_node: &stream_plan::StreamNode,
-    ) -> Result<()> {
-        if let NodeBody::Chain(_) = stream_node.node_body.as_ref().unwrap() {
-            // Create channel based on upstream actor id for [`ChainNode`], check if upstream
-            // exists.
-            let merge = try_match_expand!(
-                stream_node
-                    .input
-                    .get(0)
-                    .unwrap()
-                    .node_body
-                    .as_ref()
-                    .unwrap(),
-                NodeBody::Merge,
-                "first input of chain node should be merge node"
-            )?;
-            for upstream_actor_id in &merge.upstream_actor_id {
-                if !self.actor_infos.contains_key(upstream_actor_id) {
-                    return Err(ErrorCode::InternalError(format!(
-                        "chain upstream actor {} not exists",
-                        upstream_actor_id
-                    ))
-                    .into());
-                }
-                let (tx, rx) = channel(LOCAL_OUTPUT_CHANNEL_SIZE);
-                let up_down_ids = (*upstream_actor_id, actor_id);
-                self.context
-                    .add_channel_pairs(up_down_ids, (Some(tx), Some(rx)));
-            }
-        }
-        for child in &stream_node.input {
-            self.build_channel_for_chain_node(actor_id, child)?;
-        }
-        Ok(())
     }
 
     fn update_actors(
@@ -724,16 +822,14 @@ impl LocalStreamManagerCore {
             }
         }
 
-        for (current_id, actor) in &self.actors {
-            self.build_channel_for_chain_node(*current_id, actor.nodes.as_ref().unwrap())?;
-
+        for actor in actors {
             // At this time, the graph might not be complete, so we do not check if downstream
             // has `current_id` as upstream.
             let down_id = actor
                 .dispatcher
                 .iter()
                 .flat_map(|x| x.downstream_actor_id.iter())
-                .map(|id| (*current_id, *id))
+                .map(|id| (actor.actor_id, *id))
                 .collect_vec();
             update_upstreams(&self.context, &down_id);
 
@@ -741,7 +837,7 @@ impl LocalStreamManagerCore {
             let mut up_id = vec![];
             for upstream_id in actor.get_upstream_actor_id() {
                 if !local_actor_ids.contains(upstream_id) {
-                    up_id.push((*upstream_id, *current_id));
+                    up_id.push((*upstream_id, actor.actor_id));
                 }
             }
             update_upstreams(&self.context, &up_id);

@@ -26,7 +26,9 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::signal;
 
-async fn load_risedev_config() -> Result<(Vec<String>, HashMap<String, ServiceConfig>)> {
+async fn load_risedev_config(
+    profile: &str,
+) -> Result<(Vec<String>, HashMap<String, ServiceConfig>)> {
     let risedev_config = {
         let mut content = String::new();
         File::open("risedev.yml")
@@ -35,8 +37,8 @@ async fn load_risedev_config() -> Result<(Vec<String>, HashMap<String, ServiceCo
             .await?;
         content
     };
-    let risedev_config = ConfigExpander::expand(&risedev_config)?;
-    let (steps, services) = ConfigExpander::select(&risedev_config, "playground")?;
+    let risedev_config = ConfigExpander::expand(&risedev_config, profile)?;
+    let (steps, services) = ConfigExpander::select(&risedev_config, profile)?;
 
     Ok((steps, services))
 }
@@ -51,58 +53,71 @@ pub enum RisingWaveService {
 pub async fn playground() -> Result<()> {
     eprintln!("launching playground");
 
-    risingwave_logging::oneshot_common();
-    risingwave_logging::init_risingwave_logger(false, true);
+    risingwave_rt::oneshot_common();
+    risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new_default());
 
-    let services = if let Ok((steps, services)) = load_risedev_config().await {
-        tracing::info!(
-            "Launching services from risedev config playground section: {:?}",
-            steps
-        );
-        let mut rw_services = vec![];
-        for step in steps {
-            match services.get(&step).expect("service not found") {
-                ServiceConfig::ComputeNode(c) => {
-                    let mut command = Command::new("compute-node");
-                    ComputeNodeService::apply_command_args(&mut command, c)?;
-                    rw_services.push(RisingWaveService::Compute(
-                        command.get_args().map(ToOwned::to_owned).collect(),
-                    ));
-                }
-                ServiceConfig::MetaNode(c) => {
-                    let mut command = Command::new("meta-node");
-                    MetaNodeService::apply_command_args(&mut command, c)?;
-                    rw_services.push(RisingWaveService::Meta(
-                        command.get_args().map(ToOwned::to_owned).collect(),
-                    ));
-                }
-                ServiceConfig::FrontendV2(c) => {
-                    let mut command = Command::new("frontend-node");
-                    FrontendService::apply_command_args(&mut command, c)?;
-                    rw_services.push(RisingWaveService::Frontend(
-                        command.get_args().map(ToOwned::to_owned).collect(),
-                    ));
-                }
-                ServiceConfig::Compactor(c) => {
-                    let mut command = Command::new("compactor");
-                    CompactorService::apply_command_args(&mut command, c)?;
-                    rw_services.push(RisingWaveService::Compactor(
-                        command.get_args().map(ToOwned::to_owned).collect(),
-                    ));
-                }
-                _ => {
-                    return Err(anyhow!("unsupported service: {}", step));
+    // Enable tokio console for `./risedev p` by replacing the above statement to:
+    // risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new(false, true));
+
+    let profile = if let Ok(profile) = std::env::var("PLAYGROUND_PROFILE") {
+        profile.to_string()
+    } else {
+        "playground".to_string()
+    };
+
+    let services = match load_risedev_config(&profile).await {
+        Ok((steps, services)) => {
+            tracing::info!(
+                "Launching services from risedev config playground using profile: {}",
+                profile
+            );
+            tracing::info!("steps: {:?}", steps);
+            let mut rw_services = vec![];
+            for step in steps {
+                match services.get(&step).expect("service not found") {
+                    ServiceConfig::ComputeNode(c) => {
+                        let mut command = Command::new("compute-node");
+                        ComputeNodeService::apply_command_args(&mut command, c)?;
+                        rw_services.push(RisingWaveService::Compute(
+                            command.get_args().map(ToOwned::to_owned).collect(),
+                        ));
+                    }
+                    ServiceConfig::MetaNode(c) => {
+                        let mut command = Command::new("meta-node");
+                        MetaNodeService::apply_command_args(&mut command, c)?;
+                        rw_services.push(RisingWaveService::Meta(
+                            command.get_args().map(ToOwned::to_owned).collect(),
+                        ));
+                    }
+                    ServiceConfig::FrontendV2(c) => {
+                        let mut command = Command::new("frontend-node");
+                        FrontendService::apply_command_args(&mut command, c)?;
+                        rw_services.push(RisingWaveService::Frontend(
+                            command.get_args().map(ToOwned::to_owned).collect(),
+                        ));
+                    }
+                    ServiceConfig::Compactor(c) => {
+                        let mut command = Command::new("compactor");
+                        CompactorService::apply_command_args(&mut command, c)?;
+                        rw_services.push(RisingWaveService::Compactor(
+                            command.get_args().map(ToOwned::to_owned).collect(),
+                        ));
+                    }
+                    _ => {
+                        return Err(anyhow!("unsupported service: {}", step));
+                    }
                 }
             }
+            rw_services
         }
-        rw_services
-    } else {
-        tracing::warn!("Failed to load risedev config. All components will be started using the default command line options.");
-        vec![
-            RisingWaveService::Meta(vec!["--backend".into(), "mem".into()]),
-            RisingWaveService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
-            RisingWaveService::Frontend(vec![]),
-        ]
+        Err(e) => {
+            tracing::warn!("Failed to load risedev config. All components will be started using the default command line options.\n{}", e);
+            vec![
+                RisingWaveService::Meta(vec!["--backend".into(), "mem".into()]),
+                RisingWaveService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
+                RisingWaveService::Frontend(vec![]),
+            ]
+        }
     };
 
     for service in services {
@@ -112,7 +127,14 @@ pub async fn playground() -> Result<()> {
                 tracing::info!("starting meta-node thread with cli args: {:?}", opts);
                 let opts = risingwave_meta::MetaNodeOpts::parse_from(opts);
                 tracing::info!("opts: {:#?}", opts);
-                let _meta_handle = tokio::spawn(async move { risingwave_meta::start(opts).await });
+                let _meta_handle = tokio::spawn(async move {
+                    risingwave_meta::start(opts).await;
+                    tracing::info!("meta is stopped, shutdown all nodes");
+                    // As a playground, it's fine to just kill everything.
+                    std::process::exit(0);
+                });
+                // wait for the service to be ready
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
             RisingWaveService::Compute(mut opts) => {
                 opts.insert(0, "compute-node".into());

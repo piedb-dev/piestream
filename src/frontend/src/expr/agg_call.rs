@@ -18,6 +18,7 @@ use risingwave_common::types::DataType;
 use risingwave_expr::expr::AggKind;
 
 use super::{Expr, ExprImpl};
+use crate::utils::Condition;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct AggCall {
@@ -25,6 +26,7 @@ pub struct AggCall {
     return_type: DataType,
     inputs: Vec<ExprImpl>,
     distinct: bool,
+    filter: Condition,
 }
 
 impl std::fmt::Debug for AggCall {
@@ -34,6 +36,7 @@ impl std::fmt::Debug for AggCall {
                 .field("agg_kind", &self.agg_kind)
                 .field("return_type", &self.return_type)
                 .field("inputs", &self.inputs)
+                .field("filter", &self.filter)
                 .finish()
         } else {
             let mut builder = f.debug_tuple(&format!("{}", self.agg_kind));
@@ -96,7 +99,14 @@ impl AggCall {
             (AggKind::Sum, _) => return invalid(),
 
             // Count
-            (AggKind::Count, _) => DataType::Int64,
+            (AggKind::Count | AggKind::ApproxCountDistinct, _) => DataType::Int64,
+
+            // StringAgg
+            (AggKind::StringAgg, _) => DataType::Varchar,
+
+            // SingleValue
+            (AggKind::SingleValue, [input]) => input.clone(),
+            (AggKind::SingleValue, _) => return invalid(),
 
             // Others
             _ => return unsupported(),
@@ -107,7 +117,12 @@ impl AggCall {
 
     /// Returns error if the function name matches with an existing function
     /// but with illegal arguments.
-    pub fn new(agg_kind: AggKind, inputs: Vec<ExprImpl>, distinct: bool) -> Result<Self> {
+    pub fn new(
+        agg_kind: AggKind,
+        inputs: Vec<ExprImpl>,
+        distinct: bool,
+        filter: Condition,
+    ) -> Result<Self> {
         let data_types = inputs.iter().map(ExprImpl::return_type).collect_vec();
         let return_type = Self::infer_return_type(&agg_kind, &data_types)?;
         Ok(AggCall {
@@ -115,11 +130,12 @@ impl AggCall {
             return_type,
             inputs,
             distinct,
+            filter,
         })
     }
 
-    pub fn decompose(self) -> (AggKind, Vec<ExprImpl>, bool) {
-        (self.agg_kind, self.inputs, self.distinct)
+    pub fn decompose(self) -> (AggKind, Vec<ExprImpl>, bool, Condition) {
+        (self.agg_kind, self.inputs, self.distinct, self.filter)
     }
 
     pub fn agg_kind(&self) -> AggKind {
@@ -131,6 +147,7 @@ impl AggCall {
         self.inputs.as_ref()
     }
 }
+
 impl Expr for AggCall {
     fn return_type(&self) -> DataType {
         self.return_type.clone()

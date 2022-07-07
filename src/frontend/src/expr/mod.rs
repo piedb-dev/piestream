@@ -43,7 +43,10 @@ pub type ExprType = risingwave_pb::expr::expr_node::Type;
 
 pub use expr_rewriter::ExprRewriter;
 pub use expr_visitor::ExprVisitor;
-pub use type_inference::{align_types, cast_ok, infer_type, least_restrictive, CastContext};
+pub use type_inference::{
+    align_types, cast_map_array, cast_ok, func_sigs, infer_type, least_restrictive, CastContext,
+    DataTypeName, FuncSign,
+};
 pub use utils::*;
 
 /// the trait of bound exprssions
@@ -79,10 +82,18 @@ impl ExprImpl {
         Literal::new(Some(v.to_scalar_value()), DataType::Boolean).into()
     }
 
+    /// A literal varchar value.
+    #[inline(always)]
+    pub fn literal_varchar(v: String) -> Self {
+        Literal::new(Some(v.to_scalar_value()), DataType::Varchar).into()
+    }
+
     /// A `count(*)` aggregate function.
     #[inline(always)]
     pub fn count_star() -> Self {
-        AggCall::new(AggKind::Count, vec![], false).unwrap().into()
+        AggCall::new(AggKind::Count, vec![], false, Condition::true_cond())
+            .unwrap()
+            .into()
     }
 
     /// Collect all `InputRef`s' indexes in the expression.
@@ -100,6 +111,11 @@ impl ExprImpl {
         matches!(self, ExprImpl::Literal(literal) if literal.get_data().is_none())
     }
 
+    /// Check whether self is a literal NULL or literal string.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, ExprImpl::Literal(literal) if literal.return_type() == DataType::Varchar)
+    }
+
     /// Shorthand to create cast expr to `target` type in implicit context.
     pub fn cast_implicit(self, target: DataType) -> Result<ExprImpl> {
         FunctionCall::new_cast(self, target, CastContext::Implicit)
@@ -113,6 +129,25 @@ impl ExprImpl {
     /// Shorthand to create cast expr to `target` type in explicit context.
     pub fn cast_explicit(self, target: DataType) -> Result<ExprImpl> {
         FunctionCall::new_cast(self, target, CastContext::Explicit)
+    }
+
+    /// Create "cast" expr to string (`varchar`) type. This is different from a real cast, as
+    /// boolean is converted to a single char rather than full word.
+    ///
+    /// Choose between `cast_output` and `cast_{assign,explicit}(Varchar)` based on `PostgreSQL`'s
+    /// behavior on bools. For example, `concat(':', true)` is `:t` but `':' || true` is `:true`.
+    /// All other types have the same behavior when formatting to output and casting to string.
+    ///
+    /// References in `PostgreSQL`:
+    /// * [cast](https://github.com/postgres/postgres/blob/a3ff08e0b08dbfeb777ccfa8f13ebaa95d064c04/src/include/catalog/pg_cast.dat#L437-L444)
+    /// * [impl](https://github.com/postgres/postgres/blob/27b77ecf9f4d5be211900eda54d8155ada50d696/src/backend/utils/adt/bool.c#L204-L209)
+    pub fn cast_output(self) -> Result<ExprImpl> {
+        if self.return_type() == DataType::Boolean {
+            return Ok(FunctionCall::new(ExprType::BoolOut, vec![self])?.into());
+        }
+        // Use normal cast for other types. Both `assign` and `explicit` can pass the castability
+        // check and there is no difference.
+        self.cast_assign(DataType::Varchar)
     }
 }
 
@@ -151,6 +186,7 @@ macro_rules! impl_has_variant {
 impl_has_variant! {InputRef, Literal, FunctionCall, AggCall, Subquery}
 
 impl ExprImpl {
+    /// Used to check whether the expression has [`CorrelatedInputRef`].
     // We need to traverse inside subqueries.
     pub fn has_correlated_input_ref(&self) -> bool {
         struct Has {
@@ -160,7 +196,7 @@ impl ExprImpl {
 
         impl ExprVisitor for Has {
             fn visit_correlated_input_ref(&mut self, correlated_input_ref: &CorrelatedInputRef) {
-                if correlated_input_ref.depth() >= self.depth {
+                if correlated_input_ref.depth() == self.depth {
                     self.has = true;
                 }
             }
@@ -190,6 +226,45 @@ impl ExprImpl {
         visitor.has
     }
 
+    /// Collect `CorrelatedInputRef`s in `ExprImpl` and return theirs indices.
+    pub fn collect_correlated_indices(&self) -> Vec<usize> {
+        struct Collector {
+            depth: usize,
+            correlated_indices: Vec<usize>,
+        }
+
+        impl ExprVisitor for Collector {
+            fn visit_correlated_input_ref(&mut self, correlated_input_ref: &CorrelatedInputRef) {
+                if correlated_input_ref.depth() == self.depth {
+                    self.correlated_indices.push(correlated_input_ref.index());
+                }
+            }
+
+            fn visit_subquery(&mut self, subquery: &Subquery) {
+                use crate::binder::BoundSetExpr;
+
+                self.depth += 1;
+                match &subquery.query.body {
+                    BoundSetExpr::Select(select) => select
+                        .select_items
+                        .iter()
+                        .chain(select.group_by.iter())
+                        .chain(select.where_clause.iter())
+                        .for_each(|expr| self.visit_expr(expr)),
+                    BoundSetExpr::Values(_) => {}
+                }
+                self.depth -= 1;
+            }
+        }
+
+        let mut collector = Collector {
+            depth: 1,
+            correlated_indices: vec![],
+        };
+        collector.visit_expr(self);
+        collector.correlated_indices
+    }
+
     /// Checks whether this is a constant expr that can be evaluated over a dummy chunk.
     /// Equivalent to `!has_input_ref && !has_agg_call && !has_subquery &&
     /// !has_correlated_input_ref` but checks them in one pass.
@@ -209,6 +284,69 @@ impl ExprImpl {
         let mut visitor = Has { has: false };
         visitor.visit_expr(self);
         !visitor.has
+    }
+
+    /// Returns the `InputRefs` of an Equality predicate if it matches
+    /// ordered by the canonical ordering (lower, higher), else returns None
+    pub fn as_eq_cond(&self) -> Option<(InputRef, InputRef)> {
+        if let ExprImpl::FunctionCall(function_call) = self
+            && function_call.get_expr_type() == ExprType::Equal
+            && let (_, ExprImpl::InputRef(x), ExprImpl::InputRef(y)) = function_call.clone().decompose_as_binary()
+        {
+            if x.index() < y.index() {
+                Some((*x, *y))
+            } else {
+                Some((*y, *x))
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_eq_const(&self) -> Option<(InputRef, Literal)> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+        function_call.get_expr_type() == ExprType::Equal{
+            match function_call.clone().decompose_as_binary() {
+                (_, ExprImpl::InputRef(x), ExprImpl::Literal(y)) => Some((*x, *y)),
+                (_, ExprImpl::Literal(x), ExprImpl::InputRef(y)) => Some((*y, *x)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_comparison_const(&self) -> Option<(InputRef, ExprType, Literal)> {
+        fn reverse_comparison(comparison: ExprType) -> ExprType {
+            match comparison {
+                ExprType::LessThan => ExprType::GreaterThan,
+                ExprType::LessThanOrEqual => ExprType::GreaterThanOrEqual,
+                ExprType::GreaterThan => ExprType::LessThan,
+                ExprType::GreaterThanOrEqual => ExprType::LessThanOrEqual,
+                _ => unreachable!(),
+            }
+        }
+
+        if let ExprImpl::FunctionCall(function_call) = self {
+            match function_call.get_expr_type() {
+                ty @ (ExprType::LessThan
+                | ExprType::LessThanOrEqual
+                | ExprType::GreaterThan
+                | ExprType::GreaterThanOrEqual) => {
+                    let (_, op1, op2) = function_call.clone().decompose_as_binary();
+                    match (op1, op2) {
+                        (ExprImpl::InputRef(x), ExprImpl::Literal(y)) => Some((*x, ty, *y)),
+                        (ExprImpl::Literal(x), ExprImpl::InputRef(y)) => {
+                            Some((*y, reverse_comparison(ty), *x))
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            None
+        }
     }
 }
 

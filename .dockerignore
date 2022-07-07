@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+
+# Visual Studio Code
+.vscode/
+.devcontainer/
+
+# JetBrains
+.idea/
+*.iml
+
+# CLion
+cmake-build-debug/
+/cmake-build-wsl_profile/
+
+# build
+*.exe
+*.app
+build/
+
+# Golang
+go/bin/
+
+# Rust
+src/**/target
+src/**/target_tarpaulin
+target/
+src/proto/
+src/prost/src/*.rs
+!src/prost/src/lib.rs
+!src/prost/src/imp.rs
+**/file_descriptor_set.bin
+# runtime log
+src/log/
+# srcy-tags
+**/srcy-tags.vi
+
+# ctags
+**/tags
+
+log/
+
+.risingwave/
+.bin/
+
+# generated files
+risedev-components.user.env
+riselab-components.user.env
+
+.git/

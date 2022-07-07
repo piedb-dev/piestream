@@ -14,14 +14,12 @@
 
 use async_trait::async_trait;
 use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Schema};
-use risingwave_common::error::Result;
+use risingwave_common::catalog::{Schema, TableId};
 use risingwave_common::util::ordered::{OrderedRow, OrderedRowDeserializer};
 use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_storage::cell_based_row_deserializer::CellBasedRowDeserializer;
-use risingwave_storage::{Keyspace, StateStore};
+use risingwave_storage::StateStore;
 
-use super::error::{StreamExecutorError, StreamExecutorResult};
+use super::error::StreamExecutorResult;
 use super::managed_state::top_n::variants::TOP_N_MAX;
 use super::managed_state::top_n::ManagedTopNState;
 use super::top_n_executor::{generate_output, TopNExecutorBase, TopNExecutorWrapper};
@@ -42,12 +40,15 @@ impl<S: StateStore> AppendOnlyTopNExecutor<S> {
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, Option<usize>),
         pk_indices: PkIndices,
-        keyspace: Keyspace<S>,
+        store: S,
+        table_id_l: TableId,
+        table_id_h: TableId,
+
         cache_size: Option<usize>,
         total_count: (usize, usize),
         executor_id: u64,
         key_indices: Vec<usize>,
-    ) -> Result<Self> {
+    ) -> StreamExecutorResult<Self> {
         let info = input.info();
         let schema = input.schema().clone();
 
@@ -59,7 +60,9 @@ impl<S: StateStore> AppendOnlyTopNExecutor<S> {
                 order_pairs,
                 offset_and_limit,
                 pk_indices,
-                keyspace,
+                store,
+                table_id_l,
+                table_id_h,
                 cache_size,
                 total_count,
                 executor_id,
@@ -115,12 +118,14 @@ impl<S: StateStore> InnerAppendOnlyTopNExecutor<S> {
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, Option<usize>),
         pk_indices: PkIndices,
-        keyspace: Keyspace<S>,
+        store: S,
+        table_id_l: TableId,
+        table_id_h: TableId,
         cache_size: Option<usize>,
         total_count: (usize, usize),
         executor_id: u64,
         key_indices: Vec<usize>,
-    ) -> Result<Self> {
+    ) -> StreamExecutorResult<Self> {
         let (internal_key_indices, internal_key_data_types, internal_key_order_types) =
             generate_internal_key(&order_pairs, &pk_indices, &schema);
 
@@ -129,18 +134,8 @@ impl<S: StateStore> InnerAppendOnlyTopNExecutor<S> {
             .iter()
             .map(|field| field.data_type.clone())
             .collect::<Vec<_>>();
-        let lower_sub_keyspace = keyspace.append_u8(b'l');
-        let higher_sub_keyspace = keyspace.append_u8(b'h');
         let ordered_row_deserializer =
             OrderedRowDeserializer::new(internal_key_data_types, internal_key_order_types.clone());
-        let table_column_descs = row_data_types
-            .iter()
-            .enumerate()
-            .map(|(id, data_type)| {
-                ColumnDesc::unnamed(ColumnId::from(id as i32), data_type.clone())
-            })
-            .collect::<Vec<_>>();
-        let cell_based_row_deserializer = CellBasedRowDeserializer::new(table_column_descs);
         Ok(Self {
             info: ExecutorInfo {
                 schema: input_info.schema,
@@ -153,18 +148,20 @@ impl<S: StateStore> InnerAppendOnlyTopNExecutor<S> {
             managed_lower_state: ManagedTopNState::<S, TOP_N_MAX>::new(
                 cache_size,
                 total_count.0,
-                lower_sub_keyspace,
+                store.clone(),
+                table_id_l,
                 row_data_types.clone(),
                 ordered_row_deserializer.clone(),
-                cell_based_row_deserializer.clone(),
+                internal_key_indices.clone(),
             ),
             managed_higher_state: ManagedTopNState::<S, TOP_N_MAX>::new(
                 cache_size,
                 total_count.1,
-                higher_sub_keyspace,
+                store,
+                table_id_h,
                 row_data_types,
                 ordered_row_deserializer,
-                cell_based_row_deserializer,
+                internal_key_indices.clone(),
             ),
             pk_indices,
             internal_key_indices,
@@ -175,14 +172,8 @@ impl<S: StateStore> InnerAppendOnlyTopNExecutor<S> {
     }
 
     async fn flush_inner(&mut self, epoch: u64) -> StreamExecutorResult<()> {
-        self.managed_higher_state
-            .flush(epoch)
-            .await
-            .map_err(StreamExecutorError::top_n_state_error)?;
-        self.managed_lower_state
-            .flush(epoch)
-            .await
-            .map_err(StreamExecutorError::top_n_state_error)
+        self.managed_higher_state.flush(epoch).await?;
+        self.managed_lower_state.flush(epoch).await
     }
 }
 
@@ -194,14 +185,8 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
         epoch: u64,
     ) -> StreamExecutorResult<StreamChunk> {
         if self.first_execution {
-            self.managed_lower_state
-                .fill_in_cache(epoch)
-                .await
-                .map_err(StreamExecutorError::top_n_state_error)?;
-            self.managed_higher_state
-                .fill_in_cache(epoch)
-                .await
-                .map_err(StreamExecutorError::top_n_state_error)?;
+            self.managed_lower_state.fill_in_cache(epoch).await?;
+            self.managed_higher_state.fill_in_cache(epoch).await?;
             self.first_execution = false;
         }
 
@@ -221,8 +206,7 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
                 // we ignored it for now as it is not in the result set.
                 self.managed_lower_state
                     .insert(ordered_pk_row, row, epoch)
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?;
+                    .await?;
                 continue;
             }
 
@@ -236,13 +220,11 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
                 let res = self
                     .managed_lower_state
                     .pop_top_element(epoch)
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?
+                    .await?
                     .unwrap();
                 self.managed_lower_state
                     .insert(ordered_pk_row, row, epoch)
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?;
+                    .await?;
                 res
             } else {
                 (ordered_pk_row, row)
@@ -255,8 +237,7 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
                         element_to_compare_with_upper.1.clone(),
                         epoch,
                     )
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?;
+                    .await?;
                 new_ops.push(Op::Insert);
                 new_rows.push(element_to_compare_with_upper.1);
             } else if self.managed_higher_state.top_element().unwrap().0
@@ -265,8 +246,7 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
                 let element_to_pop = self
                     .managed_higher_state
                     .pop_top_element(epoch)
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?
+                    .await?
                     .unwrap();
                 new_ops.push(Op::Delete);
                 new_rows.push(element_to_pop.1);
@@ -278,8 +258,7 @@ impl<S: StateStore> TopNExecutorBase for InnerAppendOnlyTopNExecutor<S> {
                         element_to_compare_with_upper.1,
                         epoch,
                     )
-                    .await
-                    .map_err(StreamExecutorError::top_n_state_error)?;
+                    .await?;
             }
             // The "else" case can only be that `element_to_compare_with_upper` is larger than
             // the largest element in [offset, offset+limit), which is already full.
@@ -312,11 +291,12 @@ mod tests {
     use futures::StreamExt;
     use risingwave_common::array::stream_chunk::StreamChunkTestExt;
     use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema};
+    use risingwave_common::catalog::{Field, Schema, TableId};
     use risingwave_common::types::DataType;
     use risingwave_common::util::sort_util::{OrderPair, OrderType};
+    use risingwave_storage::memory::MemoryStateStore;
 
-    use crate::executor::test_utils::{create_in_memory_keyspace, MockSource};
+    use crate::executor::test_utils::MockSource;
     use crate::executor::top_n_appendonly::AppendOnlyTopNExecutor;
     use crate::executor::{Barrier, Epoch, Executor, Message, PkIndices};
 
@@ -389,19 +369,20 @@ mod tests {
         ))
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_append_only_top_n_executor_with_offset() {
         let order_pairs = create_order_pairs();
         let source = create_source();
 
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             AppendOnlyTopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_pairs,
                 (3, None),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
                 Some(2),
                 (0, 0),
                 1,
@@ -463,19 +444,20 @@ mod tests {
         // Now (1, 1, 1) -> (1, 2, 2, 3, 3, 3, 7, 8, 9, 10)
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_append_only_top_n_executor_with_limit() {
         let order_pairs = create_order_pairs();
         let source = create_source();
 
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             AppendOnlyTopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_pairs,
                 (0, Some(5)),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
                 Some(2),
                 (0, 0),
                 1,
@@ -543,19 +525,20 @@ mod tests {
         // Now (1, 1, 1, 1, 2)
     }
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_append_only_top_n_executor_with_offset_and_limit() {
         let order_pairs = create_order_pairs();
         let source = create_source();
 
-        let keyspace = create_in_memory_keyspace();
         let top_n_executor = Box::new(
             AppendOnlyTopNExecutor::new(
                 source as Box<dyn Executor>,
                 order_pairs,
                 (3, Some(4)),
                 vec![0, 1],
-                keyspace,
+                MemoryStateStore::new(),
+                TableId::from(0x2333),
+                TableId::from(0x2334),
                 Some(2),
                 (0, 0),
                 1,

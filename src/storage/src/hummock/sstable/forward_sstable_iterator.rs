@@ -20,16 +20,15 @@ use risingwave_hummock_sdk::VersionedComparator;
 
 use super::super::{HummockResult, HummockValue};
 use crate::hummock::iterator::{Forward, HummockIterator, ReadOptions};
-use crate::hummock::{BlockIterator, SstableStoreRef, TableHolder};
+use crate::hummock::{BlockHolder, BlockIterator, SstableStoreRef, TableHolder};
+use crate::monitor::StoreLocalStatistic;
 
-pub trait SSTableIteratorType {
-    type SSTableIterator: HummockIterator;
-
-    fn new(
+pub trait SSTableIteratorType: HummockIterator + 'static {
+    fn create(
         table: TableHolder,
         sstable_store: SstableStoreRef,
         read_options: Arc<ReadOptions>,
-    ) -> Self::SSTableIterator;
+    ) -> Self;
 }
 
 /// Iterates on a table.
@@ -44,22 +43,21 @@ pub struct SSTableIterator {
     pub sst: TableHolder,
 
     sstable_store: SstableStoreRef,
-
-    options: Arc<ReadOptions>,
+    stats: StoreLocalStatistic,
 }
 
 impl SSTableIterator {
     pub fn new(
         table: TableHolder,
         sstable_store: SstableStoreRef,
-        options: Arc<ReadOptions>,
+        _options: Arc<ReadOptions>,
     ) -> Self {
         Self {
             block_iter: None,
             cur_idx: 0,
             sst: table,
             sstable_store,
-            options,
+            stats: StoreLocalStatistic::default(),
         }
     }
 
@@ -71,19 +69,24 @@ impl SSTableIterator {
             self.sst.value().id,
             idx,
         );
+
+        // When all data are in block cache, it is highly possible that this iterator will stay on a
+        // worker thread for a full time. Therefore, we use tokio's unstable API consume_budget to
+        // do cooperative scheduling.
+        tokio::task::consume_budget().await;
+
         if idx >= self.sst.value().block_count() {
             self.block_iter = None;
         } else {
-            let block = if self.options.prefetch {
-                self.sstable_store
-                    .get_with_prefetch(self.sst.value(), idx as u64)
-                    .await?
+            let block = if idx < self.sst.value().blocks.len() {
+                BlockHolder::from_ref_block(self.sst.value().blocks[idx].clone())
             } else {
                 self.sstable_store
                     .get(
                         self.sst.value(),
                         idx as u64,
                         crate::hummock::CachePolicy::Fill,
+                        &mut self.stats,
                     )
                     .await?
             };
@@ -107,6 +110,7 @@ impl HummockIterator for SSTableIterator {
     type Direction = Forward;
 
     async fn next(&mut self) -> HummockResult<()> {
+        self.stats.scan_key_count += 1;
         let block_iter = self.block_iter.as_mut().expect("no block iter");
         block_iter.next();
 
@@ -159,17 +163,19 @@ impl HummockIterator for SSTableIterator {
 
         Ok(())
     }
+
+    fn collect_local_statistic(&self, stats: &mut StoreLocalStatistic) {
+        stats.add(&self.stats);
+    }
 }
 
 impl SSTableIteratorType for SSTableIterator {
-    type SSTableIterator = SSTableIterator;
-
-    fn new(
+    fn create(
         table: TableHolder,
         sstable_store: SstableStoreRef,
-        read_options: Arc<ReadOptions>,
-    ) -> Self::SSTableIterator {
-        SSTableIterator::new(table, sstable_store, read_options)
+        options: Arc<ReadOptions>,
+    ) -> Self {
+        SSTableIterator::new(table, sstable_store, options)
     }
 }
 
@@ -189,22 +195,11 @@ mod tests {
     };
     use crate::hummock::{CachePolicy, Sstable};
 
-    #[tokio::test]
-    async fn test_table_iterator() {
-        // Build remote table
-        let sstable_store = mock_sstable_store();
-        let table =
-            gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
-                .await;
+    async fn inner_test_forward_iterator(sstable_store: SstableStoreRef, handle: TableHolder) {
         // We should have at least 10 blocks, so that table iterator test could cover more code
         // path.
-        assert!(table.meta.block_metas.len() > 10);
-
-        let cache = create_small_table_cache();
-        let handle = cache.insert(0, 0, 1, Box::new(table));
-
         let mut sstable_iter =
-            SSTableIterator::new(handle, sstable_store, Arc::new(ReadOptions::default()));
+            SSTableIterator::create(handle, sstable_store, Arc::new(ReadOptions::default()));
         let mut cnt = 0;
         sstable_iter.rewind().await.unwrap();
 
@@ -221,6 +216,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_table_iterator() {
+        // Build remote table
+        let sstable_store = mock_sstable_store();
+        let table =
+            gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
+                .await;
+        // We should have at least 10 blocks, so that table iterator test could cover more code
+        // path.
+        assert!(table.meta.block_metas.len() > 10);
+
+        let cache = create_small_table_cache();
+        let handle = cache.insert(0, 0, 1, Box::new(table));
+        inner_test_forward_iterator(sstable_store.clone(), handle).await;
+
+        let kv_iter =
+            (0..TEST_KEYS_COUNT).map(|i| (test_key_of(i), HummockValue::put(test_value_of(i))));
+        let (data, meta, _) = gen_test_sstable_data(default_builder_opt_for_test(), kv_iter);
+        let table = Sstable::new_with_data(0, meta, data).unwrap();
+        let handle = cache.insert(0, 0, 1, Box::new(table));
+        inner_test_forward_iterator(sstable_store, handle).await;
+    }
+
+    #[tokio::test]
     async fn test_table_seek() {
         let sstable_store = mock_sstable_store();
         let table =
@@ -233,7 +251,7 @@ mod tests {
         let handle = cache.insert(0, 0, 1, Box::new(table));
 
         let mut sstable_iter =
-            SSTableIterator::new(handle, sstable_store, Arc::new(ReadOptions::default()));
+            SSTableIterator::create(handle, sstable_store, Arc::new(ReadOptions::default()));
         let mut all_key_to_test = (0..TEST_KEYS_COUNT).collect_vec();
         let mut rng = thread_rng();
         all_key_to_test.shuffle(&mut rng);
@@ -297,14 +315,19 @@ mod tests {
         let kv_iter =
             (0..TEST_KEYS_COUNT).map(|i| (test_key_of(i), HummockValue::put(test_value_of(i))));
         let (data, meta, _) = gen_test_sstable_data(default_builder_opt_for_test(), kv_iter);
-        let table = Sstable { id: 0, meta };
+        let table = Sstable {
+            id: 0,
+            meta,
+            blocks: vec![],
+        };
         sstable_store
-            .put(table.clone(), data, CachePolicy::NotFill)
+            .put(table, data, CachePolicy::NotFill)
             .await
             .unwrap();
 
-        let mut sstable_iter = SSTableIterator::new(
-            block_on(sstable_store.sstable(table.id)).unwrap(),
+        let mut stats = StoreLocalStatistic::default();
+        let mut sstable_iter = SSTableIterator::create(
+            block_on(sstable_store.sstable(0, &mut stats)).unwrap(),
             sstable_store,
             Arc::new(ReadOptions { prefetch: true }),
         );

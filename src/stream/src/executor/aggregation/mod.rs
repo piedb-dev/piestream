@@ -13,29 +13,33 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 pub use agg_call::*;
 pub use agg_state::*;
 use dyn_clone::{self, DynClone};
 pub use foldable::*;
-use itertools::Itertools;
 use risingwave_common::array::column::Column;
 use risingwave_common::array::stream_chunk::Ops;
 use risingwave_common::array::{
     Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayRef, BoolArray, DecimalArray, F32Array,
-    F64Array, I16Array, I32Array, I64Array, Row, Utf8Array,
+    F64Array, I16Array, I32Array, I64Array, IntervalArray, ListArray, NaiveDateArray,
+    NaiveDateTimeArray, NaiveTimeArray, Row, StructArray, Utf8Array,
 };
 use risingwave_common::buffer::Bitmap;
 use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result};
 use risingwave_common::hash::HashCode;
 use risingwave_common::types::{DataType, Datum};
+use risingwave_common::util::sort_util::OrderType;
 use risingwave_expr::expr::AggKind;
 use risingwave_expr::*;
-use risingwave_storage::{Keyspace, StateStore};
+use risingwave_storage::table::state_table::StateTable;
+use risingwave_storage::table::Distribution;
+use risingwave_storage::StateStore;
 pub use row_count::*;
 use static_assertions::const_assert_eq;
 
+use crate::executor::aggregation::approx_count_distinct::StreamingApproxCountDistinct;
 use crate::executor::aggregation::single_value::StreamingSingleValueAgg;
 use crate::executor::error::{StreamExecutorError, StreamExecutorResult};
 use crate::executor::managed_state::aggregation::ManagedStateImpl;
@@ -43,6 +47,7 @@ use crate::executor::{Executor, PkDataTypes};
 
 mod agg_call;
 mod agg_state;
+mod approx_count_distinct;
 mod foldable;
 mod row_count;
 mod single_value;
@@ -68,12 +73,14 @@ pub trait StreamingAggState<A: Array>: Send + Sync + 'static {
         ops: Ops<'_>,
         visibility: Option<&Bitmap>,
         data: &A,
-    ) -> Result<()>;
+    ) -> StreamExecutorResult<()>;
 }
 
 /// `StreamingAggFunction` allows us to get output from a streaming state.
 pub trait StreamingAggFunction<B: ArrayBuilder>: Send + Sync + 'static {
-    fn get_output_concrete(&self) -> Result<Option<<B::ArrayType as Array>::OwnedItem>>;
+    fn get_output_concrete(
+        &self,
+    ) -> StreamExecutorResult<Option<<B::ArrayType as Array>::OwnedItem>>;
 }
 
 /// `StreamingAggStateImpl` erases the associated type information of
@@ -86,10 +93,10 @@ pub trait StreamingAggStateImpl: Any + std::fmt::Debug + DynClone + Send + Sync 
         ops: Ops<'_>,
         visibility: Option<&Bitmap>,
         data: &[&ArrayImpl],
-    ) -> Result<()>;
+    ) -> StreamExecutorResult<()>;
 
     /// Get the output value
-    fn get_output(&self) -> Result<Datum>;
+    fn get_output(&self) -> StreamExecutorResult<Datum>;
 
     /// Get the builder of the state output
     fn new_builder(&self) -> ArrayBuilderImpl;
@@ -116,7 +123,7 @@ pub fn create_streaming_agg_state(
     agg_type: &AggKind,
     return_type: &DataType,
     datum: Option<Datum>,
-) -> Result<Box<dyn StreamingAggStateImpl>> {
+) -> StreamExecutorResult<Box<dyn StreamingAggStateImpl>> {
     macro_rules! gen_unary_agg_state_match {
         ($agg_type_expr:expr, $input_type_expr:expr, $return_type_expr:expr, $datum: expr,
             [$(($agg_type:ident, $input_type:ident, $return_type:ident, $state_impl:ty)),*$(,)?]) => {
@@ -134,6 +141,12 @@ pub fn create_streaming_agg_state(
                         Box::new(<$state_impl>::new())
                     }
                 )*
+                (AggKind::ApproxCountDistinct, _, DataType::Int64, Some(datum)) => {
+                    Box::new(StreamingApproxCountDistinct::<{approx_count_distinct::DENSE_BITS_DEFAULT}>::new_with_datum(datum))
+                }
+                (AggKind::ApproxCountDistinct, _, DataType::Int64, None) => {
+                    Box::new(StreamingApproxCountDistinct::<{approx_count_distinct::DENSE_BITS_DEFAULT}>::new())
+                }
                 (other_agg, other_input, other_return, _) => panic!(
                     "streaming agg state not implemented: {:?} {:?} {:?}",
                     other_agg, other_input, other_return
@@ -159,6 +172,17 @@ pub fn create_streaming_agg_state(
                     (Count, decimal, int64, StreamingCountAgg::<DecimalArray>),
                     (Count, boolean, int64, StreamingCountAgg::<BoolArray>),
                     (Count, varchar, int64, StreamingCountAgg::<Utf8Array>),
+                    (Count, interval, int64, StreamingCountAgg::<IntervalArray>),
+                    (Count, date, int64, StreamingCountAgg::<NaiveDateArray>),
+                    (
+                        Count,
+                        timestamp,
+                        int64,
+                        StreamingCountAgg::<NaiveDateTimeArray>
+                    ),
+                    (Count, time, int64, StreamingCountAgg::<NaiveTimeArray>),
+                    (Count, struct_type, int64, StreamingCountAgg::<StructArray>),
+                    (Count, list, int64, StreamingCountAgg::<ListArray>),
                     // Sum
                     (Sum, int64, int64, StreamingSumAgg::<I64Array, I64Array>),
                     (
@@ -260,11 +284,10 @@ pub fn create_streaming_agg_state(
                 }
                 (AggKind::Count, DataType::Int64, None) => Box::new(StreamingRowCountAgg::new()),
                 _ => {
-                    return Err(ErrorCode::NotImplemented(
-                        "unsupported aggregate type".to_string(),
-                        None.into(),
-                    )
-                    .into())
+                    return Err(StreamExecutorError::not_implemented(
+                        "unsupported aggregate type",
+                        None,
+                    ))
                 }
             }
         }
@@ -334,10 +357,10 @@ pub fn generate_agg_schema(
 pub async fn generate_managed_agg_state<S: StateStore>(
     key: Option<&Row>,
     agg_calls: &[AggCall],
-    keyspace: &[Keyspace<S>],
     pk_data_types: PkDataTypes,
     epoch: u64,
     key_hash_code: Option<HashCode>,
+    state_tables: &[StateTable<S>],
 ) -> StreamExecutorResult<AggState<S>> {
     let mut managed_states = vec![];
 
@@ -345,34 +368,21 @@ pub async fn generate_managed_agg_state<S: StateStore>(
     const_assert_eq!(ROW_COUNT_COLUMN, 0);
     let mut row_count = None;
 
-    for ((idx, agg_call), keyspace) in agg_calls.iter().enumerate().zip_eq(keyspace) {
-        // TODO: in pure in-memory engine, we should not do this serialization.
-
-        // The prefix of the state is `table_id/[group_key]`
-        let keyspace = if let Some(key) = key {
-            let bytes = key.serialize().unwrap();
-            keyspace.append(bytes)
-        } else {
-            keyspace.clone()
-        };
-
+    for (idx, agg_call) in agg_calls.iter().enumerate() {
         let mut managed_state = ManagedStateImpl::create_managed_state(
             agg_call.clone(),
-            keyspace,
             row_count,
             pk_data_types.clone(),
             idx == ROW_COUNT_COLUMN,
             key_hash_code.clone(),
+            key,
+            &state_tables[idx],
         )
-        .await
-        .map_err(StreamExecutorError::agg_state_error)?;
+        .await?;
 
         if idx == ROW_COUNT_COLUMN {
             // For the rowcount state, we should record the rowcount.
-            let output = managed_state
-                .get_output(epoch)
-                .await
-                .map_err(StreamExecutorError::agg_state_error)?;
+            let output = managed_state.get_output(epoch, &state_tables[idx]).await?;
             row_count = Some(output.as_ref().map(|x| *x.as_int64() as usize).unwrap_or(0));
         }
 
@@ -383,4 +393,64 @@ pub async fn generate_managed_agg_state<S: StateStore>(
         managed_states,
         prev_states: None,
     })
+}
+
+/// Parse from stream proto plan internal tables, generate state tables used by agg.
+/// The `vnodes` is generally `Some` for Hash Agg and `None` for Simple Agg.
+pub fn generate_state_tables_from_proto<S: StateStore>(
+    store: S,
+    internal_tables: &[risingwave_pb::catalog::Table],
+    vnodes: Option<Arc<Bitmap>>,
+) -> Vec<StateTable<S>> {
+    let mut state_tables = Vec::with_capacity(internal_tables.len());
+
+    for table_catalog in internal_tables {
+        // Parse info from proto and create state table.
+        let state_table = {
+            let columns = table_catalog
+                .columns
+                .iter()
+                .map(|col| col.column_desc.as_ref().unwrap().into())
+                .collect();
+            let order_types = table_catalog
+                .orders
+                .iter()
+                .map(|order_type| {
+                    OrderType::from_prost(
+                        &risingwave_pb::plan_common::OrderType::from_i32(*order_type).unwrap(),
+                    )
+                })
+                .collect();
+            let dist_key_indices = table_catalog
+                .distribution_keys
+                .iter()
+                .map(|dist_index| *dist_index as usize)
+                .collect();
+            let pk_indices = table_catalog
+                .pk
+                .iter()
+                .map(|pk_index| *pk_index as usize)
+                .collect();
+            let distribution = match vnodes.clone() {
+                // Hash Agg
+                Some(vnodes) => Distribution {
+                    dist_key_indices,
+                    vnodes,
+                },
+                // Simple Agg
+                None => Distribution::fallback(),
+            };
+            StateTable::new_with_distribution(
+                store.clone(),
+                risingwave_common::catalog::TableId::new(table_catalog.id),
+                columns,
+                order_types,
+                pk_indices,
+                distribution,
+            )
+        };
+
+        state_tables.push(state_table)
+    }
+    state_tables
 }

@@ -14,16 +14,17 @@
 
 use std::sync::Arc;
 
-use risingwave_common::catalog::ColumnDesc;
+use risingwave_common::catalog::{ColumnDesc, PG_CATALOG_SCHEMA_NAME};
 use risingwave_common::error::{ErrorCode, Result, RwError};
 use risingwave_sqlparser::ast::{ObjectName, TableAlias};
 
 use crate::binder::{Binder, Relation};
 use crate::catalog::source_catalog::SourceCatalog;
+use crate::catalog::system_catalog::SystemCatalog;
 use crate::catalog::table_catalog::TableCatalog;
 use crate::catalog::{CatalogError, TableId};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoundBaseTable {
     pub name: String, // explain-only
     pub table_id: TableId,
@@ -37,9 +38,17 @@ pub struct BoundTableSource {
     pub name: String,       // explain-only
     pub source_id: TableId, // TODO: refactor to source id
     pub columns: Vec<ColumnDesc>,
+    pub append_only: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct BoundSystemTable {
+    pub name: String, // explain-only
+    pub table_id: TableId,
+    pub sys_table_catalog: SystemCatalog,
+}
+
+#[derive(Debug, Clone)]
 pub struct BoundSource {
     pub catalog: SourceCatalog,
 }
@@ -57,25 +66,37 @@ impl Binder {
         table_name: &str,
         alias: Option<TableAlias>,
     ) -> Result<Relation> {
-        if schema_name == "pg_catalog" {
-            // TODO: support pg_catalog.
-            return Err(ErrorCode::NotImplemented(
-                // TODO: We can ref the document of `SHOW` commands here if ready.
-                r###"pg_catalog is not supported, please use `SHOW` commands for now.
+        let (ret, columns) = {
+            let catalog = &self.catalog;
+            if schema_name == PG_CATALOG_SCHEMA_NAME {
+                if let Ok(sys_table_catalog) =
+                    catalog.get_sys_table_by_name(&self.db_name, schema_name, table_name)
+                {
+                    let table = BoundSystemTable {
+                        table_id: sys_table_catalog.id(),
+                        name: table_name.to_string(),
+                        sys_table_catalog: sys_table_catalog.clone(),
+                    };
+                    (
+                        Relation::SystemTable(Box::new(table)),
+                        sys_table_catalog.columns.clone(),
+                    )
+                } else {
+                    return Err(ErrorCode::NotImplemented(
+                        format!(
+                            r###"pg_catalog.{} is not supported, please use `SHOW` commands for now.
 `SHOW TABLES`,
 `SHOW MATERIALIZED VIEWS`,
 `DESCRIBE <table>`,
 `SHOW COLUMNS FROM [table]`
-"###
-                .into(),
-                1695.into(),
-            )
-            .into());
-        }
-
-        let (ret, columns) = {
-            let catalog = &self.catalog;
-            if let Ok(table_catalog) =
+"###,
+                            table_name
+                        ),
+                        1695.into(),
+                    )
+                    .into());
+                }
+            } else if let Ok(table_catalog) =
                 catalog.get_table_by_name(&self.db_name, schema_name, table_name)
             {
                 let table_id = table_catalog.id();
@@ -120,7 +141,7 @@ impl Binder {
         Ok(self
             .catalog
             .get_schema_by_name(&self.db_name, schema_name)?
-            .iter_mv()
+            .iter_index()
             .filter(|x| x.is_index_on == Some(table_id))
             .map(|table| table.clone().into())
             .collect())
@@ -166,6 +187,7 @@ impl Binder {
 
         let source_id = TableId::new(source.id);
 
+        let append_only = source.append_only;
         let columns = source
             .columns
             .iter()
@@ -179,6 +201,7 @@ impl Binder {
             name: source_name,
             source_id,
             columns,
+            append_only,
         })
     }
 }

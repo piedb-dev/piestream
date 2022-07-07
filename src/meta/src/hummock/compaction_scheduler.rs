@@ -18,8 +18,9 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use risingwave_hummock_sdk::compact::compact_task_to_string;
-use risingwave_hummock_sdk::compaction_group::CompactionGroupId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use risingwave_hummock_sdk::CompactionGroupId;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot::Receiver;
 
 use crate::hummock::error::Error;
 use crate::hummock::{CompactorManagerRef, HummockManagerRef};
@@ -84,7 +85,7 @@ where
         }
     }
 
-    pub async fn start(&self, mut shutdown_rx: UnboundedReceiver<()>) {
+    pub async fn start(&self, mut shutdown_rx: Receiver<()>) {
         let (request_tx, mut request_rx) =
             tokio::sync::mpsc::unbounded_channel::<CompactionGroupId>();
         let request_channel = Arc::new(CompactionRequestChannel::new(request_tx));
@@ -102,7 +103,7 @@ where
                     }
                 },
                 // Shutdown compactor
-                _ = shutdown_rx.recv() => {
+                _ = &mut shutdown_rx => {
                     break 'compaction_trigger;
                 }
             };
@@ -118,8 +119,10 @@ where
         request_channel: Arc<CompactionRequestChannel>,
     ) -> bool {
         // 1. Pick a compaction task.
-        // TODO: specify compaction_group in get_compact_task
-        let compact_task = self.hummock_manager.get_compact_task().await;
+        let compact_task = self
+            .hummock_manager
+            .get_compact_task(compaction_group)
+            .await;
         request_channel.unschedule(compaction_group);
         let compact_task = match compact_task {
             Ok(Some(compact_task)) => compact_task,

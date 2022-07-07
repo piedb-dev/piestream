@@ -19,18 +19,20 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use itertools::Itertools;
+use prost::Message;
 use risingwave_pb::data::{Array as ProstArray, ArrayType as ProstArrayType, StructArrayData};
+use risingwave_pb::expr::StructValue as ProstStructValue;
 
 use super::{
-    Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayIterator, ArrayMeta, NULL_VAL_FOR_HASH,
+    Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayIterator, ArrayMeta, ArrayResult,
+    NULL_VAL_FOR_HASH,
 };
 use crate::array::ArrayRef;
 use crate::buffer::{Bitmap, BitmapBuilder};
-use crate::error::Result;
-use crate::types::{to_datum_ref, DataType, Datum, DatumRef, Scalar, ScalarRefImpl};
+use crate::types::{
+    display_datum_ref, to_datum_ref, DataType, Datum, DatumRef, Scalar, ScalarRefImpl,
+};
 
-/// This is a naive implementation of struct array.
-/// We will eventually move to a more efficient flatten implementation.
 #[derive(Debug)]
 pub struct StructArrayBuilder {
     bitmap: BitmapBuilder,
@@ -43,12 +45,12 @@ impl ArrayBuilder for StructArrayBuilder {
     type ArrayType = StructArray;
 
     #[cfg(not(test))]
-    fn new(_capacity: usize) -> Result<Self> {
+    fn new(_capacity: usize) -> Self {
         panic!("Must use with_meta.")
     }
 
     #[cfg(test)]
-    fn new(capacity: usize) -> Result<Self> {
+    fn new(capacity: usize) -> Self {
         Self::with_meta(
             capacity,
             ArrayMeta::Struct {
@@ -57,24 +59,24 @@ impl ArrayBuilder for StructArrayBuilder {
         )
     }
 
-    fn with_meta(capacity: usize, meta: ArrayMeta) -> Result<Self> {
+    fn with_meta(capacity: usize, meta: ArrayMeta) -> Self {
         if let ArrayMeta::Struct { children } = meta {
             let children_array = children
                 .iter()
                 .map(|a| a.create_array_builder(capacity))
-                .try_collect()?;
-            Ok(Self {
+                .collect();
+            Self {
                 bitmap: BitmapBuilder::with_capacity(capacity),
                 children_array,
                 children_type: children,
                 len: 0,
-            })
+            }
         } else {
             panic!("must be ArrayMeta::Struct");
         }
     }
 
-    fn append(&mut self, value: Option<StructRef<'_>>) -> Result<()> {
+    fn append(&mut self, value: Option<StructRef<'_>>) -> ArrayResult<()> {
         match value {
             None => {
                 self.bitmap.append(false);
@@ -95,7 +97,7 @@ impl ArrayBuilder for StructArrayBuilder {
         Ok(())
     }
 
-    fn append_array(&mut self, other: &StructArray) -> Result<()> {
+    fn append_array(&mut self, other: &StructArray) -> ArrayResult<()> {
         self.bitmap.append_bitmap(&other.bitmap);
         self.children_array
             .iter_mut()
@@ -105,12 +107,12 @@ impl ArrayBuilder for StructArrayBuilder {
         Ok(())
     }
 
-    fn finish(mut self) -> Result<StructArray> {
+    fn finish(self) -> ArrayResult<StructArray> {
         let children = self
             .children_array
             .into_iter()
             .map(|b| Ok(Arc::new(b.finish()?)))
-            .collect::<Result<Vec<ArrayRef>>>()?;
+            .collect::<ArrayResult<Vec<ArrayRef>>>()?;
         Ok(StructArray {
             bitmap: self.bitmap.finish(),
             children,
@@ -126,6 +128,19 @@ pub struct StructArray {
     children: Vec<ArrayRef>,
     children_type: Arc<[DataType]>,
     len: usize,
+}
+
+impl StructArrayBuilder {
+    pub fn append_array_refs(&mut self, refs: Vec<ArrayRef>, len: usize) -> ArrayResult<()> {
+        for _ in 0..len {
+            self.bitmap.append(true);
+        }
+        self.len += len;
+        self.children_array
+            .iter_mut()
+            .zip_eq(refs.iter())
+            .try_for_each(|(a, r)| a.append_array(r))
+    }
 }
 
 impl Array for StructArray {
@@ -177,6 +192,10 @@ impl Array for StructArray {
         &self.bitmap
     }
 
+    fn into_null_bitmap(self) -> Bitmap {
+        self.bitmap
+    }
+
     fn set_bitmap(&mut self, bitmap: Bitmap) {
         self.bitmap = bitmap;
     }
@@ -189,13 +208,13 @@ impl Array for StructArray {
         }
     }
 
-    fn create_builder(&self, capacity: usize) -> Result<super::ArrayBuilderImpl> {
+    fn create_builder(&self, capacity: usize) -> ArrayResult<super::ArrayBuilderImpl> {
         let array_builder = StructArrayBuilder::with_meta(
             capacity,
             ArrayMeta::Struct {
                 children: self.children_type.clone(),
             },
-        )?;
+        );
         Ok(ArrayBuilderImpl::Struct(array_builder))
     }
 
@@ -207,7 +226,7 @@ impl Array for StructArray {
 }
 
 impl StructArray {
-    pub fn from_protobuf(array: &ProstArray) -> Result<ArrayImpl> {
+    pub fn from_protobuf(array: &ProstArray) -> ArrayResult<ArrayImpl> {
         ensure!(
             array.values.is_empty(),
             "Must have no buffer in a struct array"
@@ -219,7 +238,7 @@ impl StructArray {
             .children_array
             .iter()
             .map(|child| Ok(Arc::new(ArrayImpl::from_protobuf(child, cardinality)?)))
-            .collect::<Result<Vec<ArrayRef>>>()?;
+            .collect::<ArrayResult<Vec<ArrayRef>>>()?;
         let children_type: Arc<[DataType]> = array_data
             .children_type
             .iter()
@@ -247,9 +266,9 @@ impl StructArray {
         null_bitmap: &[bool],
         children: Vec<ArrayImpl>,
         children_type: Vec<DataType>,
-    ) -> Result<StructArray> {
+    ) -> ArrayResult<StructArray> {
         let cardinality = null_bitmap.len();
-        let bitmap = Bitmap::try_from(null_bitmap.to_vec())?;
+        let bitmap = Bitmap::from_iter(null_bitmap.to_vec());
         let children = children.into_iter().map(Arc::new).collect_vec();
         Ok(StructArray {
             bitmap,
@@ -271,20 +290,20 @@ impl StructArray {
 
 #[derive(Clone, Debug, Eq, Default, PartialEq, Hash)]
 pub struct StructValue {
-    fields: Vec<Datum>,
+    fields: Box<[Datum]>,
 }
 
 impl fmt::Display for StructValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{{}}}",
+            "({})",
             self.fields
                 .iter()
                 .map(|f| {
                     match f {
                         Some(f) => format!("{}", f),
-                        None => "None".to_string(),
+                        None => " ".to_string(),
                     }
                 })
                 .join(", ")
@@ -306,11 +325,29 @@ impl Ord for StructValue {
 
 impl StructValue {
     pub fn new(fields: Vec<Datum>) -> Self {
-        Self { fields }
+        Self {
+            fields: fields.into_boxed_slice(),
+        }
     }
 
     pub fn fields(&self) -> &[Datum] {
         &self.fields
+    }
+
+    pub fn to_protobuf_owned(&self) -> Vec<u8> {
+        let value = ProstStructValue {
+            fields: self
+                .fields
+                .iter()
+                .map(|f| match f {
+                    None => {
+                        vec![]
+                    }
+                    Some(s) => s.to_protobuf(),
+                })
+                .collect_vec(),
+        };
+        value.encode_to_vec()
     }
 }
 
@@ -391,8 +428,9 @@ impl Debug for StructRef<'_> {
 }
 
 impl Display for StructRef<'_> {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let values = self.fields_ref().iter().map(display_datum_ref).join(",");
+        write!(f, "({})", values)
     }
 }
 
@@ -459,8 +497,7 @@ mod tests {
             ArrayMeta::Struct {
                 children: Arc::new([DataType::Int32, DataType::Float32]),
             },
-        )
-        .unwrap();
+        );
         struct_values.iter().for_each(|v| {
             builder
                 .append(v.as_ref().map(|s| s.as_scalar_ref()))

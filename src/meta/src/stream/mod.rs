@@ -17,7 +17,6 @@ mod scheduler;
 mod source_manager;
 mod stream_graph;
 mod stream_manager;
-
 #[cfg(test)]
 mod test_fragmenter;
 
@@ -33,8 +32,8 @@ pub use stream_manager::*;
 use crate::manager::HashMappingManagerRef;
 use crate::model::FragmentId;
 
-/// Set vnode mapping for stateful operators.
-pub fn set_table_vnode_mappings(
+/// Record vnode mapping for stateful operators in meta.
+pub fn record_table_vnode_mappings(
     hash_mapping_manager: &HashMappingManagerRef,
     stream_node: &StreamNode,
     fragment_id: FragmentId,
@@ -51,20 +50,31 @@ pub fn set_table_vnode_mappings(
             hash_mapping_manager.set_fragment_state_table(fragment_id, node.table_id);
         }
         NodeBody::HashAgg(node) => {
-            let table_ids = node.get_table_ids();
-            for table_id in table_ids {
-                hash_mapping_manager.set_fragment_state_table(fragment_id, *table_id);
+            for table in &node.internal_tables {
+                hash_mapping_manager.set_fragment_state_table(fragment_id, table.id);
+            }
+        }
+        NodeBody::LocalSimpleAgg(node) => {
+            for table in &node.internal_tables {
+                hash_mapping_manager.set_fragment_state_table(fragment_id, table.id);
+            }
+        }
+        NodeBody::GlobalSimpleAgg(node) => {
+            for table in &node.internal_tables {
+                hash_mapping_manager.set_fragment_state_table(fragment_id, table.id);
             }
         }
         NodeBody::HashJoin(node) => {
-            hash_mapping_manager.set_fragment_state_table(fragment_id, node.left_table_id);
-            hash_mapping_manager.set_fragment_state_table(fragment_id, node.right_table_id);
+            hash_mapping_manager
+                .set_fragment_state_table(fragment_id, node.left_table.as_ref().unwrap().id);
+            hash_mapping_manager
+                .set_fragment_state_table(fragment_id, node.right_table.as_ref().unwrap().id);
         }
         _ => {}
     }
     let input_nodes = stream_node.get_input();
     for input_node in input_nodes {
-        set_table_vnode_mappings(hash_mapping_manager, input_node, fragment_id)?;
+        record_table_vnode_mappings(hash_mapping_manager, input_node, fragment_id)?;
     }
     Ok(())
 }

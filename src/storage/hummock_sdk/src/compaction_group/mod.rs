@@ -12,41 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
-pub struct CompactionGroupId(u64);
+pub mod hummock_version_ext;
 
-impl From<u64> for CompactionGroupId {
-    fn from(u: u64) -> Self {
-        Self(u)
-    }
+use crate::CompactionGroupId;
+
+pub type StateTableId = u32;
+
+/// A compaction task's `StaticCompactionGroupId` indicates the compaction group that all its input
+/// SSTs belong to.
+pub enum StaticCompactionGroupId {
+    /// All shared buffer local compaction task goes to here. Meta service will never see this
+    /// value. Note that currently we've restricted the compaction task's input by `via
+    /// compact_shared_buffer_by_compaction_group`
+    SharedBuffer = 1,
+    /// All states goes to here by default.
+    StateDefault = 2,
+    /// All MVs goes to here.
+    MaterializedView = 3,
 }
 
-impl From<CompactionGroupId> for u64 {
-    fn from(c: CompactionGroupId) -> Self {
-        c.0
+impl From<StaticCompactionGroupId> for CompactionGroupId {
+    fn from(cg: StaticCompactionGroupId) -> Self {
+        cg as CompactionGroupId
     }
-}
-
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
-pub struct Prefix(u32);
-
-impl From<u32> for Prefix {
-    fn from(u: u32) -> Self {
-        Self(u)
-    }
-}
-
-impl From<Prefix> for u32 {
-    fn from(p: Prefix) -> Self {
-        p.0
-    }
-}
-
-#[allow(dead_code)]
-struct CompactionGroup {
-    group_id: CompactionGroupId,
-    prefixes: Vec<Prefix>,
-    /// If `is_scheduled`, no need to notify scheduler again. Scheduler will reschedule it if
-    /// necessary, e.g. more compaction task available.
-    is_scheduled: bool,
 }

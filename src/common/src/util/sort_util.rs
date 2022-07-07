@@ -15,13 +15,11 @@
 use std::cmp::{Ord, Ordering};
 use std::sync::Arc;
 
-use risingwave_pb::expr::InputRefExpr;
 use risingwave_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
 
 use crate::array::{Array, ArrayImpl, DataChunk};
 use crate::error::ErrorCode::InternalError;
 use crate::error::Result;
-use crate::types::{ScalarPartialOrd, ScalarRef};
 
 pub const K_PROCESSING_WINDOW_SIZE: usize = 1024;
 
@@ -64,10 +62,9 @@ impl OrderPair {
 
     pub fn from_prost(column_order: &ColumnOrder) -> Self {
         let order_type: ProstOrderType = ProstOrderType::from_i32(column_order.order_type).unwrap();
-        let input_ref: &InputRefExpr = column_order.get_input_ref().unwrap();
         OrderPair {
             order_type: OrderType::from_prost(&order_type),
-            column_idx: input_ref.column_idx as usize,
+            column_idx: column_order.index as usize,
         }
     }
 }
@@ -130,13 +127,20 @@ fn compare_value_in_array<'a, T>(
 ) -> Ordering
 where
     T: Array,
-    <<T as Array>::RefItem<'a> as ScalarRef<'a>>::ScalarType: ScalarPartialOrd,
+    <T as Array>::RefItem<'a>: Ord,
 {
-    let (lhs_val, rhs_val) = (
-        lhs_array.value_at(lhs_idx).unwrap(),
-        rhs_array.value_at(rhs_idx).unwrap(),
-    );
-    match lhs_val.to_owned_scalar().scalar_cmp(rhs_val).unwrap() {
+    let (lhs_val, rhs_val) = (lhs_array.value_at(lhs_idx), rhs_array.value_at(rhs_idx));
+    let ord = match (lhs_val, rhs_val) {
+        (Some(l), Some(r)) => l.cmp(&r),
+        (None, None) => Ordering::Equal,
+        // `null first` / `null last` is not supported yet.
+        // To be consistent with memcomparable (#116) encoding, `null` is treated as less than any
+        // non-null value. This is contrary to PostgreSQL's default behavior, where `null`
+        // is treated as largest.
+        (Some(_), None) => Ordering::Greater,
+        (None, Some(_)) => Ordering::Less,
+    };
+    match ord {
         Ordering::Equal => Ordering::Equal,
         Ordering::Less => {
             if *order_type == OrderType::Ascending {

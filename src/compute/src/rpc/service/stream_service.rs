@@ -18,6 +18,7 @@ use itertools::Itertools;
 use risingwave_common::catalog::TableId;
 use risingwave_common::error::{tonic_err, Result as RwResult};
 use risingwave_pb::catalog::Source;
+use risingwave_pb::stream_service::barrier_complete_response::GroupedSstableInfo;
 use risingwave_pb::stream_service::stream_service_server::StreamService;
 use risingwave_pb::stream_service::*;
 use risingwave_stream::executor::{Barrier, Epoch};
@@ -48,7 +49,7 @@ impl StreamService for StreamServiceImpl {
         match res {
             Err(e) => {
                 error!("failed to update stream actor {}", e);
-                Err(e.to_grpc_status())
+                Err(e.into())
             }
             Ok(()) => Ok(Response::new(UpdateActorsResponse { status: None })),
         }
@@ -62,11 +63,14 @@ impl StreamService for StreamServiceImpl {
         let req = request.into_inner();
 
         let actor_id = req.actor_id;
-        let res = self.mgr.build_actors(actor_id.as_slice(), self.env.clone());
+        let res = self
+            .mgr
+            .build_actors(actor_id.as_slice(), self.env.clone())
+            .await;
         match res {
             Err(e) => {
                 error!("failed to build actors {}", e);
-                Err(e.to_grpc_status())
+                Err(e.into())
             }
             Ok(()) => Ok(Response::new(BuildActorsResponse {
                 request_id: req.request_id,
@@ -86,7 +90,7 @@ impl StreamService for StreamServiceImpl {
         match res {
             Err(e) => {
                 error!("failed to update actor info table actor {}", e);
-                Err(e.to_grpc_status())
+                Err(e.into())
             }
             Ok(()) => Ok(Response::new(BroadcastActorInfoTableResponse {
                 status: None,
@@ -101,9 +105,7 @@ impl StreamService for StreamServiceImpl {
     ) -> std::result::Result<Response<DropActorsResponse>, Status> {
         let req = request.into_inner();
         let actors = req.actor_ids;
-        self.mgr
-            .drop_actor(&actors)
-            .map_err(|e| e.to_grpc_status())?;
+        self.mgr.drop_actor(&actors)?;
         Ok(Response::new(DropActorsResponse {
             request_id: req.request_id,
             status: None,
@@ -122,8 +124,7 @@ impl StreamService for StreamServiceImpl {
                 curr: epoch.curr,
                 prev: epoch.prev,
             })
-            .await
-            .map_err(|e| e.to_grpc_status())?;
+            .await?;
         Ok(Response::new(ForceStopActorsResponse {
             request_id: req.request_id,
             status: None,
@@ -139,27 +140,37 @@ impl StreamService for StreamServiceImpl {
         let barrier =
             Barrier::from_protobuf(req.get_barrier().map_err(tonic_err)?).map_err(tonic_err)?;
 
-        let collect_result = self
-            .mgr
-            .send_and_collect_barrier(
-                &barrier,
-                req.actor_ids_to_send,
-                req.actor_ids_to_collect,
-                true,
-            )
-            .await
-            .map_err(|e| e.to_grpc_status())?;
-
-        let finished_create_mviews = collect_result
-            .finished_create_mviews
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        self.mgr
+            .send_barrier(&barrier, req.actor_ids_to_send, req.actor_ids_to_collect)?;
 
         Ok(Response::new(InjectBarrierResponse {
             request_id: req.request_id,
-            finished_create_mviews,
             status: None,
+        }))
+    }
+
+    #[cfg_attr(coverage, no_coverage)]
+    async fn barrier_complete(
+        &self,
+        request: Request<BarrierCompleteRequest>,
+    ) -> Result<Response<BarrierCompleteResponse>, Status> {
+        let req = request.into_inner();
+        let collect_result = self.mgr.collect_barrier(req.prev_epoch).await;
+        // Must finish syncing data written in the epoch before respond back to ensure persistency
+        // of the state.
+        let synced_sstables = self.mgr.sync_epoch(req.prev_epoch).await;
+
+        Ok(Response::new(BarrierCompleteResponse {
+            request_id: req.request_id,
+            status: None,
+            create_mview_progress: collect_result.create_mview_progress,
+            sycned_sstables: synced_sstables
+                .into_iter()
+                .map(|(compaction_group_id, sst)| GroupedSstableInfo {
+                    compaction_group_id,
+                    sst: Some(sst),
+                })
+                .collect_vec(),
         }))
     }
 

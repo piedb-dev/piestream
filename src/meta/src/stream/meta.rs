@@ -19,25 +19,25 @@ use std::sync::Arc;
 use risingwave_common::catalog::TableId;
 use risingwave_common::error::ErrorCode::InternalError;
 use risingwave_common::error::{Result, RwError};
-use risingwave_common::hash::VIRTUAL_NODE_COUNT;
 use risingwave_common::try_match_expand;
+use risingwave_common::types::{ParallelUnitId, VIRTUAL_NODE_COUNT};
 use risingwave_common::util::compress::decompress_data;
 use risingwave_pb::meta::table_fragments::ActorState;
 use risingwave_pb::stream_plan::{FragmentType, StreamActor};
 use tokio::sync::RwLock;
 
-use crate::cluster::{ParallelUnitId, WorkerId};
+use crate::cluster::WorkerId;
 use crate::manager::{HashMappingManagerRef, MetaSrvEnv};
 use crate::model::{ActorId, MetadataModel, TableFragments, Transactional};
 use crate::storage::{MetaStore, Transaction};
-use crate::stream::set_table_vnode_mappings;
+use crate::stream::record_table_vnode_mappings;
 
 struct FragmentManagerCore {
     table_fragments: HashMap<TableId, TableFragments>,
 }
 
 /// `FragmentManager` stores definition and status of fragment as well as the actors inside.
-pub struct FragmentManager<S> {
+pub struct FragmentManager<S: MetaStore> {
     meta_store: Arc<S>,
 
     core: RwLock<FragmentManagerCore>,
@@ -59,7 +59,7 @@ pub struct BuildGraphInfo {
 
 pub type FragmentManagerRef<S> = Arc<FragmentManager<S>>;
 
-impl<S> FragmentManager<S>
+impl<S: MetaStore> FragmentManager<S>
 where
     S: MetaStore,
 {
@@ -104,6 +104,21 @@ where
                 "table_fragment not exist: id={}",
                 table_fragment.table_id()
             )))),
+        }
+    }
+
+    pub async fn select_table_fragments_by_table_id(
+        &self,
+        table_id: &TableId,
+    ) -> Result<TableFragments> {
+        let map = &self.core.read().await.table_fragments;
+        if let Some(table_fragments) = map.get(table_id) {
+            Ok(table_fragments.clone())
+        } else {
+            Err(RwError::from(InternalError(format!(
+                "table_fragment not exist: id={}",
+                table_id
+            ))))
         }
     }
 
@@ -235,11 +250,10 @@ where
             }
 
             self.meta_store.txn(transaction).await?;
-            map.remove(table_id);
+            map.remove(table_id).unwrap();
             for dependent_table in dependent_tables {
                 map.insert(dependent_table.table_id(), dependent_table);
             }
-
             Ok(())
         } else {
             Err(RwError::from(InternalError(format!(
@@ -442,7 +456,11 @@ where
                 // identical state table id.
                 let actor = fragment.actors.first().unwrap();
                 let stream_node = actor.get_nodes()?;
-                set_table_vnode_mappings(&hash_mapping_manager, stream_node, fragment.fragment_id)?;
+                record_table_vnode_mappings(
+                    &hash_mapping_manager,
+                    stream_node,
+                    fragment.fragment_id,
+                )?;
             }
         }
         Ok(())

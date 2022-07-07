@@ -18,7 +18,6 @@ use itertools::Itertools;
 use risingwave_common::catalog::Schema;
 use risingwave_common::error::Result;
 use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::expr::InputRefExpr;
 use risingwave_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
 
 use super::super::plan_node::*;
@@ -30,23 +29,15 @@ pub struct Order {
 }
 
 impl Order {
-    pub fn new(field_order: Vec<FieldOrder>) -> Self {
+    pub const fn new(field_order: Vec<FieldOrder>) -> Self {
         Self { field_order }
     }
 
     /// Convert into protobuf.
-    pub fn to_protobuf(&self, schema: &Schema) -> Vec<ColumnOrder> {
+    pub fn to_protobuf(&self, _schema: &Schema) -> Vec<ColumnOrder> {
         self.field_order
             .iter()
-            .map(|f| {
-                let (input_ref, order_type) = f.to_protobuf();
-                let data_type = schema.fields[f.index].data_type.to_protobuf();
-                ColumnOrder {
-                    order_type: order_type as i32,
-                    input_ref: Some(input_ref),
-                    return_type: Some(data_type),
-                }
-            })
+            .map(FieldOrder::to_protobuf)
             .collect_vec()
     }
 }
@@ -91,12 +82,11 @@ impl FieldOrder {
         }
     }
 
-    pub fn to_protobuf(&self) -> (InputRefExpr, ProstOrderType) {
-        let input_ref_expr = InputRefExpr {
-            column_idx: self.index as i32,
-        };
-        let order_type = self.direct.to_protobuf();
-        (input_ref_expr, order_type)
+    pub fn to_protobuf(&self) -> ColumnOrder {
+        ColumnOrder {
+            order_type: self.direct.to_protobuf() as i32,
+            index: self.index as u32,
+        }
     }
 }
 
@@ -153,11 +143,9 @@ impl Direction {
     }
 }
 
-lazy_static::lazy_static! {
-    static ref ANY_ORDER: Order = Order {
-        field_order: vec![],
-    };
-}
+const ANY_ORDER: Order = Order {
+    field_order: vec![],
+};
 
 impl Order {
     pub fn enforce_if_not_satisfies(&self, plan: PlanRef) -> Result<PlanRef> {
@@ -177,7 +165,7 @@ impl Order {
         if self.field_order.len() < other.field_order.len() {
             return false;
         }
-        #[allow(clippy::disallowed_methods)]
+        #[expect(clippy::disallowed_methods)]
         for (order, other_order) in self.field_order.iter().zip(other.field_order.iter()) {
             if order.index != other_order.index || !order.direct.satisfies(&other_order.direct) {
                 return false;
@@ -186,10 +174,12 @@ impl Order {
         true
     }
 
-    pub fn any() -> &'static Self {
-        &ANY_ORDER
+    #[inline(always)]
+    pub const fn any() -> Self {
+        ANY_ORDER
     }
 
+    #[inline(always)]
     pub fn is_any(&self) -> bool {
         self.field_order.is_empty()
     }

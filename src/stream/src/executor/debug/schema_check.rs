@@ -52,7 +52,7 @@ pub async fn schema_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
                 let builder = pair
                     .as_ref()
                     .right()
-                    .map(|f| f.data_type.create_array_builder(0).unwrap()); // TODO: check `data_type` directly
+                    .map(|f| f.data_type.create_array_builder(0)); // TODO: check `data_type` directly
 
                 macro_rules! check_schema {
                     ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
@@ -88,7 +88,7 @@ mod tests {
     use crate::executor::test_utils::MockSource;
     use crate::executor::Executor;
 
-    #[madsim::test]
+    #[tokio::test]
     async fn test_schema_ok() {
         let schema = Schema {
             fields: vec![
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[should_panic]
-    #[madsim::test]
+    #[tokio::test]
     async fn test_schema_bad() {
         let schema = Schema {
             fields: vec![

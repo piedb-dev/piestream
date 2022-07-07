@@ -19,15 +19,16 @@ use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use itertools::Itertools;
-use risingwave_common::catalog::TableId;
+use risingwave_common::catalog::{generate_intertable_name, TableId};
 use risingwave_common::error::{ErrorCode, Result};
+use risingwave_pb::catalog::Table;
 use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
 use risingwave_pb::meta::table_fragments::Fragment;
 use risingwave_pb::stream_plan::lookup_node::ArrangementTableId;
 use risingwave_pb::stream_plan::stream_fragment_graph::{StreamFragment, StreamFragmentEdge};
 use risingwave_pb::stream_plan::stream_node::NodeBody;
 use risingwave_pb::stream_plan::{
-    Dispatcher, DispatcherType, MergeNode, StreamActor,
+    DispatchStrategy, Dispatcher, DispatcherType, MergeNode, StreamActor,
     StreamFragmentGraph as StreamFragmentGraphProto, StreamNode,
 };
 
@@ -127,9 +128,8 @@ impl OrderedActorLink {
 }
 
 struct StreamActorDownstream {
-    /// Dispatcher
-    /// TODO: refactor to `DispatchStrategy`.
-    dispatcher: Dispatcher,
+    dispatch_strategy: DispatchStrategy,
+    dispatcher_id: u64,
 
     /// Downstream actors.
     actors: OrderedActorLink,
@@ -201,26 +201,19 @@ impl StreamActorBuilder {
         self.fragment_id
     }
 
-    /// Add a dispatcher to this actor. Note that the `downstream_actor_id` field must be left
-    /// empty, as we will fill this out when building actors.
+    /// Add a dispatcher to this actor.
     pub fn add_dispatcher(
         &mut self,
-        dispatcher: Dispatcher,
+        dispatch_strategy: DispatchStrategy,
+        dispatcher_id: u64,
         downstream_actors: OrderedActorLink,
         same_worker_node: bool,
     ) {
         assert!(!self.sealed);
-        // TODO: we should have a non-proto Dispatcher type here
-        assert!(
-            dispatcher.downstream_actor_id.is_empty(),
-            "should leave downstream_actor_id empty, will be filled later"
-        );
-        assert!(
-            dispatcher.hash_mapping.is_none(),
-            "should leave hash_mapping empty, will be filled later"
-        );
+
         self.downstreams.push(StreamActorDownstream {
-            dispatcher,
+            dispatch_strategy,
+            dispatcher_id,
             actors: downstream_actors,
             same_worker_node,
         });
@@ -236,26 +229,28 @@ impl StreamActorBuilder {
             .into_iter()
             .map(
                 |StreamActorDownstream {
-                     dispatcher,
+                     dispatch_strategy,
+                     dispatcher_id,
                      actors: downstreams,
                      same_worker_node,
                  }| {
                     let downstreams = downstreams.to_global_ids(actor_id_offset, actor_id_len);
 
-                    if dispatcher.r#type == DispatcherType::NoShuffle as i32 {
+                    if dispatch_strategy.r#type == DispatcherType::NoShuffle as i32 {
                         assert_eq!(
                             downstreams.0.len(),
                             1,
                             "no shuffle should only have one actor downstream"
                         );
                         assert!(
-                            dispatcher.column_indices.is_empty(),
+                            dispatch_strategy.column_indices.is_empty(),
                             "should leave `column_indices` empty"
                         );
                     }
 
                     StreamActorDownstream {
-                        dispatcher,
+                        dispatch_strategy,
+                        dispatcher_id,
                         actors: downstreams,
                         same_worker_node,
                     }
@@ -295,10 +290,17 @@ impl StreamActorBuilder {
             .iter()
             .map(
                 |StreamActorDownstream {
-                     dispatcher, actors, ..
+                     dispatch_strategy,
+                     dispatcher_id,
+                     actors,
+                     same_worker_node: _,
                  }| Dispatcher {
                     downstream_actor_id: actors.as_global_ids(),
-                    ..dispatcher.clone()
+                    r#type: dispatch_strategy.r#type,
+                    column_indices: dispatch_strategy.column_indices.clone(),
+                    // will be filled later by stream manager
+                    hash_mapping: None,
+                    dispatcher_id: *dispatcher_id,
                 },
             )
             .collect_vec();
@@ -335,6 +337,7 @@ impl StreamActorBuilder {
                         },
                     )| *same_worker_node,
                 ),
+            vnode_bitmap: None,
         }
     }
 }
@@ -375,17 +378,16 @@ impl StreamGraphBuilder {
         self.actor_builders.len()
     }
 
-    /// Add dependency between two connected node in the graph. Only provide `mapping` when it's
-    /// hash mapping.
+    /// Add dependency between two connected node in the graph.
     pub fn add_link(
         &mut self,
         upstream_actor_ids: &[LocalActorId],
         downstream_actor_ids: &[LocalActorId],
         exchange_operator_id: u64,
-        dispatcher: Dispatcher,
+        dispatch_strategy: DispatchStrategy,
         same_worker_node: bool,
     ) {
-        if dispatcher.get_type().unwrap() == DispatcherType::NoShuffle {
+        if dispatch_strategy.get_type().unwrap() == DispatcherType::NoShuffle {
             assert_eq!(
                 upstream_actor_ids.len(),
                 downstream_actor_ids.len(),
@@ -404,7 +406,8 @@ impl StreamGraphBuilder {
                         .get_mut(upstream_id)
                         .unwrap()
                         .add_dispatcher(
-                            dispatcher.clone(),
+                            dispatch_strategy.clone(),
+                            exchange_operator_id,
                             OrderedActorLink(vec![*downstream_id]),
                             same_worker_node,
                         );
@@ -447,7 +450,8 @@ impl StreamGraphBuilder {
                 .get_mut(upstream_id)
                 .unwrap()
                 .add_dispatcher(
-                    dispatcher.clone(),
+                    dispatch_strategy.clone(),
+                    exchange_operator_id,
                     OrderedActorLink(downstream_actor_ids.to_vec()),
                     same_worker_node,
                 );
@@ -478,18 +482,21 @@ impl StreamGraphBuilder {
     }
 
     /// Build final stream DAG with dependencies with current actor builders.
+    #[allow(clippy::type_complexity)]
     pub fn build(
         mut self,
         ctx: &mut CreateMaterializedViewContext,
         actor_id_offset: u32,
         actor_id_len: u32,
-    ) -> Result<HashMap<GlobalFragmentId, Vec<StreamActor>>> {
+    ) -> Result<(HashMap<GlobalFragmentId, Vec<StreamActor>>, Vec<Table>)> {
         let mut graph = HashMap::new();
 
         for builder in self.actor_builders.values_mut() {
             builder.seal(actor_id_offset, actor_id_len);
         }
 
+        let mut internal_tables = vec![];
+        let mut is_filled = false;
         for builder in self.actor_builders.values() {
             let actor_id = builder.actor_id;
             let mut actor = builder.build();
@@ -499,20 +506,20 @@ impl StreamGraphBuilder {
                 .map(|(id, StreamActorUpstream { actors, .. })| (*id, actors.clone()))
                 .collect();
 
-            actor.nodes =
-                Some(self.build_inner(ctx, actor.get_nodes()?, actor_id, &mut upstream_actors)?);
-
+            let (stream_node, mut inner_internal_tables) =
+                self.build_inner(ctx, actor.get_nodes()?, actor_id, &mut upstream_actors)?;
+            if !is_filled {
+                internal_tables.append(&mut inner_internal_tables);
+                is_filled = true;
+            }
+            actor.nodes = Some(stream_node);
             graph
                 .entry(builder.get_fragment_id())
                 .or_insert(vec![])
                 .push(actor);
         }
-        for actor_ids in ctx.upstream_node_actors.values_mut() {
-            actor_ids.sort_unstable();
-            actor_ids.dedup();
-        }
 
-        Ok(graph)
+        Ok((graph, internal_tables))
     }
 
     /// Build stream actor inside, two works will be done:
@@ -527,53 +534,99 @@ impl StreamGraphBuilder {
         stream_node: &StreamNode,
         actor_id: LocalActorId,
         upstream_actor_id: &mut HashMap<u64, OrderedActorLink>,
-    ) -> Result<StreamNode> {
+    ) -> Result<(StreamNode, Vec<Table>)> {
         let table_id_offset = ctx.table_id_offset;
+        let mut internal_tables = vec![];
         match stream_node.get_node_body()? {
             NodeBody::Exchange(_) => {
                 panic!("ExchangeNode should be eliminated from the top of the plan node when converting fragments to actors: {:#?}", stream_node)
             }
-            NodeBody::Chain(_) => self.resolve_chain_node(stream_node),
+            NodeBody::Chain(_) => Ok((self.resolve_chain_node(stream_node)?, internal_tables)),
             _ => {
                 let mut new_stream_node = stream_node.clone();
 
                 // Table id rewrite done below.
-
-                if let NodeBody::HashJoin(node) = new_stream_node.node_body.as_mut().unwrap() {
-                    // The operator id must be assigned with table ids. Otherwise it is a logic
-                    // error.
-                    let left_table_id = node.left_table_id + table_id_offset;
-                    let right_table_id = left_table_id + 1;
-                    node.left_table_id = left_table_id;
-                    node.right_table_id = right_table_id;
-                }
-
-                if let NodeBody::Lookup(node) = new_stream_node.node_body.as_mut().unwrap() {
-                    if let Some(ArrangementTableId::TableId(table_id)) =
-                        &mut node.arrangement_table_id
-                    {
-                        *table_id += table_id_offset;
-                    }
-                }
-
-                if let NodeBody::Arrange(node) = new_stream_node.node_body.as_mut().unwrap() {
-                    node.table_id += table_id_offset;
-                }
-
-                if let NodeBody::HashAgg(node) = new_stream_node.node_body.as_mut().unwrap() {
-                    assert_eq!(node.table_ids.len(), node.agg_calls.len());
-                    // In-place update the table id. Convert from local to global.
-                    for table_id in &mut node.table_ids {
-                        *table_id += table_id_offset;
-                    }
-                }
-
                 match new_stream_node.node_body.as_mut().unwrap() {
-                    NodeBody::GlobalSimpleAgg(node) | NodeBody::LocalSimpleAgg(node) => {
-                        assert_eq!(node.table_ids.len(), node.agg_calls.len());
-                        // In-place update the table id. Convert from local to global.
-                        for table_id in &mut node.table_ids {
+                    NodeBody::HashJoin(node) => {
+                        // The operator id must be assigned with table ids. Otherwise it is a logic
+                        // error.
+                        let mut left_table_id: u32 = 0;
+                        let mut right_table_id: u32 = 0;
+                        if let Some(table) = &mut node.left_table {
+                            left_table_id = table.id + table_id_offset;
+                            table.id = left_table_id;
+                            table.schema_id = ctx.schema_id;
+                            table.database_id = ctx.database_id;
+                            table.name = generate_intertable_name(&ctx.mview_name, left_table_id);
+                            internal_tables.push(table.clone());
+                        }
+                        if let Some(table) = &mut node.right_table {
+                            right_table_id = left_table_id + 1;
+                            table.id = right_table_id;
+                            table.schema_id = ctx.schema_id;
+                            table.database_id = ctx.database_id;
+                            table.name = generate_intertable_name(&ctx.mview_name, right_table_id);
+                            internal_tables.push(table.clone());
+                        }
+                        ctx.internal_table_id_set.insert(left_table_id);
+                        ctx.internal_table_id_set.insert(right_table_id);
+                    }
+
+                    NodeBody::Lookup(node) => {
+                        if let Some(ArrangementTableId::TableId(table_id)) =
+                            &mut node.arrangement_table_id
+                        {
                             *table_id += table_id_offset;
+                            ctx.internal_table_id_set.insert(*table_id);
+                        }
+                    }
+
+                    NodeBody::Arrange(node) => {
+                        node.table_id += table_id_offset;
+                        ctx.internal_table_id_set.insert(node.table_id);
+                    }
+
+                    NodeBody::HashAgg(node) => {
+                        assert_eq!(node.internal_tables.len(), node.agg_calls.len());
+                        // In-place update the table id. Convert from local to global.
+                        for table in &mut node.internal_tables {
+                            table.id += table_id_offset;
+                            table.schema_id = ctx.schema_id;
+                            table.database_id = ctx.database_id;
+                            table.name = generate_intertable_name(&ctx.mview_name, table.id);
+                            ctx.internal_table_id_set.insert(table.id);
+                            internal_tables.push(table.clone());
+                        }
+                    }
+
+                    NodeBody::TopN(node) => {
+                        node.table_id_l += table_id_offset;
+                        node.table_id_m += table_id_offset;
+                        node.table_id_h += table_id_offset;
+                        ctx.internal_table_id_set.insert(node.table_id_l);
+                        ctx.internal_table_id_set.insert(node.table_id_m);
+                        ctx.internal_table_id_set.insert(node.table_id_h);
+                    }
+
+                    NodeBody::AppendOnlyTopN(node) => {
+                        node.table_id_l += table_id_offset;
+                        node.table_id_m += table_id_offset;
+                        node.table_id_h += table_id_offset;
+                        ctx.internal_table_id_set.insert(node.table_id_l);
+                        ctx.internal_table_id_set.insert(node.table_id_m);
+                        ctx.internal_table_id_set.insert(node.table_id_h);
+                    }
+
+                    NodeBody::GlobalSimpleAgg(node) | NodeBody::LocalSimpleAgg(node) => {
+                        assert_eq!(node.internal_tables.len(), node.agg_calls.len());
+                        // In-place update the table id. Convert from local to global.
+                        for table in &mut node.internal_tables {
+                            table.id += table_id_offset;
+                            table.schema_id = ctx.schema_id;
+                            table.database_id = ctx.database_id;
+                            table.name = generate_intertable_name(&ctx.mview_name, table.id);
+                            internal_tables.push(table.clone());
+                            ctx.internal_table_id_set.insert(table.id);
                         }
                     }
                     _ => {}
@@ -602,12 +655,14 @@ impl StreamGraphBuilder {
                             new_stream_node.input[idx] = self.resolve_chain_node(input)?;
                         }
                         _ => {
-                            new_stream_node.input[idx] =
+                            let mut inner_internal_tables: Vec<Table>;
+                            (new_stream_node.input[idx], inner_internal_tables) =
                                 self.build_inner(ctx, input, actor_id, upstream_actor_id)?;
+                            internal_tables.append(&mut inner_internal_tables);
                         }
                     }
                 }
-                Ok(new_stream_node)
+                Ok((new_stream_node, internal_tables))
             }
         }
     }
@@ -675,66 +730,85 @@ impl BuildActorGraphState {
 
 /// [`ActorGraphBuilder`] generates the proto for interconnected actors for a streaming pipeline.
 pub struct ActorGraphBuilder {
-    /// degree of parallelism
-    parallel_degree: u32,
+    /// GlobalFragmentId -> parallel_degree
+    parallelisms: Option<HashMap<FragmentId, u32>>,
+
+    fragment_graph: StreamFragmentGraph,
 }
 
 impl ActorGraphBuilder {
-    pub async fn generate_graph<S>(
+    pub async fn new<S>(
         id_gen_manager: IdGeneratorManagerRef<S>,
-        fragment_manager: FragmentManagerRef<S>,
-        parallel_degree: u32,
         fragment_graph: &StreamFragmentGraphProto,
         ctx: &mut CreateMaterializedViewContext,
-    ) -> Result<BTreeMap<FragmentId, Fragment>>
+    ) -> Result<Self>
     where
         S: MetaStore,
     {
-        Self { parallel_degree }
-            .generate_graph_inner(id_gen_manager, fragment_manager, fragment_graph, ctx)
+        // save dependent table ids in ctx
+        ctx.dependent_table_ids = fragment_graph
+            .dependent_table_ids
+            .iter()
+            .map(|table_id| TableId::new(*table_id))
+            .collect();
+
+        let fragment_len = fragment_graph.fragments.len() as u32;
+        let offset = id_gen_manager
+            .generate_interval::<{ IdCategory::Fragment }>(fragment_len as i32)
+            .await? as _;
+
+        // Compute how many table ids should be allocated for all actors.
+        // Allocate all needed table ids for current MV.
+        let table_ids_cnt = fragment_graph.table_ids_cnt;
+        let start_table_id = id_gen_manager
+            .generate_interval::<{ IdCategory::Table }>(table_ids_cnt as i32)
+            .await? as _;
+        ctx.table_id_offset = start_table_id;
+
+        Ok(Self {
+            fragment_graph: StreamFragmentGraph::from_protobuf(fragment_graph.clone(), offset),
+            parallelisms: None,
+        })
+    }
+
+    pub async fn generate_graph<S>(
+        &mut self,
+        id_gen_manager: IdGeneratorManagerRef<S>,
+        fragment_manager: FragmentManagerRef<S>,
+        parallelisms: HashMap<FragmentId, u32>,
+        ctx: &mut CreateMaterializedViewContext,
+    ) -> Result<(BTreeMap<FragmentId, Fragment>, Vec<Table>)>
+    where
+        S: MetaStore,
+    {
+        self.parallelisms = Some(parallelisms);
+        self.generate_graph_inner(id_gen_manager, fragment_manager, ctx)
             .await
+    }
+
+    pub fn list_fragment_ids(&self) -> Vec<(FragmentId, bool)> {
+        self.fragment_graph
+            .fragments()
+            .iter()
+            .map(|(id, fragment)| (id.as_global_id(), fragment.is_singleton))
+            .collect_vec()
     }
 
     /// Build a stream graph by duplicating each fragment as parallel actors.
     async fn generate_graph_inner<S>(
-        self,
+        &self,
         id_gen_manager: IdGeneratorManagerRef<S>,
         fragment_manager: FragmentManagerRef<S>,
-        fragment_graph: &StreamFragmentGraphProto,
         ctx: &mut CreateMaterializedViewContext,
-    ) -> Result<BTreeMap<FragmentId, Fragment>>
+    ) -> Result<(BTreeMap<FragmentId, Fragment>, Vec<Table>)>
     where
         S: MetaStore,
     {
-        let fragment_graph = {
-            // save dependent table ids in ctx
-            ctx.dependent_table_ids = fragment_graph
-                .dependent_table_ids
-                .iter()
-                .map(|table_id| TableId::new(*table_id))
-                .collect();
-
-            let fragment_len = fragment_graph.fragments.len() as u32;
-            let offset = id_gen_manager
-                .generate_interval::<{ IdCategory::Fragment }>(fragment_len as i32)
-                .await? as _;
-
-            // Compute how many table ids should be allocated for all actors.
-            // Allocate all needed table ids for current MV.
-            let table_ids_cnt = fragment_graph.table_ids_cnt;
-            let start_table_id = id_gen_manager
-                .generate_interval::<{ IdCategory::Table }>(table_ids_cnt as i32)
-                .await? as _;
-            ctx.table_id_offset = start_table_id;
-
-            StreamFragmentGraph::from_protobuf(fragment_graph.clone(), offset)
-        };
-
-        let stream_graph = {
+        let (stream_graph, internal_tables) = {
             let BuildActorGraphState {
                 stream_graph_builder,
-                fragment_actors: _,
                 next_local_actor_id,
+                ..
             } = {
                 let mut state = BuildActorGraphState::default();
                 // resolve upstream table infos first
@@ -743,10 +817,11 @@ impl ActorGraphBuilder {
                 let info = fragment_manager
                     .get_build_graph_info(&ctx.dependent_table_ids)
                     .await?;
+                ctx.table_sink_map = info.table_sink_actor_ids.clone();
                 state.stream_graph_builder.fill_info(info);
 
                 // Generate actors of the streaming plan
-                self.build_actor_graph(&mut state, &fragment_graph)?;
+                self.build_actor_graph(&mut state, &self.fragment_graph)?;
                 state
             };
 
@@ -768,7 +843,7 @@ impl ActorGraphBuilder {
         let stream_graph = stream_graph
             .into_iter()
             .map(|(fragment_id, actors)| {
-                let fragment = fragment_graph.get_fragment(fragment_id).unwrap();
+                let fragment = self.fragment_graph.get_fragment(fragment_id).unwrap();
                 let fragment_id = fragment_id.as_global_id();
                 (
                     fragment_id,
@@ -786,7 +861,7 @@ impl ActorGraphBuilder {
                 )
             })
             .collect();
-        Ok(stream_graph)
+        Ok((stream_graph, internal_tables))
     }
 
     /// Build actor graph from fragment graph using topological sort. Setup dispatcher in actor and
@@ -845,11 +920,13 @@ impl ActorGraphBuilder {
     ) -> Result<()> {
         let current_fragment = fragment_graph.get_fragment(fragment_id).unwrap().clone();
 
-        let parallel_degree = if current_fragment.is_singleton {
-            1
-        } else {
-            self.parallel_degree
-        };
+        let parallel_degree = self
+            .parallelisms
+            .as_ref()
+            .unwrap()
+            .get(&fragment_id.as_global_id())
+            .unwrap()
+            .to_owned();
 
         let node = Arc::new(current_fragment.node.unwrap());
         let actor_ids = state
@@ -872,21 +949,15 @@ impl ActorGraphBuilder {
 
             let dispatch_strategy = dispatch_edge.dispatch_strategy.as_ref().unwrap();
             match dispatch_strategy.get_type()? {
-                ty @ (DispatcherType::Hash
+                DispatcherType::Hash
                 | DispatcherType::Simple
                 | DispatcherType::Broadcast
-                | DispatcherType::NoShuffle) => {
+                | DispatcherType::NoShuffle => {
                     state.stream_graph_builder.add_link(
                         &actor_ids,
                         downstream_actors,
                         dispatch_edge.link_id,
-                        Dispatcher {
-                            r#type: ty.into(),
-                            column_indices: dispatch_strategy.column_indices.clone(),
-                            hash_mapping: None,
-                            dispatcher_id: dispatch_edge.link_id,
-                            downstream_actor_id: vec![],
-                        },
+                        dispatch_strategy.clone(),
                         dispatch_edge.same_worker_node,
                     );
                 }
