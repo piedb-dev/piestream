@@ -18,10 +18,10 @@ use async_trait::async_trait;
 use itertools::{join, Itertools};
 use mysql_async::prelude::*;
 use mysql_async::*;
-use risingwave_common::array::Op::*;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::types::{Datum, Decimal, ScalarImpl};
+use piestream_common::array::Op::*;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::types::{Datum, Decimal, ScalarImpl};
 
 use crate::sink::{Result, Sink, SinkError};
 
@@ -181,7 +181,7 @@ impl Sink for MySQLSink {
 
 #[cfg(test)]
 mod test {
-    use risingwave_common::types::chrono_wrapper::*;
+    use piestream_common::types::chrono_wrapper::*;
     use rust_decimal::Decimal as RustDecimal;
 
     use super::*;

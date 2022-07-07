@@ -14,10 +14,10 @@
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::{DataChunk, Row};
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Schema, SysCatalogReaderRef};
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::{DataChunk, Row};
+use piestream_common::catalog::{ColumnDesc, ColumnId, Schema, SysCatalogReaderRef};
+use piestream_common::error::{Result, RwError};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,

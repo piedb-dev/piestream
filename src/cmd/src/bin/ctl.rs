@@ -25,11 +25,11 @@ static GLOBAL: Jemalloc = Jemalloc;
 async fn main() -> Result<()> {
     use clap::StructOpt;
 
-    let opts = risingwave_ctl::CliOpts::parse();
+    let opts = piestream_ctl::CliOpts::parse();
 
-    risingwave_rt::oneshot_common();
-    risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new_default());
+    piestream_rt::oneshot_common();
+    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
     // console_subscriber::init();a
 
-    risingwave_ctl::start(opts).await
+    piestream_ctl::start(opts).await
 }

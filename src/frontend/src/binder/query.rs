@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::{Cte, Expr, OrderByExpr, Query, Value, With};
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::{Cte, Expr, OrderByExpr, Query, Value, With};
 
 use crate::binder::{Binder, BoundSetExpr};
 use crate::expr::ExprImpl;

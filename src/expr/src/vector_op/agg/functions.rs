@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::{Array, ListRef, StructRef};
-use risingwave_common::error::{ErrorCode, Result};
+use piestream_common::array::{Array, ListRef, StructRef};
+use piestream_common::error::{ErrorCode, Result};
 
 /// Essentially `RTFn` is an alias of the specific Fn. It was aliased not to
 /// shorten the `where` clause of `GeneralAgg`, but to workaround an compiler
@@ -54,7 +54,7 @@ where
 use std::convert::From;
 use std::ops::Add;
 
-use risingwave_common::types::ScalarRef;
+use piestream_common::types::ScalarRef;
 
 pub fn sum<R, T>(result: Option<R>, input: Option<T>) -> Result<Option<R>>
 where

@@ -229,7 +229,7 @@ impl Condition {
         .unwrap()
     }
 
-    /// See also [`ScanRange`](risingwave_pb::batch_plan::ScanRange).
+    /// See also [`ScanRange`](piestream_pb::batch_plan::ScanRange).
     pub fn split_to_scan_range(
         self,
         order_column_ids: &[usize],
@@ -449,7 +449,7 @@ impl Condition {
 #[cfg(test)]
 mod tests {
     use rand::Rng;
-    use risingwave_common::types::DataType;
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::expr::{FunctionCall, InputRef};

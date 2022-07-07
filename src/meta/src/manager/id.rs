@@ -15,8 +15,8 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
-use risingwave_common::catalog::RESERVED_PG_CATALOG_TABLE_ID;
-use risingwave_common::error::Result;
+use piestream_common::catalog::RESERVED_PG_CATALOG_TABLE_ID;
+use piestream_common::error::Result;
 use tokio::sync::RwLock;
 
 use crate::cluster::META_NODE_ID;

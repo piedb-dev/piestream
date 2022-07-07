@@ -15,14 +15,14 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{
+use piestream_common::array::column::Column;
+use piestream_common::array::{
     ArrayBuilder, ArrayImpl, ArrayMeta, ArrayRef, DataChunk, ListArrayBuilder, ListValue, Row,
     StructArrayBuilder, StructValue,
 };
-use risingwave_common::types::{DataType, Datum, Scalar};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::types::{DataType, Datum, Scalar};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::{build_from_prost as expr_build_from_prost, BoxedExpression, Expression};
 use crate::{bail, ensure, ExprError, Result};
@@ -135,8 +135,8 @@ impl<'a> TryFrom<&'a ExprNode> for NestedConstructExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{DataChunk, ListValue, Row};
-    use risingwave_common::types::{DataType, Scalar, ScalarImpl};
+    use piestream_common::array::{DataChunk, ListValue, Row};
+    use piestream_common::types::{DataType, Scalar, ScalarImpl};
 
     use super::NestedConstructExpression;
     use crate::expr::{BoxedExpression, Expression, LiteralExpression};

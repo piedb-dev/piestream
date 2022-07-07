@@ -27,7 +27,7 @@ use std::pin::Pin;
 
 use anyhow::{bail, Result};
 use clap::StructOpt;
-use risingwave_cmd_all::playground;
+use piestream_cmd_all::playground;
 
 type RwFns =
     HashMap<&'static str, Box<dyn Fn(Vec<String>) -> Box<dyn Future<Output = Result<()>>>>>;
@@ -45,15 +45,15 @@ async fn main() -> Result<()> {
                 Box::new(async move {
                     eprintln!("launching compute node");
 
-                    let opts = risingwave_compute::ComputeNodeOpts::parse_from(args);
+                    let opts = piestream_compute::ComputeNodeOpts::parse_from(args);
 
-                    risingwave_rt::oneshot_common();
-                    risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new(
+                    piestream_rt::oneshot_common();
+                    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new(
                         opts.enable_jaeger_tracing,
                         false,
                     ));
 
-                    risingwave_compute::start(opts).await;
+                    piestream_compute::start(opts).await;
 
                     Ok(())
                 })
@@ -69,14 +69,14 @@ async fn main() -> Result<()> {
                 Box::new(async move {
                     eprintln!("launching meta node");
 
-                    let opts = risingwave_meta::MetaNodeOpts::parse_from(args);
+                    let opts = piestream_meta::MetaNodeOpts::parse_from(args);
 
-                    risingwave_rt::oneshot_common();
-                    risingwave_rt::init_risingwave_logger(
-                        risingwave_rt::LoggerSettings::new_default(),
+                    piestream_rt::oneshot_common();
+                    piestream_rt::init_piestream_logger(
+                        piestream_rt::LoggerSettings::new_default(),
                     );
 
-                    risingwave_meta::start(opts).await;
+                    piestream_meta::start(opts).await;
 
                     Ok(())
                 })
@@ -92,14 +92,14 @@ async fn main() -> Result<()> {
                 Box::new(async move {
                     eprintln!("launching frontend node");
 
-                    let opts = risingwave_frontend::FrontendOpts::parse_from(args);
+                    let opts = piestream_frontend::FrontendOpts::parse_from(args);
 
-                    risingwave_rt::oneshot_common();
-                    risingwave_rt::init_risingwave_logger(
-                        risingwave_rt::LoggerSettings::new_default(),
+                    piestream_rt::oneshot_common();
+                    piestream_rt::init_piestream_logger(
+                        piestream_rt::LoggerSettings::new_default(),
                     );
 
-                    risingwave_frontend::start(opts).await;
+                    piestream_frontend::start(opts).await;
 
                     Ok(())
                 })
@@ -115,14 +115,14 @@ async fn main() -> Result<()> {
                 Box::new(async move {
                     eprintln!("launching compactor node");
 
-                    let opts = risingwave_compactor::CompactorOpts::parse_from(args);
+                    let opts = piestream_compactor::CompactorOpts::parse_from(args);
 
-                    risingwave_rt::oneshot_common();
-                    risingwave_rt::init_risingwave_logger(
-                        risingwave_rt::LoggerSettings::new_default(),
+                    piestream_rt::oneshot_common();
+                    piestream_rt::init_piestream_logger(
+                        piestream_rt::LoggerSettings::new_default(),
                     );
 
-                    risingwave_compactor::start(opts).await;
+                    piestream_compactor::start(opts).await;
 
                     Ok(())
                 })
@@ -137,11 +137,11 @@ async fn main() -> Result<()> {
             Box::new(async move {
                 eprintln!("launching risectl");
 
-                let opts = risingwave_ctl::CliOpts::parse_from(args);
-                risingwave_rt::oneshot_common();
-                risingwave_rt::init_risingwave_logger(risingwave_rt::LoggerSettings::new_default());
+                let opts = piestream_ctl::CliOpts::parse_from(args);
+                piestream_rt::oneshot_common();
+                piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
 
-                risingwave_ctl::start(opts).await
+                piestream_ctl::start(opts).await
             })
         }),
     );
@@ -157,12 +157,12 @@ async fn main() -> Result<()> {
     /// Get the launch target of this all-in-one binary
     fn get_target(cmds: Vec<&str>) -> (String, Vec<String>) {
         if let Some(cmd) = env::args().nth(1) && cmds.contains(&cmd.as_str()){
-            // ./risingwave meta <args>
+            // ./piestream meta <args>
             return (cmd, env::args().skip(1).collect());
         }
 
         if let Ok(target) = env::var("RW_NODE") {
-            // RW_NODE=meta ./risingwave <args>
+            // RW_NODE=meta ./piestream <args>
             (target, env::args().collect())
         } else {
             // ./meta-node <args>
@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
             func.await?;
         }
         None => {
-            bail!("unknown target: {}\nPlease either:\n* set `RW_NODE` env variable (`RW_NODE=<component>`)\n* create a symbol link to `risingwave` binary (ln -s risingwave <component>)\n* start with subcommand `risingwave <component>``\nwith one of the following: {:?}", target, fns.keys().collect::<Vec<_>>());
+            bail!("unknown target: {}\nPlease either:\n* set `RW_NODE` env variable (`RW_NODE=<component>`)\n* create a symbol link to `piestream` binary (ln -s piestream <component>)\n* start with subcommand `piestream <component>``\nwith one of the following: {:?}", target, fns.keys().collect::<Vec<_>>());
         }
     }
 

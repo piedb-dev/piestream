@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{DispatchStrategy, DispatcherType, ExchangeNode};
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{DispatchStrategy, DispatcherType, ExchangeNode};
 
 use super::{PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
 use crate::optimizer::property::Distribution;

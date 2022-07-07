@@ -36,7 +36,7 @@ pub struct Ec2Instance {
 #[serde(deny_unknown_fields)]
 pub struct ComposeDeployConfig {
     pub instances: Vec<Ec2Instance>,
-    pub risingwave_image_override: Option<String>,
+    pub piestream_image_override: Option<String>,
     pub risedev_extra_args: HashMap<String, String>,
 }
 
@@ -115,7 +115,7 @@ fi
             let host = &instance.dns_host;
             let public_ip = &instance.public_ip;
             let id = &instance.id;
-            let base_folder = "~/risingwave-deploy";
+            let base_folder = "~/piestream-deploy";
             let mut y = String::new();
             writeln!(y, "#!/bin/bash -e")?;
             writeln!(y)?;
@@ -158,7 +158,7 @@ fi
                 r#"echo "{id}: $(tput setaf 2)stopping and pulling$(tput sgr0)""#,
             )?;
             let public_ip = &instance.public_ip;
-            let base_folder = "~/risingwave-deploy";
+            let base_folder = "~/piestream-deploy";
             let tear_down_volumes = instance.r#type == "source";
             let down_extra_arg = if tear_down_volumes {
                 // tear down volumes for source
@@ -167,7 +167,7 @@ fi
                 ""
             };
             writeln!(y, "ssh {ssh_extra_args} ubuntu@{public_ip} \"bash -c 'cd {base_folder} && docker compose kill && docker compose down --remove-orphans{down_extra_arg} && docker pull {}'\"",
-                compose_config.image.risingwave
+                compose_config.image.piestream
             )?;
             if tear_down_volumes {
                 writeln!(
@@ -211,7 +211,7 @@ fi
                 r#"echo "{id}: $(tput setaf 2)start service {step}$(tput sgr0)""#,
             )?;
             let public_ip = &instance.public_ip;
-            let base_folder = "~/risingwave-deploy";
+            let base_folder = "~/piestream-deploy";
             writeln!(x, "ssh {ssh_extra_args} ubuntu@{public_ip} \"bash -c 'cd {base_folder} && docker compose up -d {step}'\"")?;
         }
         writeln!(x, r#"fi"#)?;
@@ -229,7 +229,7 @@ fi
             writeln!(y, "#!/bin/bash -e")?;
             writeln!(y, r#"echo "{id}: $(tput setaf 2)check status$(tput sgr0)""#,)?;
             let public_ip = &instance.public_ip;
-            let base_folder = "~/risingwave-deploy";
+            let base_folder = "~/piestream-deploy";
             writeln!(y, "ssh {ssh_extra_args} ubuntu@{public_ip} \"bash -c 'cd {base_folder} && docker compose ps'\"")?;
 
             let sh = format!("_check.{id}.partial.sh");

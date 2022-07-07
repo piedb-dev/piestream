@@ -14,8 +14,8 @@
 //
 use std::fmt;
 
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::plan_common::JoinType;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::plan_common::JoinType;
 
 use super::{
     ColPrunable, LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, PredicatePushdown, ToBatch,

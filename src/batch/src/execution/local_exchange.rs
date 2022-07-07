@@ -15,8 +15,8 @@
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::Result;
+use piestream_common::array::DataChunk;
+use piestream_common::error::Result;
 
 use crate::exchange_source::ExchangeSource;
 use crate::task::{BatchTaskContext, TaskId, TaskOutput, TaskOutputId};
@@ -81,13 +81,13 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use risingwave_common::util::addr::HostAddr;
-    use risingwave_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskId, TaskOutputId};
-    use risingwave_pb::data::DataChunk;
-    use risingwave_pb::task_service::exchange_service_server::{
+    use piestream_common::util::addr::HostAddr;
+    use piestream_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskId, TaskOutputId};
+    use piestream_pb::data::DataChunk;
+    use piestream_pb::task_service::exchange_service_server::{
         ExchangeService, ExchangeServiceServer,
     };
-    use risingwave_pb::task_service::{
+    use piestream_pb::task_service::{
         GetDataRequest, GetDataResponse, GetStreamRequest, GetStreamResponse,
     };
     use tokio_stream::wrappers::ReceiverStream;

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use pgwire::pg_response::PgResponse;
 use pgwire::pg_response::StatementType::{ABORT, START_TRANSACTION};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::{DropStatement, ObjectType, Statement, WithProperties};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::{DropStatement, ObjectType, Statement, WithProperties};
 
 use crate::session::{OptimizerContext, SessionImpl};
 

@@ -24,7 +24,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use moka::future::Cache;
 use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
-use risingwave_storage::hummock::{HummockError, HummockResult, LookupResult, LruCache};
+use piestream_storage::hummock::{HummockError, HummockResult, LookupResult, LruCache};
 use tokio::runtime::{Builder, Runtime};
 
 pub struct Block {

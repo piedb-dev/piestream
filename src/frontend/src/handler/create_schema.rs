@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::catalog::RESERVED_PG_SCHEMA_PREFIX;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::ObjectName;
+use piestream_common::catalog::RESERVED_PG_SCHEMA_PREFIX;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::ObjectName;
 
 use crate::binder::Binder;
 use crate::catalog::CatalogError;
@@ -67,7 +67,7 @@ pub async fn handle_create_schema(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::DEFAULT_DATABASE_NAME;
+    use piestream_common::catalog::DEFAULT_DATABASE_NAME;
 
     use crate::test_utils::LocalFrontend;
 

@@ -17,12 +17,12 @@ use std::fmt;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, OrderedColumnDesc, TableId};
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::Result;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::plan_common::ColumnOrder;
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_common::catalog::{ColumnDesc, OrderedColumnDesc, TableId};
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::Result;
+use piestream_common::util::sort_util::OrderType;
+use piestream_pb::plan_common::ColumnOrder;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
 use super::{PlanRef, PlanTreeNodeUnary, ToStreamProst};
 use crate::catalog::column_catalog::ColumnCatalog;
@@ -162,7 +162,7 @@ impl StreamMaterialize {
             is_index_on,
             distribution_keys: base.dist.dist_column_indices().to_vec(),
             appendonly: input.append_only(),
-            owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+            owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
             vnode_mapping: None,
             properties: HashMap::default(),
         };
@@ -238,7 +238,7 @@ impl_plan_tree_node_for_unary! { StreamMaterialize }
 
 impl ToStreamProst for StreamMaterialize {
     fn to_stream_prost_body(&self) -> ProstStreamNode {
-        use risingwave_pb::stream_plan::*;
+        use piestream_pb::stream_plan::*;
 
         ProstStreamNode::Materialize(MaterializeNode {
             // We don't need table id for materialize node in frontend. The id will be generated on

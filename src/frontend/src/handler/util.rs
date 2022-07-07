@@ -18,12 +18,12 @@ use itertools::Itertools;
 use num_traits::Float;
 use pgwire::pg_field_descriptor::{PgFieldDescriptor, TypeOid};
 use pgwire::types::Row;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::{ColumnDesc, Field};
-use risingwave_common::error::ErrorCode::ProtocolError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::{DataType, ScalarRefImpl};
-use risingwave_sqlparser::ast::{SqlOption, Value};
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::{ColumnDesc, Field};
+use piestream_common::error::ErrorCode::ProtocolError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::{DataType, ScalarRefImpl};
+use piestream_sqlparser::ast::{SqlOption, Value};
 
 /// Format scalars according to postgres convention.
 fn pg_value_format(d: ScalarRefImpl) -> String {
@@ -128,7 +128,7 @@ pub fn handle_with_properties(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::*;
+    use piestream_common::array::*;
 
     use super::*;
 

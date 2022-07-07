@@ -15,7 +15,7 @@
 use std::cmp::{Ord, Ordering};
 use std::sync::Arc;
 
-use risingwave_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
+use piestream_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
 
 use crate::array::{Array, ArrayImpl, DataChunk};
 use crate::error::ErrorCode::InternalError;
@@ -76,7 +76,7 @@ pub struct HeapElem {
     pub chunk_idx: usize,
     pub elem_idx: usize,
     /// DataChunk can be encoded to accelerate the comparison.
-    /// Use `risingwave_common::util::encoding_for_comparison::encode_chunk`
+    /// Use `piestream_common::util::encoding_for_comparison::encode_chunk`
     /// to perform encoding, otherwise the comparison will be performed
     /// column by column.
     pub encoded_chunk: Option<Arc<Vec<Vec<u8>>>>,

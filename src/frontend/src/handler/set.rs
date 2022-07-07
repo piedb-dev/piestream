@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
-use risingwave_sqlparser::ast::{Ident, SetVariableValue};
+use piestream_common::error::Result;
+use piestream_sqlparser::ast::{Ident, SetVariableValue};
 
 use crate::session::OptimizerContext;
 

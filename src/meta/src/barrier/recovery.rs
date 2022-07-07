@@ -19,12 +19,12 @@ use std::time::Duration;
 
 use futures::future::try_join_all;
 use log::{debug, error};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::util::epoch::Epoch;
-use risingwave_pb::common::ActorInfo;
-use risingwave_pb::data::Epoch as ProstEpoch;
-use risingwave_pb::stream_service::barrier_complete_response::CreateMviewProgress;
-use risingwave_pb::stream_service::{
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::util::epoch::Epoch;
+use piestream_pb::common::ActorInfo;
+use piestream_pb::data::Epoch as ProstEpoch;
+use piestream_pb::stream_service::barrier_complete_response::CreateMviewProgress;
+use piestream_pb::stream_service::{
     BroadcastActorInfoTableRequest, BuildActorsRequest, ForceStopActorsRequest, SyncSourcesRequest,
     UpdateActorsRequest,
 };

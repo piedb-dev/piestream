@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::{ColumnDesc, PG_CATALOG_SCHEMA_NAME};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::DataType;
+use piestream_common::catalog::{ColumnDesc, PG_CATALOG_SCHEMA_NAME};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::DataType;
 use thiserror::Error;
 pub(crate) mod catalog_service;
 
@@ -34,8 +34,8 @@ pub(crate) type SinkId = u32;
 
 pub(crate) type DatabaseId = u32;
 pub(crate) type SchemaId = u32;
-pub(crate) type TableId = risingwave_common::catalog::TableId;
-pub(crate) type ColumnId = risingwave_common::catalog::ColumnId;
+pub(crate) type TableId = piestream_common::catalog::TableId;
+pub(crate) type ColumnId = piestream_common::catalog::ColumnId;
 
 /// Check if the column name does not conflict with the internally reserved column name.
 pub fn check_valid_column_name(column_name: &str) -> Result<()> {

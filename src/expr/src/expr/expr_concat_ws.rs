@@ -15,12 +15,12 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use risingwave_common::array::{
+use piestream_common::array::{
     Array, ArrayBuilder, ArrayImpl, ArrayRef, DataChunk, Row, Utf8ArrayBuilder,
 };
-use risingwave_common::types::{DataType, Datum, Scalar};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::types::{DataType, Datum, Scalar};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::{build_from_prost as expr_build_from_prost, BoxedExpression, Expression};
 use crate::{bail, ensure, ExprError, Result};
@@ -157,13 +157,13 @@ impl<'a> TryFrom<&'a ExprNode> for ConcatWsExpression {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use risingwave_common::array::{DataChunk, DataChunkTestExt, Row};
-    use risingwave_common::types::{Datum, Scalar};
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::expr_node::RexNode;
-    use risingwave_pb::expr::expr_node::Type::ConcatWs;
-    use risingwave_pb::expr::{ExprNode, FunctionCall};
+    use piestream_common::array::{DataChunk, DataChunkTestExt, Row};
+    use piestream_common::types::{Datum, Scalar};
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::expr_node::RexNode;
+    use piestream_pb::expr::expr_node::Type::ConcatWs;
+    use piestream_pb::expr::{ExprNode, FunctionCall};
 
     use crate::expr::expr_concat_ws::ConcatWsExpression;
     use crate::expr::test_utils::make_input_ref;

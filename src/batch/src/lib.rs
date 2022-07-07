@@ -46,4 +46,4 @@ pub mod task;
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate risingwave_common;
+extern crate piestream_common;

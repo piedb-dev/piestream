@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::catalog::{ColumnDesc, Field, OrderedColumnDesc};
-use risingwave_common::types::DataType;
-use risingwave_common::util::sort_util::OrderType;
+use piestream_common::catalog::{ColumnDesc, Field, OrderedColumnDesc};
+use piestream_common::types::DataType;
+use piestream_common::util::sort_util::OrderType;
 
 use crate::catalog::column_catalog::ColumnCatalog;
 use crate::catalog::{TableCatalog, TableId};
@@ -110,7 +110,7 @@ impl TableCatalogBuilder {
             is_index_on: None,
             distribution_keys,
             appendonly: append_only,
-            owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+            owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
             vnode_mapping: None,
             properties: HashMap::default(),
         }

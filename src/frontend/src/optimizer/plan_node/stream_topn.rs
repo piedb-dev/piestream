@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
 use super::{LogicalTopN, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
 use crate::optimizer::property::{Distribution, FieldOrder};
@@ -75,7 +75,7 @@ impl_plan_tree_node_for_unary! { StreamTopN }
 
 impl ToStreamProst for StreamTopN {
     fn to_stream_prost_body(&self) -> ProstStreamNode {
-        use risingwave_pb::stream_plan::*;
+        use piestream_pb::stream_plan::*;
         let column_orders = self
             .logical
             .topn_order()

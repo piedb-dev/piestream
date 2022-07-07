@@ -16,10 +16,10 @@ use std::cmp::min;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{Result, RwError};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -135,10 +135,10 @@ mod tests {
     use std::vec;
 
     use futures_async_stream::for_await;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::{Array, BoolArray, DataChunk, PrimitiveArray};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::{Array, BoolArray, DataChunk, PrimitiveArray};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;

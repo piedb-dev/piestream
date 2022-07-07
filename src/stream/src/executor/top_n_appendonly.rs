@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::catalog::{Schema, TableId};
-use risingwave_common::util::ordered::{OrderedRow, OrderedRowDeserializer};
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_storage::StateStore;
+use piestream_common::array::{Op, StreamChunk};
+use piestream_common::catalog::{Schema, TableId};
+use piestream_common::util::ordered::{OrderedRow, OrderedRowDeserializer};
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_storage::StateStore;
 
 use super::error::StreamExecutorResult;
 use super::managed_state::top_n::variants::TOP_N_MAX;
@@ -289,12 +289,12 @@ mod tests {
 
     use assert_matches::assert_matches;
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema, TableId};
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::{OrderPair, OrderType};
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{Field, Schema, TableId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::{OrderPair, OrderType};
+    use piestream_storage::memory::MemoryStateStore;
 
     use crate::executor::test_utils::MockSource;
     use crate::executor::top_n_appendonly::AppendOnlyTopNExecutor;

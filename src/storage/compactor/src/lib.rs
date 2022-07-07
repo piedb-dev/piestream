@@ -32,9 +32,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use clap::Parser;
-use risingwave_common::config::{ServerConfig, StorageConfig};
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::{Result, RwError};
+use piestream_common::config::{ServerConfig, StorageConfig};
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::{Result, RwError};
 use serde::{Deserialize, Serialize};
 
 use crate::server::compactor_serve;

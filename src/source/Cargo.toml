@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "risingwave_source"
+name = "piestream_source"
 version = "0.1.10"
 
 [dependencies]
@@ -32,11 +32,11 @@ protobuf = "2"
 protobuf-codegen-pure = "2"
 rand = "0.8"
 rdkafka = { version = "0.28", features = ["cmake-build"] }
-risingwave_common = { path = "../common" }
-risingwave_connector = { path = "../connector" }
-risingwave_expr = { path = "../expr" }
-risingwave_pb = { path = "../prost" }
-risingwave_storage = { path = "../storage" }
+piestream_common = { path = "../common" }
+piestream_connector = { path = "../connector" }
+piestream_expr = { path = "../expr" }
+piestream_pb = { path = "../prost" }
+piestream_storage = { path = "../storage" }
 serde = { version = "1", features = ["derive"] }
 serde-protobuf = "0.8"
 serde-value = "0.7"

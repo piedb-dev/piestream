@@ -15,11 +15,11 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use risingwave_common::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayRef, DataChunk, Row};
-use risingwave_common::for_all_variants;
-use risingwave_common::types::{DataType, Datum, Scalar, ScalarImpl};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayRef, DataChunk, Row};
+use piestream_common::for_all_variants;
+use piestream_common::types::{DataType, Datum, Scalar, ScalarImpl};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::Expression;
 use crate::{bail, ensure, ExprError, Result};
@@ -151,14 +151,14 @@ impl<'a> TryFrom<&'a ExprNode> for LiteralExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{I32Array, StructValue};
-    use risingwave_common::array_nonnull;
-    use risingwave_common::types::{Decimal, IntervalUnit, IntoOrdered};
-    use risingwave_pb::data::data_type::{IntervalType, TypeName};
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::expr_node::RexNode::Constant;
-    use risingwave_pb::expr::expr_node::Type;
-    use risingwave_pb::expr::{ConstantValue, ExprNode};
+    use piestream_common::array::{I32Array, StructValue};
+    use piestream_common::array_nonnull;
+    use piestream_common::types::{Decimal, IntervalUnit, IntoOrdered};
+    use piestream_pb::data::data_type::{IntervalType, TypeName};
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::expr_node::RexNode::Constant;
+    use piestream_pb::expr::expr_node::Type;
+    use piestream_pb::expr::{ConstantValue, ExprNode};
 
     use super::*;
 

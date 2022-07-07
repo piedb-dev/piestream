@@ -18,14 +18,14 @@ use async_trait::async_trait;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
 use madsim::collections::BTreeMap;
-use risingwave_common::array::stream_chunk::{Op, Ops};
-use risingwave_common::array::{Array, ArrayImpl, Row};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::hash::HashCode;
-use risingwave_common::types::*;
-use risingwave_expr::expr::AggKind;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::stream_chunk::{Op, Ops};
+use piestream_common::array::{Array, ArrayImpl, Row};
+use piestream_common::buffer::Bitmap;
+use piestream_common::hash::HashCode;
+use piestream_common::types::*;
+use piestream_expr::expr::AggKind;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 use smallvec::SmallVec;
 
 use crate::executor::aggregation::{AggArgs, AggCall};
@@ -426,7 +426,7 @@ pub async fn create_streaming_extreme_state<S: StateStore>(
     macro_rules! match_new_extreme_state {
         ($( { $( $kind:pat_param )|+, $array:ty } ),* $(,)?) => {{
             use DataType::*;
-            use risingwave_common::array::*;
+            use piestream_common::array::*;
 
             match (agg_call.kind, agg_call.return_type.clone()) {
                 $(
@@ -477,11 +477,11 @@ mod tests {
     use itertools::Itertools;
     use madsim::collections::{BTreeSet, HashSet};
     use madsim::rand::prelude::*;
-    use risingwave_common::array::{I64Array, Op};
-    use risingwave_common::catalog::{ColumnDesc, ColumnId, TableId};
-    use risingwave_common::types::ScalarImpl;
-    use risingwave_common::util::sort_util::OrderType;
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_common::array::{I64Array, Op};
+    use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+    use piestream_common::types::ScalarImpl;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_storage::memory::MemoryStateStore;
     use smallvec::smallvec;
 
     use super::*;

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use risingwave_common::catalog::{ColumnDesc, PG_CATALOG_SCHEMA_NAME};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_sqlparser::ast::{ObjectName, TableAlias};
+use piestream_common::catalog::{ColumnDesc, PG_CATALOG_SCHEMA_NAME};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_sqlparser::ast::{ObjectName, TableAlias};
 
 use crate::binder::{Binder, Relation};
 use crate::catalog::source_catalog::SourceCatalog;

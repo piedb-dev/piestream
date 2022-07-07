@@ -17,8 +17,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::array::{ArrayBuilder, ArrayRef, BoolArrayBuilder, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum, Scalar, ToOwnedDatum};
+use piestream_common::array::{ArrayBuilder, ArrayRef, BoolArrayBuilder, DataChunk, Row};
+use piestream_common::types::{DataType, Datum, Scalar, ToOwnedDatum};
 
 use crate::expr::{BoxedExpression, Expression};
 use crate::Result;
@@ -80,9 +80,9 @@ impl Expression for InExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{DataChunk, Row};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::{DataType, Scalar, ScalarImpl};
+    use piestream_common::array::{DataChunk, Row};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::{DataType, Scalar, ScalarImpl};
 
     use crate::expr::expr_in::InExpression;
     use crate::expr::{Expression, InputRefExpression};

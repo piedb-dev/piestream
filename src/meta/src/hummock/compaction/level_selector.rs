@@ -19,8 +19,8 @@
 
 use std::sync::Arc;
 
-use risingwave_hummock_sdk::HummockCompactionTaskId;
-use risingwave_pb::hummock::{CompactionConfig, Level};
+use piestream_hummock_sdk::HummockCompactionTaskId;
+use piestream_pb::hummock::{CompactionConfig, Level};
 
 use crate::hummock::compaction::compaction_config::CompactionConfigBuilder;
 use crate::hummock::compaction::manual_compaction_picker::ManualCompactionPicker;
@@ -306,9 +306,9 @@ pub mod tests {
     use std::ops::Range;
 
     use itertools::Itertools;
-    use risingwave_common::config::constant::hummock::CompactionFilterFlag;
-    use risingwave_pb::hummock::compaction_config::CompactionMode;
-    use risingwave_pb::hummock::{LevelType, SstableInfo};
+    use piestream_common::config::constant::hummock::CompactionFilterFlag;
+    use piestream_pb::hummock::compaction_config::CompactionMode;
+    use piestream_pb::hummock::{LevelType, SstableInfo};
 
     use super::*;
     use crate::hummock::compaction::compaction_config::CompactionConfigBuilder;

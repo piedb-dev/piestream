@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::{fmt, vec};
 
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, Result, RwError};
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, Result, RwError};
 
 use super::{
     BatchValues, ColPrunable, LogicalFilter, PlanBase, PlanRef, PredicatePushdown, ToBatch,
@@ -117,8 +117,8 @@ impl ToStream for LogicalValues {
 #[cfg(test)]
 mod tests {
 
-    use risingwave_common::catalog::Field;
-    use risingwave_common::types::{DataType, Datum};
+    use piestream_common::catalog::Field;
+    use piestream_common::types::{DataType, Datum};
 
     use super::*;
     use crate::expr::Literal;

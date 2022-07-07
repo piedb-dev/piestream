@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::Result;
 
@@ -23,7 +23,7 @@ pub fn lower(s: &str, writer: BytesWriter) -> Result<BytesGuard> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::*;
 

@@ -20,8 +20,8 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use prost::Message;
-use risingwave_pb::data::{Array as ProstArray, ArrayType as ProstArrayType, StructArrayData};
-use risingwave_pb::expr::StructValue as ProstStructValue;
+use piestream_pb::data::{Array as ProstArray, ArrayType as ProstArrayType, StructArrayData};
+use piestream_pb::expr::StructValue as ProstStructValue;
 
 use super::{
     Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayIterator, ArrayMeta, ArrayResult,

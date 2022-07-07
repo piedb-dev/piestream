@@ -16,9 +16,9 @@ pub mod mysql;
 pub mod redis;
 
 use async_trait::async_trait;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, RwError};
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, RwError};
 use thiserror::Error;
 
 use crate::sink::mysql::{MySQLConfig, MySQLSink};

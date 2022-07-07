@@ -21,13 +21,13 @@ use apache_avro::types::Value;
 use apache_avro::{Reader, Schema};
 use chrono::{Datelike, NaiveDate};
 use num_traits::FromPrimitive;
-use risingwave_common::array::Op;
-use risingwave_common::error::ErrorCode::{InternalError, InvalidConfigValue, ProtocolError};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::{
+use piestream_common::array::Op;
+use piestream_common::error::ErrorCode::{InternalError, InvalidConfigValue, ProtocolError};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::{
     DataType, Datum, Decimal, NaiveDateTimeWrapper, NaiveDateWrapper, ScalarImpl,
 };
-use risingwave_connector::aws_utils::{default_conn_config, s3_client, AwsConfigV2};
+use piestream_connector::aws_utils::{default_conn_config, s3_client, AwsConfigV2};
 use url::Url;
 
 use crate::{Event, SourceColumnDesc, SourceParser};
@@ -347,11 +347,11 @@ mod test {
     use apache_avro::types::{Record, Value};
     use apache_avro::{Codec, Schema, Writer};
     use chrono::NaiveDate;
-    use risingwave_common::catalog::ColumnId;
-    use risingwave_common::error;
-    use risingwave_common::error::ErrorCode::InternalError;
-    use risingwave_common::error::RwError;
-    use risingwave_common::types::{DataType, NaiveDateTimeWrapper, NaiveDateWrapper, ScalarImpl};
+    use piestream_common::catalog::ColumnId;
+    use piestream_common::error;
+    use piestream_common::error::ErrorCode::InternalError;
+    use piestream_common::error::RwError;
+    use piestream_common::types::{DataType, NaiveDateTimeWrapper, NaiveDateWrapper, ScalarImpl};
 
     use crate::parser::avro_parser::{
         load_schema_async, read_schema_from_local, read_schema_from_s3, unix_epoch_days, AvroParser,

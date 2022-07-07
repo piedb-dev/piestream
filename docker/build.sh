@@ -10,4 +10,4 @@ docker build -f docker/Dockerfile -t frontend-node:latest --target frontend-node
 docker build -f docker/Dockerfile -t compute-node:latest --target compute-node .
 docker build -f docker/Dockerfile -t meta-node:latest --target meta-node .
 docker build -f docker/Dockerfile -t compactor-node:latest --target compactor-node .
-docker build -f docker/Dockerfile -t risingwave:latest --target risingwave .
+docker build -f docker/Dockerfile -t piestream:latest --target piestream .

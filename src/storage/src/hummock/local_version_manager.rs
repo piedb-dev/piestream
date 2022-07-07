@@ -22,11 +22,11 @@ use bytes::Bytes;
 use futures::future::{join_all, try_join_all};
 use itertools::Itertools;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard};
-use risingwave_common::config::StorageConfig;
-use risingwave_hummock_sdk::key::FullKey;
-use risingwave_hummock_sdk::{CompactionGroupId, LocalSstableInfo};
-use risingwave_pb::hummock::HummockVersion;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_common::config::StorageConfig;
+use piestream_hummock_sdk::key::FullKey;
+use piestream_hummock_sdk::{CompactionGroupId, LocalSstableInfo};
+use piestream_pb::hummock::HummockVersion;
+use piestream_rpc_client::HummockMetaClient;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{mpsc, oneshot};
@@ -830,10 +830,10 @@ mod tests {
 
     use bytes::Bytes;
     use itertools::Itertools;
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-    use risingwave_meta::hummock::test_utils::setup_compute_env;
-    use risingwave_meta::hummock::MockHummockMetaClient;
-    use risingwave_pb::hummock::HummockVersion;
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_meta::hummock::test_utils::setup_compute_env;
+    use piestream_meta::hummock::MockHummockMetaClient;
+    use piestream_pb::hummock::HummockVersion;
     use tokio::sync::mpsc;
 
     use super::LocalVersionManager;

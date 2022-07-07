@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::ProjectNode;
-use risingwave_pb::expr::ExprNode;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::ProjectNode;
+use piestream_pb::expr::ExprNode;
 
 use super::{
     LogicalProject, PlanBase, PlanRef, PlanTreeNodeUnary, ToBatchProst, ToDistributedBatch,

@@ -18,15 +18,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use parking_lot::{Mutex, MutexGuard};
-use risingwave_common::catalog::{ColumnDesc, ColumnId, TableId};
-use risingwave_common::ensure;
-use risingwave_common::error::ErrorCode::{ConnectorError, InternalError, ProtocolError};
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::DataType;
-use risingwave_common::util::epoch::UNIX_SINGULARITY_DATE_EPOCH;
-use risingwave_connector::ConnectorProperties;
-use risingwave_pb::catalog::StreamSourceInfo;
-use risingwave_pb::plan_common::RowFormatType;
+use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+use piestream_common::ensure;
+use piestream_common::error::ErrorCode::{ConnectorError, InternalError, ProtocolError};
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::DataType;
+use piestream_common::util::epoch::UNIX_SINGULARITY_DATE_EPOCH;
+use piestream_connector::ConnectorProperties;
+use piestream_pb::catalog::StreamSourceInfo;
+use piestream_pb::plan_common::RowFormatType;
 
 use crate::monitor::SourceMetrics;
 use crate::row_id::{RowId, RowIdGenerator};
@@ -253,14 +253,14 @@ impl MemSourceManager {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
-    use risingwave_common::error::Result;
-    use risingwave_common::types::DataType;
-    use risingwave_connector::kinesis::config::kinesis_demo_properties;
-    use risingwave_pb::catalog::StreamSourceInfo;
-    use risingwave_pb::plan_common::ColumnCatalog;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::Keyspace;
+    use piestream_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
+    use piestream_common::error::Result;
+    use piestream_common::types::DataType;
+    use piestream_connector::kinesis::config::kinesis_demo_properties;
+    use piestream_pb::catalog::StreamSourceInfo;
+    use piestream_pb::plan_common::ColumnCatalog;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::Keyspace;
 
     use crate::*;
 

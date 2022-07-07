@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_common"
+name = "piestream_common"
 version = "0.1.10"
 edition = "2021"
 
@@ -32,7 +32,7 @@ prometheus = { version = "0.13" }
 prost = "0.10"
 rand = "0.8"
 regex = "1"
-risingwave_pb = { path = "../prost" }
+piestream_pb = { path = "../prost" }
 rust_decimal = "1"
 serde = { version = "1", features = ["derive"] }
 serde_derive = "1"

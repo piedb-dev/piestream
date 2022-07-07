@@ -14,8 +14,8 @@
 
 use std::slice;
 
-use risingwave_common::types::DataType;
-use risingwave_expr::expr::AggKind;
+use piestream_common::types::DataType;
+use piestream_expr::expr::AggKind;
 
 /// An aggregation function may accept 0, 1 or 2 arguments.
 #[derive(Clone, Debug)]
@@ -39,7 +39,7 @@ impl AggArgs {
         }
     }
 
-    /// return the indices of the arguments in [`risingwave_common::array::StreamChunk`].
+    /// return the indices of the arguments in [`piestream_common::array::StreamChunk`].
     pub fn val_indices(&self) -> &[usize] {
         use AggArgs::*;
         match self {

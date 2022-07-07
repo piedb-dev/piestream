@@ -17,14 +17,14 @@ use std::marker::PhantomData;
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
-use risingwave_common::types::DataType;
-use risingwave_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
-use risingwave_expr::expr::{build_from_prost, BoxedExpression};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::{Result, RwError};
+use piestream_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher};
+use piestream_common::types::DataType;
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
+use piestream_expr::expr::{build_from_prost, BoxedExpression};
+use piestream_pb::batch_plan::plan_node::NodeBody;
 
 use crate::executor::join::hash_join_state::{BuildTable, ProbeTable};
 use crate::executor::join::JoinType;
@@ -399,16 +399,16 @@ mod tests {
 
     use futures::StreamExt;
     use itertools::Itertools;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::{ArrayBuilderImpl, DataChunk};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::error::Result;
-    use risingwave_common::hash::Key32;
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-    use risingwave_expr::expr::{BoxedExpression, InputRefExpression};
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::{ArrayBuilderImpl, DataChunk};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::error::Result;
+    use piestream_common::hash::Key32;
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+    use piestream_expr::expr::{BoxedExpression, InputRefExpression};
+    use piestream_pb::expr::expr_node::Type;
 
     use crate::executor::join::hash_join::{EquiJoinParams, HashJoinExecutor};
     use crate::executor::join::JoinType;

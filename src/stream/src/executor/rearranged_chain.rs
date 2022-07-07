@@ -18,8 +18,8 @@ use futures::channel::{mpsc, oneshot};
 use futures::stream::select_with_strategy;
 use futures::{stream, StreamExt};
 use futures_async_stream::try_stream;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
 use tokio::sync::Mutex;
 
 use super::error::StreamExecutorError;

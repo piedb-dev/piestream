@@ -20,23 +20,23 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use pgwire::pg_response::PgResponse;
 use pgwire::pg_server::{BoxedError, Session, SessionManager, UserAuthenticator};
-use risingwave_common::catalog::{
+use piestream_common::catalog::{
     TableId, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DEFAULT_SUPPER_USER,
     PG_CATALOG_SCHEMA_NAME,
 };
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::table::OptionalAssociatedSourceId;
-use risingwave_pb::catalog::{
+use piestream_common::error::Result;
+use piestream_pb::catalog::table::OptionalAssociatedSourceId;
+use piestream_pb::catalog::{
     Database as ProstDatabase, Schema as ProstSchema, Sink as ProstSink, Source as ProstSource,
     Table as ProstTable,
 };
-use risingwave_pb::common::ParallelUnitMapping;
-use risingwave_pb::meta::list_table_fragments_response::TableFragmentInfo;
-use risingwave_pb::stream_plan::StreamFragmentGraph;
-use risingwave_pb::user::{GrantPrivilege, UserInfo};
-use risingwave_rpc_client::error::Result as RpcResult;
-use risingwave_sqlparser::ast::Statement;
-use risingwave_sqlparser::parser::Parser;
+use piestream_pb::common::ParallelUnitMapping;
+use piestream_pb::meta::list_table_fragments_response::TableFragmentInfo;
+use piestream_pb::stream_plan::StreamFragmentGraph;
+use piestream_pb::user::{GrantPrivilege, UserInfo};
+use piestream_rpc_client::error::Result as RpcResult;
+use piestream_sqlparser::ast::Statement;
+use piestream_sqlparser::parser::Parser;
 use tempfile::{Builder, NamedTempFile};
 
 use crate::binder::Binder;

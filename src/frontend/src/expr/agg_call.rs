@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::DataType;
-use risingwave_expr::expr::AggKind;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::DataType;
+use piestream_expr::expr::AggKind;
 
 use super::{Expr, ExprImpl};
 use crate::utils::Condition;
@@ -153,7 +153,7 @@ impl Expr for AggCall {
         self.return_type.clone()
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
         // This function is always called on the physical planning step, where
         // `ExprImpl::AggCall` must have been rewritten to aggregate operators.
 

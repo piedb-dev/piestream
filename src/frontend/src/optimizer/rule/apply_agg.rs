@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_pb::plan_common::JoinType;
+use piestream_pb::plan_common::JoinType;
 
 use super::{BoxedRule, Rule};
 use crate::optimizer::plan_node::{LogicalAgg, PlanTreeNodeBinary, PlanTreeNodeUnary};

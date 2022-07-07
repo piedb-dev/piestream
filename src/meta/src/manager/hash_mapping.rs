@@ -16,8 +16,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use risingwave_common::types::{ParallelUnitId, VirtualNode, VIRTUAL_NODE_COUNT};
-use risingwave_pb::common::ParallelUnit;
+use piestream_common::types::{ParallelUnitId, VirtualNode, VIRTUAL_NODE_COUNT};
+use piestream_pb::common::ParallelUnit;
 
 use super::TableId;
 use crate::model::FragmentId;
@@ -224,8 +224,8 @@ impl HashMappingManagerCore {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use risingwave_common::types::VIRTUAL_NODE_COUNT;
-    use risingwave_pb::common::{ParallelUnit, ParallelUnitType};
+    use piestream_common::types::VIRTUAL_NODE_COUNT;
+    use piestream_pb::common::{ParallelUnit, ParallelUnitType};
     use static_assertions::const_assert_eq;
 
     use super::{HashMappingInfo, HashMappingManager};

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_pb::plan_common::{CellBasedTableDesc, ColumnOrder};
+use piestream_pb::plan_common::{CellBasedTableDesc, ColumnOrder};
 
 use super::{ColumnDesc, OrderedColumnDesc, TableId};
 use crate::types::ParallelUnitId;

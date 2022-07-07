@@ -17,9 +17,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
-use risingwave_common::error::Result;
-use risingwave_hummock_sdk::HummockSSTableId;
-use risingwave_pb::hummock::VacuumTask;
+use piestream_common::error::Result;
+use piestream_hummock_sdk::HummockSSTableId;
+use piestream_pb::hummock::VacuumTask;
 
 use crate::hummock::model::INVALID_TIMESTAMP;
 use crate::hummock::{CompactorManager, HummockManagerRef};
@@ -66,7 +66,7 @@ where
     /// version(only older version) can also be deleted, even if the version itself is NOT
     /// qualified to be deleted. If a version is not pinned and all of its stale ssts are
     /// qualified to be deleted, then this version can be deleted.
-    pub async fn vacuum_version_metadata(&self) -> risingwave_common::error::Result<u64> {
+    pub async fn vacuum_version_metadata(&self) -> piestream_common::error::Result<u64> {
         let batch_size = 16usize;
         let mut vacuum_count: usize = 0;
         let version_ids = self.hummock_manager.list_version_ids_asc().await?;
@@ -127,7 +127,7 @@ where
     pub async fn vacuum_sst_data(
         &self,
         orphan_sst_retention_interval: Duration,
-    ) -> risingwave_common::error::Result<Vec<HummockSSTableId>> {
+    ) -> piestream_common::error::Result<Vec<HummockSSTableId>> {
         // Select SSTs to delete.
         let ssts_to_delete = {
             // 1. Retry the pending SSTs first.
@@ -243,7 +243,7 @@ mod tests {
     use std::time::Duration;
 
     use itertools::Itertools;
-    use risingwave_pb::hummock::VacuumTask;
+    use piestream_pb::hummock::VacuumTask;
 
     use crate::hummock::test_utils::{add_test_tables, setup_compute_env};
     use crate::hummock::{start_vacuum_scheduler, CompactorManager, VacuumTrigger};

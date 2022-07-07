@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use fixedbitset::FixedBitSet;
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 
 use crate::binder::BoundQuery;
 use crate::optimizer::plan_node::{LogicalLimit, LogicalTopN};

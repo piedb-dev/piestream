@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::*;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::*;
-use risingwave_pb::expr::AggCall;
+use piestream_common::array::*;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::*;
+use piestream_pb::expr::AggCall;
 
 use crate::expr::AggKind;
 use crate::vector_op::agg::approx_count_distinct::ApproxCountDistinct;
@@ -243,7 +243,7 @@ pub fn create_agg_state_unary(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::types::DataType;
+    use piestream_common::types::DataType;
 
     use super::*;
 

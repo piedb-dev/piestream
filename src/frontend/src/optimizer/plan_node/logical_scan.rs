@@ -18,8 +18,8 @@ use std::rc::Rc;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::{ColumnDesc, Schema, TableDesc};
-use risingwave_common::error::{ErrorCode, Result, RwError};
+use piestream_common::catalog::{ColumnDesc, Schema, TableDesc};
+use piestream_common::error::{ErrorCode, Result, RwError};
 
 use super::{
     BatchFilter, BatchProject, ColPrunable, PlanBase, PlanRef, PredicatePushdown, StreamTableScan,

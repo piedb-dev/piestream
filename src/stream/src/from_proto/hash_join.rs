@@ -15,10 +15,10 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use risingwave_common::catalog::TableId;
-use risingwave_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher, HashKeyKind};
-use risingwave_expr::expr::{build_from_prost, RowExpression};
-use risingwave_pb::plan_common::JoinType as JoinTypeProto;
+use piestream_common::catalog::TableId;
+use piestream_common::hash::{calc_hash_key_kind, HashKey, HashKeyDispatcher, HashKeyKind};
+use piestream_expr::expr::{build_from_prost, RowExpression};
+use piestream_pb::plan_common::JoinType as JoinTypeProto;
 
 use super::*;
 use crate::executor::hash_join::*;

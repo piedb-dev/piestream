@@ -50,11 +50,11 @@ pub async fn regress_main() -> i32 {
 
     match run_schedules(opts).await {
         Ok(_) => {
-            info!("Risingwave regress test completed successfully!");
+            info!("piestream regress test completed successfully!");
             0
         }
         Err(e) => {
-            error!("Risingwave regress test failed: {:?}. Please ensure that your psql version is larger than 14.1", e);
+            error!("piestream regress test failed: {:?}. Please ensure that your psql version is larger than 14.1", e);
             1
         }
     }

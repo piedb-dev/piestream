@@ -14,7 +14,7 @@
 
 use rand::prelude::SliceRandom;
 use rand::Rng;
-use risingwave_sqlparser::ast::{Ident, ObjectName, TableAlias, TableFactor, TableWithJoins};
+use piestream_sqlparser::ast::{Ident, ObjectName, TableAlias, TableFactor, TableWithJoins};
 
 use crate::{SqlGenerator, Table};
 

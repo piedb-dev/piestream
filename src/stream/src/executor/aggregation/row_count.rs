@@ -15,10 +15,10 @@
 //! This module implements `StreamingRowCountAgg`.
 
 use itertools::Itertools;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::*;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::types::{DataType, Datum, ScalarImpl};
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::*;
+use piestream_common::buffer::Bitmap;
+use piestream_common::types::{DataType, Datum, ScalarImpl};
 
 use super::StreamingAggStateImpl;
 use crate::executor::error::StreamExecutorResult;

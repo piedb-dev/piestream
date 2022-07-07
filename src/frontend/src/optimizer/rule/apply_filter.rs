@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use itertools::{Either, Itertools};
-use risingwave_pb::plan_common::JoinType;
+use piestream_pb::plan_common::JoinType;
 
 use super::{BoxedRule, Rule};
 use crate::expr::{CorrelatedInputRef, Expr, ExprImpl, ExprRewriter, InputRef};

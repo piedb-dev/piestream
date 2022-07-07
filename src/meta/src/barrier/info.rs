@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use risingwave_pb::common::WorkerNode;
+use piestream_pb::common::WorkerNode;
 
 use crate::cluster::WorkerId;
 use crate::model::ActorId;

@@ -18,7 +18,7 @@ use std::collections::{BinaryHeap, LinkedList};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use risingwave_hummock_sdk::VersionedComparator;
+use piestream_hummock_sdk::VersionedComparator;
 
 use crate::hummock::iterator::{
     BoxedHummockIterator, DirectionEnum, HummockIterator, HummockIteratorDirection,

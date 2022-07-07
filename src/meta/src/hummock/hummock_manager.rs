@@ -20,21 +20,21 @@ use std::time::{Duration, Instant};
 
 use itertools::Itertools;
 use prost::Message;
-use risingwave_common::util::epoch::INVALID_EPOCH;
-use risingwave_hummock_sdk::compact::compact_task_to_string;
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::{
+use piestream_common::util::epoch::INVALID_EPOCH;
+use piestream_hummock_sdk::compact::compact_task_to_string;
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::{
     get_remote_sst_id, CompactionGroupId, HummockCompactionTaskId, HummockContextId, HummockEpoch,
     HummockRefCount, HummockSSTableId, HummockVersionId, LocalSstableInfo, FIRST_VERSION_ID,
 };
-use risingwave_pb::hummock::hummock_version::Levels;
-use risingwave_pb::hummock::{
+use piestream_pb::hummock::hummock_version::Levels;
+use piestream_pb::hummock::{
     CompactTask, CompactTaskAssignment, HummockPinnedSnapshot, HummockPinnedVersion,
     HummockSnapshot, HummockStaleSstables, HummockVersion, HummockVersionDelta, Level, LevelDelta,
     LevelType, SstableIdInfo, SstableInfo,
 };
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
-use risingwave_pb::meta::MetaLeaderInfo;
+use piestream_pb::meta::subscribe_response::{Info, Operation};
+use piestream_pb::meta::MetaLeaderInfo;
 use tokio::sync::RwLock;
 
 use crate::cluster::{ClusterManagerRef, META_NODE_ID};

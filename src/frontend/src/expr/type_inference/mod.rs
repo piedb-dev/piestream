@@ -14,7 +14,7 @@
 
 //! This type inference is just to infer the return type of function calls, and make sure the
 //! functionCall expressions have same input type requirement and return type definition as backend.
-use risingwave_common::types::DataType;
+use piestream_common::types::DataType;
 
 mod cast;
 mod func;

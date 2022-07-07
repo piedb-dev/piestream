@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::TableDesc;
+use piestream_common::catalog::TableDesc;
 
 use crate::catalog::column_catalog::ColumnCatalog;
 use crate::catalog::TableId;

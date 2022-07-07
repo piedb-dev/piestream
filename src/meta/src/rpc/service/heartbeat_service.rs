@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_pb::meta::heartbeat_service_server::HeartbeatService;
-use risingwave_pb::meta::{HeartbeatRequest, HeartbeatResponse};
+use piestream_pb::meta::heartbeat_service_server::HeartbeatService;
+use piestream_pb::meta::{HeartbeatRequest, HeartbeatResponse};
 use tonic::{Request, Response, Status};
 
 use crate::cluster::ClusterManagerRef;

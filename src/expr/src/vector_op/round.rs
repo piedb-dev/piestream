@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::types::{Decimal, OrderedF64};
+use piestream_common::types::{Decimal, OrderedF64};
 
 use crate::Result;
 
@@ -62,7 +62,7 @@ mod tests {
     use std::str::FromStr;
 
     use num_traits::FromPrimitive;
-    use risingwave_common::types::{Decimal, OrderedF64};
+    use piestream_common::types::{Decimal, OrderedF64};
 
     use super::ceil_f64;
     use crate::vector_op::round::*;

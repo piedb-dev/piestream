@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_bench"
+name = "piestream_bench"
 version = "0.1.10"
 edition = "2021"
 
@@ -15,12 +15,12 @@ madsim = "=0.2.0-alpha.3"
 moka = { version = "0.8", features = ["future"] }
 prometheus = { version = "0.13", features = ["process"] }
 rand = "0.8"
-risingwave_common = { path = "../common" }
-risingwave_hummock_sdk = { path = "../storage/hummock_sdk" }
-risingwave_meta = { path = "../meta", features = ["test"] }
-risingwave_pb = { path = "../prost" }
-risingwave_rpc_client = { path = "../rpc_client" }
-risingwave_storage = { path = "../storage" }
+piestream_common = { path = "../common" }
+piestream_hummock_sdk = { path = "../storage/hummock_sdk" }
+piestream_meta = { path = "../meta", features = ["test"] }
+piestream_pb = { path = "../prost" }
+piestream_rpc_client = { path = "../rpc_client" }
+piestream_storage = { path = "../storage" }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "fs",

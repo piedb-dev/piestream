@@ -14,9 +14,9 @@
 
 use futures::stream::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::RwError;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::RwError;
 use tracing::event;
 use tracing_futures::Instrument;
 

@@ -24,7 +24,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures::Stream;
-use risingwave_common::error::{tonic_err, RwError};
+use piestream_common::error::{tonic_err, RwError};
 use tokio::sync::mpsc::Receiver;
 
 /// `RwReceiverStream` is a wrapper around `tokio::sync::mpsc::Receiver` that implements Stream.

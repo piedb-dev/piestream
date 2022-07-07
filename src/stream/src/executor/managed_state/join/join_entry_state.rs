@@ -62,8 +62,8 @@ impl JoinEntryState {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::*;
-    use risingwave_common::types::ScalarImpl;
+    use piestream_common::array::*;
+    use piestream_common::types::ScalarImpl;
 
     use super::*;
 

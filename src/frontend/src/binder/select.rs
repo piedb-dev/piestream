@@ -15,10 +15,10 @@
 use std::fmt::Debug;
 
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_sqlparser::ast::{Expr, Select, SelectItem};
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_sqlparser::ast::{Expr, Select, SelectItem};
 
 use super::bind_context::{Clause, ColumnBinding};
 use super::UNNAMED_COLUMN;

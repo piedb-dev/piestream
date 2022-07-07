@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_sqlparser::ast::ObjectName;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_sqlparser::ast::ObjectName;
 
 use crate::binder::Binder;
 use crate::handler::drop_table::check_source;
@@ -59,7 +59,7 @@ pub async fn handle_drop_index(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+    use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
 
     use crate::test_utils::LocalFrontend;
 

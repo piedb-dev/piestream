@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 
 use crate::session::OptimizerContext;
 

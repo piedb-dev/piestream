@@ -18,10 +18,10 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{Op, Row, StreamChunk};
-use risingwave_common::catalog::Schema;
-use risingwave_common::util::chunk_coalesce::DataChunkBuilder;
+use piestream_common::array::column::Column;
+use piestream_common::array::{Op, Row, StreamChunk};
+use piestream_common::catalog::Schema;
+use piestream_common::util::chunk_coalesce::DataChunkBuilder;
 
 use super::expect_first_barrier;
 use crate::executor::error::{StreamExecutorError, StreamExecutorResult};

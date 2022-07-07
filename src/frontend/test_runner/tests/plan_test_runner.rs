@@ -15,7 +15,7 @@
 use std::ffi::OsStr;
 
 use libtest_mimic::{run_tests, Arguments, Outcome, Test};
-use risingwave_frontend_test_runner::run_test_file;
+use piestream_frontend_test_runner::run_test_file;
 use tokio::runtime;
 use walkdir::WalkDir;
 

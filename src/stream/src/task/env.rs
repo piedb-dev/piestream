@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use risingwave_common::config::StreamingConfig;
-use risingwave_common::util::addr::HostAddr;
-use risingwave_source::{SourceManager, SourceManagerRef};
-use risingwave_storage::StateStoreImpl;
+use piestream_common::config::StreamingConfig;
+use piestream_common::util::addr::HostAddr;
+use piestream_source::{SourceManager, SourceManagerRef};
+use piestream_storage::StateStoreImpl;
 
 pub(crate) type WorkerNodeId = u32;
 
@@ -61,8 +61,8 @@ impl StreamEnvironment {
     // Create an instance for testing purpose.
     #[cfg(test)]
     pub fn for_test() -> Self {
-        use risingwave_source::MemSourceManager;
-        use risingwave_storage::monitor::StateStoreMetrics;
+        use piestream_source::MemSourceManager;
+        use piestream_storage::monitor::StateStoreMetrics;
         StreamEnvironment {
             server_addr: "127.0.0.1:5688".parse().unwrap(),
             source_manager: Arc::new(MemSourceManager::default()),

@@ -18,13 +18,13 @@ use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use madsim::collections::HashSet;
-use risingwave_common::array::{Array, ArrayRef, Op, Row, RowRef, StreamChunk};
-use risingwave_common::bail;
-use risingwave_common::catalog::{Schema, TableId};
-use risingwave_common::hash::HashKey;
-use risingwave_common::types::{DataType, ToOwnedDatum};
-use risingwave_expr::expr::RowExpression;
-use risingwave_storage::StateStore;
+use piestream_common::array::{Array, ArrayRef, Op, Row, RowRef, StreamChunk};
+use piestream_common::bail;
+use piestream_common::catalog::{Schema, TableId};
+use piestream_common::hash::HashKey;
+use piestream_common::types::{DataType, ToOwnedDatum};
+use piestream_expr::expr::RowExpression;
+use piestream_storage::StateStore;
 
 use super::barrier_align::*;
 use super::error::{StreamExecutorError, StreamExecutorResult};
@@ -779,14 +779,14 @@ impl<K: HashKey, S: StateStore, const T: JoinTypePrimitive> HashJoinExecutor<K, 
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::*;
-    use risingwave_common::catalog::{Field, Schema, TableId};
-    use risingwave_common::hash::{Key128, Key64};
-    use risingwave_expr::expr::expr_binary_nonnull::new_binary_expr;
-    use risingwave_expr::expr::{InputRefExpression, RowExpression};
-    use risingwave_pb::expr::expr_node::Type;
-    use risingwave_storage::memory::MemoryStateStore;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::*;
+    use piestream_common::catalog::{Field, Schema, TableId};
+    use piestream_common::hash::{Key128, Key64};
+    use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
+    use piestream_expr::expr::{InputRefExpression, RowExpression};
+    use piestream_pb::expr::expr_node::Type;
+    use piestream_storage::memory::MemoryStateStore;
 
     use super::*;
     use crate::executor::test_utils::{MessageSender, MockSource};

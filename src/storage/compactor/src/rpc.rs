@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_pb::hummock::compactor_service_server::CompactorService;
+use piestream_pb::hummock::compactor_service_server::CompactorService;
 
 pub struct CompactorServiceImpl {}
 

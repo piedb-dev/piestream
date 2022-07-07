@@ -15,7 +15,7 @@
 use std::ops::Bound::{self, *};
 use std::sync::Arc;
 
-use risingwave_hummock_sdk::key::{get_epoch, key_with_epoch, user_key as to_user_key, Epoch};
+use piestream_hummock_sdk::key::{get_epoch, key_with_epoch, user_key as to_user_key, Epoch};
 
 use crate::hummock::iterator::merge_inner::UnorderedMergeIteratorInner;
 use crate::hummock::iterator::{
@@ -294,7 +294,7 @@ mod tests {
 
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use risingwave_hummock_sdk::key::{prev_key, user_key};
+    use piestream_hummock_sdk::key::{prev_key, user_key};
 
     use super::*;
     use crate::hummock::iterator::test_utils::{

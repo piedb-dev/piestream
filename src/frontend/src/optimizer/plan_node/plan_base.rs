@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use paste::paste;
-use risingwave_common::catalog::Schema;
+use piestream_common::catalog::Schema;
 
 use super::*;
 use crate::for_all_plan_nodes;

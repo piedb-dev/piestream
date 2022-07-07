@@ -19,15 +19,15 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use itertools::Itertools;
-use risingwave_common::catalog::{
+use piestream_common::catalog::{
     DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DEFAULT_SUPPER_USER, PG_CATALOG_SCHEMA_NAME,
 };
-use risingwave_common::ensure;
-use risingwave_common::error::ErrorCode::{CatalogError, InternalError};
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::catalog::table::OptionalAssociatedSourceId;
-use risingwave_pb::catalog::{Database, Schema, Source, Table};
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
+use piestream_common::ensure;
+use piestream_common::error::ErrorCode::{CatalogError, InternalError};
+use piestream_common::error::{Result, RwError};
+use piestream_pb::catalog::table::OptionalAssociatedSourceId;
+use piestream_pb::catalog::{Database, Schema, Source, Table};
+use piestream_pb::meta::subscribe_response::{Info, Operation};
 use tokio::sync::{Mutex, MutexGuard};
 
 use super::IdCategory;

@@ -19,23 +19,23 @@ pub use agg_call::*;
 pub use agg_state::*;
 use dyn_clone::{self, DynClone};
 pub use foldable::*;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::{
+use piestream_common::array::column::Column;
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::{
     Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayRef, BoolArray, DecimalArray, F32Array,
     F64Array, I16Array, I32Array, I64Array, IntervalArray, ListArray, NaiveDateArray,
     NaiveDateTimeArray, NaiveTimeArray, Row, StructArray, Utf8Array,
 };
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::hash::HashCode;
-use risingwave_common::types::{DataType, Datum};
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_expr::expr::AggKind;
-use risingwave_expr::*;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::table::Distribution;
-use risingwave_storage::StateStore;
+use piestream_common::buffer::Bitmap;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::hash::HashCode;
+use piestream_common::types::{DataType, Datum};
+use piestream_common::util::sort_util::OrderType;
+use piestream_expr::expr::AggKind;
+use piestream_expr::*;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::table::Distribution;
+use piestream_storage::StateStore;
 pub use row_count::*;
 use static_assertions::const_assert_eq;
 
@@ -399,7 +399,7 @@ pub async fn generate_managed_agg_state<S: StateStore>(
 /// The `vnodes` is generally `Some` for Hash Agg and `None` for Simple Agg.
 pub fn generate_state_tables_from_proto<S: StateStore>(
     store: S,
-    internal_tables: &[risingwave_pb::catalog::Table],
+    internal_tables: &[piestream_pb::catalog::Table],
     vnodes: Option<Arc<Bitmap>>,
 ) -> Vec<StateTable<S>> {
     let mut state_tables = Vec::with_capacity(internal_tables.len());
@@ -417,7 +417,7 @@ pub fn generate_state_tables_from_proto<S: StateStore>(
                 .iter()
                 .map(|order_type| {
                     OrderType::from_prost(
-                        &risingwave_pb::plan_common::OrderType::from_i32(*order_type).unwrap(),
+                        &piestream_pb::plan_common::OrderType::from_i32(*order_type).unwrap(),
                     )
                 })
                 .collect();
@@ -442,7 +442,7 @@ pub fn generate_state_tables_from_proto<S: StateStore>(
             };
             StateTable::new_with_distribution(
                 store.clone(),
-                risingwave_common::catalog::TableId::new(table_catalog.id),
+                piestream_common::catalog::TableId::new(table_catalog.id),
                 columns,
                 order_types,
                 pk_indices,

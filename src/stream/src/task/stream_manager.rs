@@ -19,16 +19,16 @@ use std::sync::Arc;
 use itertools::Itertools;
 use madsim::collections::{HashMap, HashSet};
 use parking_lot::Mutex;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::config::StreamingConfig;
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::util::addr::{is_local_address, HostAddr};
-use risingwave_common::util::compress::decompress_data;
-use risingwave_hummock_sdk::LocalSstableInfo;
-use risingwave_pb::common::ActorInfo;
-use risingwave_pb::{stream_plan, stream_service};
-use risingwave_rpc_client::ComputeClientPool;
-use risingwave_storage::{
+use piestream_common::buffer::Bitmap;
+use piestream_common::config::StreamingConfig;
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::util::addr::{is_local_address, HostAddr};
+use piestream_common::util::compress::decompress_data;
+use piestream_hummock_sdk::LocalSstableInfo;
+use piestream_pb::common::ActorInfo;
+use piestream_pb::{stream_plan, stream_service};
+use piestream_rpc_client::ComputeClientPool;
+use piestream_storage::{
     dispatch_hummock_state_store, dispatch_state_store, StateStore, StateStoreImpl,
 };
 use tokio::sync::mpsc::{channel, Receiver};
@@ -380,7 +380,7 @@ impl LocalStreamManagerCore {
 
     #[cfg(test)]
     fn for_test() -> Self {
-        use risingwave_storage::monitor::StateStoreMetrics;
+        use piestream_storage::monitor::StateStoreMetrics;
 
         let register = prometheus::Registry::new();
         let streaming_metrics = Arc::new(StreamingMetrics::new(register));

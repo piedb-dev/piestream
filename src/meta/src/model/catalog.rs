@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::{Database, Schema, Source, Table};
+use piestream_common::error::Result;
+use piestream_pb::catalog::{Database, Schema, Source, Table};
 
 use crate::model::MetadataModel;
 
@@ -67,7 +67,7 @@ mod tests {
         Database {
             id,
             name: format!("database_{}", id),
-            owner: risingwave_common::catalog::DEFAULT_SUPPER_USER.to_string(),
+            owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
         }
     }
 

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use risingwave_common::config::BatchConfig;
-use risingwave_common::util::addr::HostAddr;
-use risingwave_source::{SourceManager, SourceManagerRef};
-use risingwave_storage::StateStoreImpl;
+use piestream_common::config::BatchConfig;
+use piestream_common::util::addr::HostAddr;
+use piestream_source::{SourceManager, SourceManagerRef};
+use piestream_storage::StateStoreImpl;
 
 use crate::executor::monitor::BatchMetrics;
 use crate::task::BatchManager;
@@ -74,8 +74,8 @@ impl BatchEnvironment {
     // Create an instance for testing purpose.
     #[cfg(test)]
     pub fn for_test() -> Self {
-        use risingwave_source::MemSourceManager;
-        use risingwave_storage::monitor::StateStoreMetrics;
+        use piestream_source::MemSourceManager;
+        use piestream_storage::monitor::StateStoreMetrics;
 
         BatchEnvironment {
             task_manager: Arc::new(BatchManager::new()),

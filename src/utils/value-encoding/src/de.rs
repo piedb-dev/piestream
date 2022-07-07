@@ -43,7 +43,7 @@ impl<B: Buf> Deserializer<B> {
     }
 
     /// Read u8 from Bytes input in decimal form (Do not include null tag). Used by value encoding
-    /// (`serialize_cell` in risingwave_common crate). TODO: It is a temporal solution For value
+    /// (`serialize_cell` in piestream_common crate). TODO: It is a temporal solution For value
     /// encoding. Will moved to value encoding serializer in future.
     pub fn read_decimal_v2(&mut self) -> Result<Vec<u8>> {
         self.inner.read_decimal_v2()

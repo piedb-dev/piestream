@@ -15,14 +15,14 @@
 use std::cmp::Ordering;
 
 use futures_async_stream::try_stream;
-use risingwave_common::array::{DataChunk, Row, RowRef};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::{ErrorCode, RwError};
-use risingwave_common::types::to_datum_ref;
-use risingwave_common::util::chunk_coalesce::DataChunkBuilder;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::plan_common::OrderType as OrderTypeProst;
+use piestream_common::array::{DataChunk, Row, RowRef};
+use piestream_common::catalog::Schema;
+use piestream_common::error::{ErrorCode, RwError};
+use piestream_common::types::to_datum_ref;
+use piestream_common::util::chunk_coalesce::DataChunkBuilder;
+use piestream_common::util::sort_util::OrderType;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::plan_common::OrderType as OrderTypeProst;
 
 use crate::executor::join::row_level_iter::RowLevelIter;
 use crate::executor::join::JoinType;
@@ -243,7 +243,7 @@ impl BoxedExecutorBuilder for SortMergeJoinExecutor {
     async fn new_boxed_executor<C: BatchTaskContext>(
         source: &ExecutorBuilder<C>,
         mut inputs: Vec<BoxedExecutor>,
-    ) -> risingwave_common::error::Result<BoxedExecutor> {
+    ) -> piestream_common::error::Result<BoxedExecutor> {
         ensure!(
             inputs.len() == 2,
             "SortMergeJoinExecutor should have 2 children!"
@@ -317,10 +317,10 @@ impl BoxedExecutorBuilder for SortMergeJoinExecutor {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::DataChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::DataType;
+    use piestream_common::array::DataChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::DataType;
 
     use crate::executor::join::sort_merge_join::{RowLevelIter, SortMergeJoinExecutor};
     use crate::executor::join::JoinType;

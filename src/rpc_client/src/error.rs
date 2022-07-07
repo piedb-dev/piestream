@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub use anyhow::anyhow;
-use risingwave_common::error::{ErrorCode, RwError};
+use piestream_common::error::{ErrorCode, RwError};
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, RpcError>;

@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 
 use itertools::Itertools as _;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
 
 use super::DataTypeName;
 use crate::expr::{Expr as _, ExprImpl};

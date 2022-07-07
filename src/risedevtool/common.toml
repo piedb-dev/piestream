@@ -3,7 +3,7 @@ OS = { source = "${CARGO_MAKE_RUST_TARGET_OS}", mapping = { linux = "linux", mac
 ARCH = { source = "${CARGO_MAKE_RUST_TARGET_ARCH}", mapping = { x86_64 = "amd64", aarch64 = "arm64" } }
 SYSTEM = "${OS}-${ARCH}"
 SYSTEM_AMD64 = "${OS}-amd64" # some components do not support darwin-arm64 for now, use amd64 for fallback
-PREFIX = "${PWD}/.risingwave"
+PREFIX = "${PWD}/.piestream"
 PREFIX_USR_BIN = "${PWD}/.bin"
 PREFIX_BIN = "${PREFIX}/bin"
 PREFIX_CONFIG = "${PREFIX}/config"
@@ -14,7 +14,7 @@ PREFIX_UI = "${PREFIX}/ui"
 PREFIX_DOCKER = "${PREFIX}/rw-docker"
 
 BUILD_MODE_DIR = { source = "${ENABLE_RELEASE_PROFILE}", default_value = "debug", mapping = { true = "release" } }
-RISINGWAVE_BUILD_PROFILE = { source = "${ENABLE_RELEASE_PROFILE}", default_value = "dev", mapping = { true = "release" } }
+piestream_BUILD_PROFILE = { source = "${ENABLE_RELEASE_PROFILE}", default_value = "dev", mapping = { true = "release" } }
 
 [tasks.prepare-dir]
 private = true
@@ -36,5 +36,5 @@ exit 1
 
 [tasks.prepare]
 category = "Misc"
-description = "Create .risingwave folder for storing temporary files and data"
+description = "Create .piestream folder for storing temporary files and data"
 dependencies = ["prepare-dir", "check-risedev-configured"]

@@ -15,10 +15,10 @@
 use std::convert::TryFrom;
 
 use anyhow::anyhow;
-use risingwave_common::array::{ArrayImpl, ArrayRef, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum};
-use risingwave_pb::expr::expr_node::{RexNode, Type};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::{ArrayImpl, ArrayRef, DataChunk, Row};
+use piestream_common::types::{DataType, Datum};
+use piestream_pb::expr::expr_node::{RexNode, Type};
+use piestream_pb::expr::ExprNode;
 
 use crate::expr::{build_from_prost as expr_build_from_prost, BoxedExpression, Expression};
 use crate::{bail, ensure, ExprError, Result};
@@ -94,11 +94,11 @@ impl<'a> TryFrom<&'a ExprNode> for FieldExpression {
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::{DataChunk, F32Array, I32Array, StructArray};
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_pb::data::data_type::TypeName;
+    use piestream_common::array;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::{DataChunk, F32Array, I32Array, StructArray};
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_pb::data::data_type::TypeName;
 
     use crate::expr::expr_field::FieldExpression;
     use crate::expr::test_utils::{make_field_function, make_i32_literal, make_input_ref};

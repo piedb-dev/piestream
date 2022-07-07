@@ -21,7 +21,7 @@ use axum::http::{Method, StatusCode};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, get_service};
 use axum::Router;
-use risingwave_common::error::ErrorCode;
+use piestream_common::error::ErrorCode;
 use tower::ServiceBuilder;
 use tower_http::add_extension::AddExtensionLayer;
 use tower_http::cors::{self, CorsLayer};
@@ -45,10 +45,10 @@ pub type Service<S> = Arc<DashboardService<S>>;
 
 mod handlers {
     use axum::Json;
-    use risingwave_pb::catalog::Table;
-    use risingwave_pb::common::WorkerNode;
-    use risingwave_pb::meta::ActorLocation;
-    use risingwave_pb::stream_plan::StreamActor;
+    use piestream_pb::catalog::Table;
+    use piestream_pb::common::WorkerNode;
+    use piestream_pb::meta::ActorLocation;
+    use piestream_pb::stream_plan::StreamActor;
     use serde_json::json;
 
     use super::*;
@@ -78,7 +78,7 @@ mod handlers {
         Path(ty): Path<i32>,
         Extension(srv): Extension<Service<S>>,
     ) -> Result<Json<Vec<WorkerNode>>> {
-        use risingwave_pb::common::WorkerType;
+        use piestream_pb::common::WorkerType;
         let result = srv
             .cluster_manager
             .list_worker_node(
@@ -103,7 +103,7 @@ mod handlers {
     pub async fn list_actors<S: MetaStore>(
         Extension(srv): Extension<Service<S>>,
     ) -> Result<Json<Vec<ActorLocation>>> {
-        use risingwave_pb::common::WorkerType;
+        use piestream_pb::common::WorkerType;
 
         let node_actors = srv.fragment_manager.all_node_actors(true).await;
         let nodes = srv

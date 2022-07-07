@@ -164,7 +164,7 @@ impl<'a, S: StateStore> KeySpaceWriteBatch<'a, S> {
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use risingwave_common::catalog::TableId;
+    use piestream_common::catalog::TableId;
 
     use super::WriteBatch;
     use crate::memory::MemoryStateStore;

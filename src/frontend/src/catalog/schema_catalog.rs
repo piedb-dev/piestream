@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use risingwave_common::catalog::{valid_table_name, TableId, PG_CATALOG_SCHEMA_NAME};
-use risingwave_pb::catalog::{
+use piestream_common::catalog::{valid_table_name, TableId, PG_CATALOG_SCHEMA_NAME};
+use piestream_pb::catalog::{
     Schema as ProstSchema, Sink as ProstSink, Source as ProstSource, Table as ProstTable,
 };
-use risingwave_pb::stream_plan::source_node::SourceType;
+use piestream_pb::stream_plan::source_node::SourceType;
 
 use super::source_catalog::SourceCatalog;
 use crate::catalog::system_catalog::SystemCatalog;

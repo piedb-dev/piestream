@@ -11,7 +11,7 @@
 
 > Source files: `common/src/types`
 
-RisingWave adapts a relational data model with extensive support for semi-structured data. Relational tables, including tables and materialized views, consist of a list of named, strong-typed columns.
+piestream adapts a relational data model with extensive support for semi-structured data. Relational tables, including tables and materialized views, consist of a list of named, strong-typed columns.
 
 Tables created by users have an implicit, auto-generated row-id column as their primary key; while for materialized views, the primary key is derived from queries. For example, the primary key of an aggregation (group-by) materialized view is the specified group keys.
 
@@ -47,7 +47,7 @@ A Stream Chunk consists of columns, visibility array and an additional `ops` col
 
 > Source files: `utils/memcomparable`, `utils/value-encoding`
 
-RisingWave stores user data in shared key-value storage called 'Hummock'. Tables, materialized views and checkpoints of internal streaming operators are encoded into key-value entries. Every field of a row, a.k.a. cell, is encoded as a key-value entry, except that `NULL` values are omitted.
+piestream stores user data in shared key-value storage called 'Hummock'. Tables, materialized views and checkpoints of internal streaming operators are encoded into key-value entries. Every field of a row, a.k.a. cell, is encoded as a key-value entry, except that `NULL` values are omitted.
 
 ![row-format](./images/data-model-and-encoding/row-format.svg)
 

@@ -20,13 +20,13 @@ use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use futures::{stream, StreamExt};
 use itertools::Itertools;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::{
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::{
     ExchangeNode, ExchangeSource, MergeSortExchangeNode, PlanFragment, PlanNode as PlanNodeProst,
     TaskId as TaskIdProst, TaskOutputId,
 };
-use risingwave_pb::common::{Buffer, HostAddress, WorkerNode};
-use risingwave_rpc_client::ComputeClientPoolRef;
+use piestream_pb::common::{Buffer, HostAddress, WorkerNode};
+use piestream_rpc_client::ComputeClientPoolRef;
 use tokio::spawn;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::RwLock;

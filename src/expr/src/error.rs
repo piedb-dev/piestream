@@ -13,9 +13,9 @@
 // limitations under the License.
 
 pub use anyhow::anyhow;
-use risingwave_common::array::ArrayError;
-use risingwave_common::error::{ErrorCode, RwError};
-use risingwave_common::types::DataType;
+use piestream_common::array::ArrayError;
+use piestream_common::error::{ErrorCode, RwError};
+use piestream_common::types::DataType;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

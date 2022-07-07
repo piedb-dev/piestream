@@ -16,10 +16,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::catalog::TableOption;
-use risingwave_hummock_sdk::compaction_group::{StateTableId, StaticCompactionGroupId};
-use risingwave_hummock_sdk::CompactionGroupId;
-use risingwave_pb::hummock::CompactionConfig;
+use piestream_common::catalog::TableOption;
+use piestream_hummock_sdk::compaction_group::{StateTableId, StaticCompactionGroupId};
+use piestream_hummock_sdk::CompactionGroupId;
+use piestream_pb::hummock::CompactionConfig;
 use tokio::sync::RwLock;
 
 use crate::hummock::compaction::compaction_config::CompactionConfigBuilder;
@@ -372,8 +372,8 @@ mod tests {
     use std::collections::HashMap;
     use std::ops::Deref;
 
-    use risingwave_common::catalog::{TableId, TableOption};
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_common::catalog::{TableId, TableOption};
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
 
     use crate::hummock::compaction_group::manager::{
         CompactionGroupManager, CompactionGroupManagerInner,

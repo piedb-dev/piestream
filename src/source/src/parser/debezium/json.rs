@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use itertools::Itertools;
-use risingwave_common::array::Op;
-use risingwave_common::array::Op::{UpdateDelete, UpdateInsert};
-use risingwave_common::error::ErrorCode::ProtocolError;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::types::Datum;
+use piestream_common::array::Op;
+use piestream_common::array::Op::{UpdateDelete, UpdateInsert};
+use piestream_common::error::ErrorCode::ProtocolError;
+use piestream_common::error::{Result, RwError};
+use piestream_common::types::Datum;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -151,9 +151,9 @@ impl SourceParser for DebeziumJsonParser {
 
 #[cfg(test)]
 mod test {
-    use risingwave_common::array::Op;
-    use risingwave_common::catalog::ColumnId;
-    use risingwave_common::types::{DataType, ScalarImpl};
+    use piestream_common::array::Op;
+    use piestream_common::catalog::ColumnId;
+    use piestream_common::types::{DataType, ScalarImpl};
 
     use crate::parser::debezium::json::DebeziumJsonParser;
     use crate::{SourceColumnDesc, SourceParser};

@@ -20,25 +20,25 @@ use std::time::Duration;
 
 use futures::future::try_join_all;
 use itertools::Itertools;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{internal_error, Result, RwError, ToRwResult};
-use risingwave_common::try_match_expand;
-use risingwave_connector::{ConnectorProperties, SplitEnumeratorImpl, SplitImpl, SplitMetaData};
-use risingwave_pb::catalog::source::Info;
-use risingwave_pb::catalog::source::Info::StreamSource;
-use risingwave_pb::catalog::Source;
-use risingwave_pb::common::worker_node::State::Running;
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::data::barrier::Mutation;
-use risingwave_pb::data::SourceChangeSplitMutation;
-use risingwave_pb::source::{
+use piestream_common::catalog::TableId;
+use piestream_common::error::{internal_error, Result, RwError, ToRwResult};
+use piestream_common::try_match_expand;
+use piestream_connector::{ConnectorProperties, SplitEnumeratorImpl, SplitImpl, SplitMetaData};
+use piestream_pb::catalog::source::Info;
+use piestream_pb::catalog::source::Info::StreamSource;
+use piestream_pb::catalog::Source;
+use piestream_pb::common::worker_node::State::Running;
+use piestream_pb::common::WorkerType;
+use piestream_pb::data::barrier::Mutation;
+use piestream_pb::data::SourceChangeSplitMutation;
+use piestream_pb::source::{
     ConnectorSplit, ConnectorSplits, SourceActorInfo as ProstSourceActorInfo,
 };
-use risingwave_pb::stream_service::{
+use piestream_pb::stream_service::{
     CreateSourceRequest as ComputeNodeCreateSourceRequest,
     DropSourceRequest as ComputeNodeDropSourceRequest,
 };
-use risingwave_rpc_client::StreamClient;
+use piestream_rpc_client::StreamClient;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;

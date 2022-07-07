@@ -15,10 +15,10 @@
 use std::iter::once;
 
 use itertools::Itertools;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_expr::expr::AggKind;
-use risingwave_sqlparser::ast::{Function, FunctionArg, FunctionArgExpr};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_expr::expr::AggKind;
+use piestream_sqlparser::ast::{Function, FunctionArg, FunctionArgExpr};
 
 use crate::binder::bind_context::Clause;
 use crate::binder::Binder;

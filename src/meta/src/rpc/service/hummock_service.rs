@@ -15,10 +15,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{tonic_err, ErrorCode};
-use risingwave_pb::hummock::hummock_manager_service_server::HummockManagerService;
-use risingwave_pb::hummock::*;
+use piestream_common::catalog::TableId;
+use piestream_common::error::{tonic_err, ErrorCode};
+use piestream_pb::hummock::hummock_manager_service_server::HummockManagerService;
+use piestream_pb::hummock::*;
 use tonic::{Request, Response, Status};
 
 use crate::hummock::compaction::ManualCompactionOption;

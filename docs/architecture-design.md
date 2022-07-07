@@ -44,7 +44,7 @@ Each parallel unit is called a *task*. Specifically, PlanFragment 2 will be dist
 
 Behind the TableScan operator, there's a storage engine called Hummock that stores the internal states, materialized views, and the tables. Note that only the materialized views and tables are queryable. The internal states are invisible to users.
 
-To know more about Hummock, you can check out "[An Overview of RisingWave State Store](./state-store-overview.md)".
+To know more about Hummock, you can check out "[An Overview of piestream State Store](./state-store-overview.md)".
 
 ### Streaming Mode 
 
@@ -76,8 +76,8 @@ When another sequence `[(6, "EUROPE"), (7, "EUROPE")]` comes, the MV will soon b
 
 `mv1` can also act as other MV's source. For example, mv2, mv3 can reuse the processing results of mv1 thus deduplicating the computation.
 
-The durability of materialized views in RisingWave is built upon a snapshot-based mechanism. Every time a snapshot is triggered, the internal states of each operator will be flushed to S3. Upon failover, the operator recovers from the latest S3 checkpoint. 
+The durability of materialized views in piestream is built upon a snapshot-based mechanism. Every time a snapshot is triggered, the internal states of each operator will be flushed to S3. Upon failover, the operator recovers from the latest S3 checkpoint. 
 
 Since the streaming states can be extremely large that are probably unable (or ineffective) to be entirely held in memory, we have designed Hummock to be highly scalable. Compared to [Flink's rocksdb-based state store](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/ops/state/state_backends/#the-embeddedrocksdbstatebackend), Hummock is cloud-native  and provides super elasticity.
 
-For more details of streaming engine, please refer to "[An Overview of RisingWave Streaming Engine](./streaming-overview.md)".
+For more details of streaming engine, please refer to "[An Overview of piestream Streaming Engine](./streaming-overview.md)".

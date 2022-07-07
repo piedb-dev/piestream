@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use risingwave_common::catalog::ColumnDesc;
-use risingwave_pb::plan_common::JoinType;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{ArrangementInfo, DeltaIndexJoinNode};
+use piestream_common::catalog::ColumnDesc;
+use piestream_pb::plan_common::JoinType;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{ArrangementInfo, DeltaIndexJoinNode};
 
 use super::{LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, StreamHashJoin, ToStreamProst};
 use crate::expr::Expr;

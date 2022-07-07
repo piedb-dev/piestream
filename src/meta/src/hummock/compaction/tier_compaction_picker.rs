@@ -15,10 +15,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use risingwave_hummock_sdk::key::{user_key, FullKey};
-use risingwave_hummock_sdk::prost_key_range::KeyRangeExt;
-use risingwave_hummock_sdk::HummockEpoch;
-use risingwave_pb::hummock::{CompactionConfig, KeyRange, Level, LevelType, SstableInfo};
+use piestream_hummock_sdk::key::{user_key, FullKey};
+use piestream_hummock_sdk::prost_key_range::KeyRangeExt;
+use piestream_hummock_sdk::HummockEpoch;
+use piestream_pb::hummock::{CompactionConfig, KeyRange, Level, LevelType, SstableInfo};
 
 use super::SearchResult;
 use crate::hummock::compaction::overlap_strategy::OverlapStrategy;
@@ -369,7 +369,7 @@ impl LevelCompactionPicker {
 #[cfg(test)]
 pub mod tests {
     use itertools::Itertools;
-    use risingwave_pb::hummock::KeyRange;
+    use piestream_pb::hummock::KeyRange;
 
     use super::*;
     use crate::hummock::compaction::compaction_config::CompactionConfigBuilder;

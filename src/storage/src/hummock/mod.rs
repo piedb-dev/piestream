@@ -18,9 +18,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use risingwave_common::config::StorageConfig;
-use risingwave_hummock_sdk::*;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_common::config::StorageConfig;
+use piestream_hummock_sdk::*;
+use piestream_rpc_client::HummockMetaClient;
 
 mod block_cache;
 pub use block_cache::*;
@@ -55,8 +55,8 @@ pub mod value;
 pub mod file_cache;
 
 pub use error::*;
-pub use risingwave_common::cache::{CachableEntry, LookupResult, LruCache};
-use risingwave_common::catalog::TableId;
+pub use piestream_common::cache::{CachableEntry, LookupResult, LruCache};
+use piestream_common::catalog::TableId;
 use value::*;
 
 use self::iterator::HummockIterator;

@@ -16,8 +16,8 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_common::util::epoch::Epoch;
-use risingwave_pb::stream_service::barrier_complete_response::CreateMviewProgress;
+use piestream_common::util::epoch::Epoch;
+use piestream_pb::stream_service::barrier_complete_response::CreateMviewProgress;
 
 use super::notifier::Notifier;
 use crate::model::ActorId;

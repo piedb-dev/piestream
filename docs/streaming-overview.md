@@ -1,6 +1,6 @@
-# An Overview of RisingWave Streaming Engine
+# An Overview of piestream Streaming Engine
 
-- [An Overview of RisingWave Streaming Engine](#an-overview-of-risingwave-streaming-engine)
+- [An Overview of piestream Streaming Engine](#an-overview-of-piestream-streaming-engine)
   - [Overview](#overview)
   - [Architecture](#architecture)
   - [Actors, executors, and states](#actors-executors-and-states)
@@ -15,21 +15,21 @@
 
 ## Overview
 
-RisingWave provides real-time analytics to serve user’s need. This is done by defining materialized views (MV). All materialized views will be automatically refreshed according to recent updates, such that querying materialized views will reflect real-time analytical results. Such refreshing is carried out by our RisingWave streaming engine.
+piestream provides real-time analytics to serve user’s need. This is done by defining materialized views (MV). All materialized views will be automatically refreshed according to recent updates, such that querying materialized views will reflect real-time analytical results. Such refreshing is carried out by our piestream streaming engine.
 
-The core design principles of RisingWave streaming engine are summarized as follows. 
+The core design principles of piestream streaming engine are summarized as follows. 
 
 * **Actor model based execution engine.** We create a set of actors such that each actor reacts to its own input message, including both data update and control signal. In this way we build a highly concurrent and efficient streaming engine.
 * **Shared storage for states.** The backbone of the state storage is based on shared cloud object storage (currently AWS S3), which gives us computational elasticity, cheap and infinite storage capacity, and simplicity during configuration change.
 * **Everything is a table, everything is a state.** We treat every object in our internal storage as both a logical table and an internal state. Therefore they can be effectively managed by catalog, and be updated in a unified streaming engine with consistency guarantee.
 
-In this document we give an overview of RisingWave streaming engine. 
+In this document we give an overview of piestream streaming engine. 
 
 ## Architecture
 
 ![streaming-architecture](./images/streaming-overview/streaming-architecture.svg)
 
-The overall architecture of RisingWave is depicted in the figure above. In brief, RisingWave streaming engine consists of three sets of nodes: frontend, compute nodes, and meta service. The frontend node consists the serving layer, handling users’ SQL requests concurrently. Underlying is the processing layer. Each compute node hosts a collection of long-running actors for stream processing. All actors access a shared persistence layer of storage (currently AWS S3) as its state storage. The meta service maintains all meta-information and coordinates the whole cluster. 
+The overall architecture of piestream is depicted in the figure above. In brief, piestream streaming engine consists of three sets of nodes: frontend, compute nodes, and meta service. The frontend node consists the serving layer, handling users’ SQL requests concurrently. Underlying is the processing layer. Each compute node hosts a collection of long-running actors for stream processing. All actors access a shared persistence layer of storage (currently AWS S3) as its state storage. The meta service maintains all meta-information and coordinates the whole cluster. 
 
 When receiving a create materialized view statement at the frontend, a materialized view and the corresponding streaming pipeline are built in following steps.
 
@@ -43,7 +43,7 @@ When receiving a create materialized view statement at the frontend, a materiali
 
 ### Actors
 
-Actors are the minimal unit to be scheduled in the RisingWave streaming engine, such that there is no parallelism inside each actor. The typical structure of an actor is depicted on the right of the figure above. An actor consists of three parts.
+Actors are the minimal unit to be scheduled in the piestream streaming engine, such that there is no parallelism inside each actor. The typical structure of an actor is depicted on the right of the figure above. An actor consists of three parts.
 
 * Merger (optional). Each merger merges the messages from different upstream actors into one channel, such that the executors can handle messages sequentially. The merger is also in charge of aligning barriers to support checkpoints (details described later). 
 * A chain of executors. Each executor is the basic unit of delta computation (details described later). 
@@ -57,7 +57,7 @@ Messages between two local actors are transferred via channels. For two actors l
 
 Executors are the basic computational units in the streaming engine. Each executor responds to its received messages and computes an output message atomically, i.e the computation inside each executor will not be broken down. 
 
-The underlying algorithmic framework of RisingWave streaming system is the traditional change propagation framework. Given a materialized view to be maintained, we build a set of executors where each executor corresponds to a relational operator (including base table). When any of the base tables receive an update, the streaming engine computes the changes to each of the materialized views by recursively computing the update from the leaf to the root. Each node receives an update from one of its children, computes the local update, and propagates the update to its parents. By guaranteeing the correctness of every single executor, we get a composable framework for maintaining arbitrary SQL queries.
+The underlying algorithmic framework of piestream streaming system is the traditional change propagation framework. Given a materialized view to be maintained, we build a set of executors where each executor corresponds to a relational operator (including base table). When any of the base tables receive an update, the streaming engine computes the changes to each of the materialized views by recursively computing the update from the leaf to the root. Each node receives an update from one of its children, computes the local update, and propagates the update to its parents. By guaranteeing the correctness of every single executor, we get a composable framework for maintaining arbitrary SQL queries.
 
 ## Checkpoint, Consistency, and Fault tolerance
 
@@ -65,7 +65,7 @@ We use the term consistency to denote the model of the *completeness and correct
 
 ### Barrier based checkpoint
 
-To guarantee consistency, RisingWave introduces a Chandy-Lamport style consistent snapshot algorithm as its checkpoint scheme. 
+To guarantee consistency, piestream introduces a Chandy-Lamport style consistent snapshot algorithm as its checkpoint scheme. 
 
 This procedure guarantees that every state to be flushed into the storage is consistent (matching a certain barrier at the source). Therefore when querying materialized views, consistency is naturally guaranteed when the batch engine reads a consistent snapshot (of views and tables) on the storage. We also call each barrier an epoch and sometimes use both terms interchangeably as data streams are cut into epochs. In other words, the write to the database is visible only after it has been committed to the storage via the checkpoint.
 

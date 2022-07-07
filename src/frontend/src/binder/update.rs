@@ -17,9 +17,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use risingwave_common::ensure;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::{Assignment, Expr, TableFactor, TableWithJoins};
+use piestream_common::ensure;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::{Assignment, Expr, TableFactor, TableWithJoins};
 
 use super::{Binder, BoundTableSource, Relation};
 use crate::expr::{Expr as _, ExprImpl};

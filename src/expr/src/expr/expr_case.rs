@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::array::{ArrayRef, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum, ScalarImpl, ScalarRefImpl, ToOwnedDatum};
+use piestream_common::array::{ArrayRef, DataChunk, Row};
+use piestream_common::types::{DataType, Datum, ScalarImpl, ScalarRefImpl, ToOwnedDatum};
 
 use crate::expr::{BoxedExpression, Expression};
 use crate::Result;
@@ -128,9 +128,9 @@ impl Expression for CaseExpression {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_common::types::Scalar;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_common::types::Scalar;
+    use piestream_pb::expr::expr_node::Type;
 
     use super::*;
     use crate::expr::expr_binary_nonnull::new_binary_expr;

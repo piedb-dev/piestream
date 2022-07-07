@@ -18,9 +18,9 @@ use std::rc::Rc;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_pb::catalog::Table as ProstTable;
-use risingwave_sqlparser::ast::{ObjectName, OrderByExpr};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_pb::catalog::Table as ProstTable;
+use piestream_sqlparser::ast::{ObjectName, OrderByExpr};
 
 use crate::binder::Binder;
 use crate::catalog::check_schema_writable;
@@ -54,7 +54,7 @@ pub(crate) fn gen_create_index_plan(
                 .into());
             }
 
-            use risingwave_sqlparser::ast::Expr;
+            use piestream_sqlparser::ast::Expr;
 
             if let Expr::Identifier(ref ident) = column.expr {
                 Ok::<_, RwError>(ident)

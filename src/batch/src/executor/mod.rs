@@ -48,12 +48,12 @@ pub use merge_sort_exchange::*;
 pub use monitor::*;
 pub use order_by::*;
 pub use project::*;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::ErrorCode::InternalError;
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::PlanNode;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::Schema;
+use piestream_common::error::ErrorCode::InternalError;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::PlanNode;
 pub use row_seq_scan::*;
 pub use sort_agg::*;
 pub use table_function::*;
@@ -196,7 +196,7 @@ impl<'a, C: BatchTaskContext> ExecutorBuilder<'a, C> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::batch_plan::PlanNode;
+    use piestream_pb::batch_plan::PlanNode;
 
     use crate::executor::ExecutorBuilder;
     use crate::task::{ComputeNodeContext, TaskId};

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use aho_corasick::AhoCorasickBuilder;
-use risingwave_common::array::{BytesGuard, BytesWriter};
-use risingwave_common::types::NaiveDateTimeWrapper;
+use piestream_common::array::{BytesGuard, BytesWriter};
+use piestream_common::types::NaiveDateTimeWrapper;
 
 use crate::Result;
 

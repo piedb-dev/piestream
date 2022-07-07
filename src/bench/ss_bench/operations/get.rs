@@ -18,8 +18,8 @@ use bytes::Bytes;
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
-use risingwave_storage::store::ReadOptions;
-use risingwave_storage::StateStore;
+use piestream_storage::store::ReadOptions;
+use piestream_storage::StateStore;
 
 use super::{Operations, PerfMetrics};
 use crate::utils::latency_stat::LatencyStat;

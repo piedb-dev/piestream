@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use prost::Message;
-use risingwave_hummock_sdk::{HummockContextId, HummockEpoch};
-use risingwave_pb::hummock::HummockPinnedSnapshot;
+use piestream_hummock_sdk::{HummockContextId, HummockEpoch};
+use piestream_pb::hummock::HummockPinnedSnapshot;
 
 use crate::model::MetadataModel;
 
@@ -43,7 +43,7 @@ impl MetadataModel for HummockPinnedSnapshot {
         prost
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.context_id)
     }
 }

@@ -16,12 +16,12 @@ use either::Either;
 use futures::stream::PollNext;
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::ColumnDesc;
-use risingwave_common::types::DataType;
-use risingwave_common::util::sort_util::OrderPair;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::ColumnDesc;
+use piestream_common::types::DataType;
+use piestream_common::util::sort_util::OrderPair;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use crate::executor::error::StreamExecutorError;
 use crate::executor::{Barrier, Executor, Message, MessageStream};

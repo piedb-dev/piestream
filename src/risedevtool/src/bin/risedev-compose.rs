@@ -44,15 +44,15 @@ pub struct RiseDevComposeOpts {
 
 fn load_docker_image_config(
     risedev_config: &str,
-    override_risingwave_image: Option<&String>,
+    override_piestream_image: Option<&String>,
 ) -> Result<DockerImageConfig> {
     #[derive(Deserialize)]
     struct ConfigInRiseDev {
         compose: DockerImageConfig,
     }
     let mut config: ConfigInRiseDev = serde_yaml::from_str(risedev_config)?;
-    if let Some(override_risingwave_image) = override_risingwave_image {
-        config.compose.risingwave = override_risingwave_image.to_string();
+    if let Some(override_piestream_image) = override_piestream_image {
+        config.compose.piestream = override_piestream_image.to_string();
     }
     Ok(config.compose)
 }
@@ -105,7 +105,7 @@ fn main() -> Result<()> {
             &risedev_config_content,
             compose_deploy_config
                 .as_ref()
-                .and_then(|x| x.risingwave_image_override.as_ref()),
+                .and_then(|x| x.piestream_image_override.as_ref()),
         )?,
         config_directory: opts.directory.clone(),
     };
@@ -247,7 +247,7 @@ fn main() -> Result<()> {
                 version: "3".into(),
                 services: services.clone(),
                 volumes: node_volumes,
-                name: format!("risingwave-{}", opts.profile),
+                name: format!("piestream-{}", opts.profile),
             };
 
             let yaml = serde_yaml::to_string(&compose_file)?;
@@ -304,7 +304,7 @@ fn main() -> Result<()> {
             version: "3".into(),
             services,
             volumes,
-            name: format!("risingwave-{}", opts.profile),
+            name: format!("piestream-{}", opts.profile),
         };
 
         let yaml = serde_yaml::to_string(&compose_file)?;

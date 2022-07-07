@@ -16,9 +16,9 @@ use std::fmt;
 use std::rc::Rc;
 
 use itertools::Itertools;
-use risingwave_common::catalog::TableDesc;
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
-use risingwave_pb::stream_plan::StreamNode as ProstStreamPlan;
+use piestream_common::catalog::TableDesc;
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_pb::stream_plan::StreamNode as ProstStreamPlan;
 
 use super::{LogicalScan, PlanBase, PlanNodeId, StreamIndexScan, ToStreamProst};
 use crate::catalog::ColumnId;
@@ -91,8 +91,8 @@ impl ToStreamProst for StreamTableScan {
 
 impl StreamTableScan {
     pub fn adhoc_to_stream_prost(&self, auto_fields: bool) -> ProstStreamPlan {
-        use risingwave_pb::plan_common::*;
-        use risingwave_pb::stream_plan::*;
+        use piestream_pb::plan_common::*;
+        use piestream_pb::stream_plan::*;
 
         let batch_plan_node = BatchPlanNode {
             table_desc: Some(self.logical.table_desc().to_protobuf()),

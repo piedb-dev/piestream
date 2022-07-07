@@ -38,9 +38,9 @@ use std::sync::Arc;
 pub use agg::AggKind;
 pub use expr_input_ref::InputRefExpression;
 pub use expr_literal::*;
-use risingwave_common::array::{ArrayRef, DataChunk, Row};
-use risingwave_common::types::{DataType, Datum};
-use risingwave_pb::expr::ExprNode;
+use piestream_common::array::{ArrayRef, DataChunk, Row};
+use piestream_common::types::{DataType, Datum};
+use piestream_pb::expr::ExprNode;
 
 use super::Result;
 use crate::expr::build_expr_from_prost::*;
@@ -87,7 +87,7 @@ pub trait Expression: std::fmt::Debug + Sync + Send {
 pub type BoxedExpression = Box<dyn Expression>;
 
 pub fn build_from_prost(prost: &ExprNode) -> Result<BoxedExpression> {
-    use risingwave_pb::expr::expr_node::Type::*;
+    use piestream_pb::expr::expr_node::Type::*;
 
     match prost.get_expr_type().unwrap() {
         Cast | Upper | Lower | Md5 | Not | IsTrue | IsNotTrue | IsFalse | IsNotFalse | IsNull

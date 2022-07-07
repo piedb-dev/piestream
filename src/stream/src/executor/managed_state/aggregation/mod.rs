@@ -15,14 +15,14 @@
 //! Aggregators with state store support
 
 pub use extreme::*;
-use risingwave_common::array::stream_chunk::Ops;
-use risingwave_common::array::{ArrayImpl, Row};
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::hash::HashCode;
-use risingwave_common::types::Datum;
-use risingwave_expr::expr::AggKind;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::stream_chunk::Ops;
+use piestream_common::array::{ArrayImpl, Row};
+use piestream_common::buffer::Bitmap;
+use piestream_common::hash::HashCode;
+use piestream_common::types::Datum;
+use piestream_expr::expr::AggKind;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 pub use value::*;
 
 use crate::executor::aggregation::AggCall;
@@ -38,9 +38,9 @@ mod value;
 /// Verify if the data going through the state is valid by checking if `ops.len() ==
 /// visibility.len() == data[x].len()`.
 pub fn verify_batch(
-    ops: risingwave_common::array::stream_chunk::Ops<'_>,
-    visibility: Option<&risingwave_common::buffer::Bitmap>,
-    data: &[&risingwave_common::array::ArrayImpl],
+    ops: piestream_common::array::stream_chunk::Ops<'_>,
+    visibility: Option<&piestream_common::buffer::Bitmap>,
+    data: &[&piestream_common::array::ArrayImpl],
 ) -> bool {
     let mut all_lengths = vec![ops.len()];
     if let Some(visibility) = visibility {

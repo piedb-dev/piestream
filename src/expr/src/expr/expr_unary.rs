@@ -14,9 +14,9 @@
 
 //! For expression that only accept one value as input (e.g. CAST)
 
-use risingwave_common::array::*;
-use risingwave_common::types::*;
-use risingwave_pb::expr::expr_node::Type as ProstType;
+use piestream_common::array::*;
+use piestream_common::types::*;
+use piestream_pb::expr::expr_node::Type as ProstType;
 
 use super::template::{UnaryBytesExpression, UnaryExpression};
 use crate::expr::expr_is_null::{IsNotNullExpression, IsNullExpression};
@@ -369,13 +369,13 @@ pub fn new_rtrim_expr(expr_ia1: BoxedExpression, return_type: DataType) -> Boxed
 mod tests {
     use chrono::NaiveDate;
     use itertools::Itertools;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::*;
-    use risingwave_common::types::{NaiveDateWrapper, Scalar};
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType;
-    use risingwave_pb::expr::expr_node::{RexNode, Type};
-    use risingwave_pb::expr::FunctionCall;
+    use piestream_common::array::column::Column;
+    use piestream_common::array::*;
+    use piestream_common::types::{NaiveDateWrapper, Scalar};
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType;
+    use piestream_pb::expr::expr_node::{RexNode, Type};
+    use piestream_pb::expr::FunctionCall;
 
     use super::super::*;
     use crate::expr::test_utils::{make_expression, make_input_ref};

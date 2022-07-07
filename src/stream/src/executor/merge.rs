@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use futures_async_stream::for_await;
 use madsim::time::Instant;
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::Result;
-use risingwave_pb::task_service::GetStreamResponse;
-use risingwave_rpc_client::ComputeClient;
+use piestream_common::catalog::Schema;
+use piestream_common::error::Result;
+use piestream_pb::task_service::GetStreamResponse;
+use piestream_rpc_client::ComputeClient;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Streaming;
@@ -292,15 +292,15 @@ mod tests {
     use assert_matches::assert_matches;
     use itertools::Itertools;
     use madsim::collections::HashSet;
-    use risingwave_common::array::{Op, StreamChunk};
-    use risingwave_pb::data::StreamMessage;
-    use risingwave_pb::task_service::exchange_service_server::{
+    use piestream_common::array::{Op, StreamChunk};
+    use piestream_pb::data::StreamMessage;
+    use piestream_pb::task_service::exchange_service_server::{
         ExchangeService, ExchangeServiceServer,
     };
-    use risingwave_pb::task_service::{
+    use piestream_pb::task_service::{
         GetDataRequest, GetDataResponse, GetStreamRequest, GetStreamResponse,
     };
-    use risingwave_rpc_client::ComputeClient;
+    use piestream_rpc_client::ComputeClient;
     use tokio::sync::mpsc::channel;
     use tokio::time::sleep;
     use tokio_stream::wrappers::ReceiverStream;
@@ -415,7 +415,7 @@ mod tests {
             tx.send(Ok(GetStreamResponse {
                 message: Some(StreamMessage {
                     stream_message: Some(
-                        risingwave_pb::data::stream_message::StreamMessage::StreamChunk(
+                        piestream_pb::data::stream_message::StreamMessage::StreamChunk(
                             stream_chunk,
                         ),
                     ),
@@ -428,7 +428,7 @@ mod tests {
             tx.send(Ok(GetStreamResponse {
                 message: Some(StreamMessage {
                     stream_message: Some(
-                        risingwave_pb::data::stream_message::StreamMessage::Barrier(
+                        piestream_pb::data::stream_message::StreamMessage::Barrier(
                             barrier.to_protobuf(),
                         ),
                     ),

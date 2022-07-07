@@ -87,10 +87,10 @@ datasources:
             ));
         };
 
-        let filename = "risingwave-dashboard.json";
+        let filename = "piestream-dashboard.json";
         let generate_path = generate_path.as_ref();
         let dashboard_path = Path::new(generate_path).join(filename);
-        std::fs::copy("grafana/risingwave-dashboard.json", dashboard_path)?;
+        std::fs::copy("grafana/piestream-dashboard.json", dashboard_path)?;
 
         let grafana_read_path = grafana_read_path.as_ref();
         let dashboard_path = Path::new(grafana_read_path).join(filename);
@@ -103,7 +103,7 @@ datasources:
 apiVersion: 1
 
 providers:
-  - name: 'risingwave-grafana'
+  - name: 'piestream-grafana'
     orgId: 1
     folder: ''
     folderUid: ''

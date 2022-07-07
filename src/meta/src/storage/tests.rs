@@ -15,7 +15,7 @@
 use assert_matches::assert_matches;
 use async_trait::async_trait;
 use itertools::Itertools;
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 
 use super::{Key, Result as MetaResult, Value};
 use crate::storage::{Error, MemStore, MetaStore, Operation, Snapshot, Transaction};

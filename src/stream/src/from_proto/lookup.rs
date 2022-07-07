@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::{ColumnDesc, Field, Schema, TableId};
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_pb::stream_plan::lookup_node::ArrangementTableId;
+use piestream_common::catalog::{ColumnDesc, Field, Schema, TableId};
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_pb::stream_plan::lookup_node::ArrangementTableId;
 
 use super::*;
 use crate::executor::{LookupExecutor, LookupExecutorParams};

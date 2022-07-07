@@ -21,7 +21,7 @@ pub(crate) const VAR_PG_OPTS: &str = "PGOPTIONS";
 /// This is useful since it may affect psql's behavior.
 pub(crate) fn init_env() {
     // Set default application name.
-    set_var("PGAPPNAME", "risingwave_regress");
+    set_var("PGAPPNAME", "piestream_regress");
 
     // Set translation-related settings to English; otherwise psql will
     // produce translated messages and produce diffs.  (XXX If we ever support

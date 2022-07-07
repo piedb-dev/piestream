@@ -16,13 +16,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use risingwave_common::catalog::CatalogVersion;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::util::addr::HostAddr;
-use risingwave_pb::common::{WorkerNode, WorkerType};
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
-use risingwave_pb::meta::SubscribeResponse;
-use risingwave_rpc_client::{MetaClient, NotificationStream};
+use piestream_common::catalog::CatalogVersion;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::util::addr::HostAddr;
+use piestream_pb::common::{WorkerNode, WorkerType};
+use piestream_pb::meta::subscribe_response::{Info, Operation};
+use piestream_pb::meta::SubscribeResponse;
+use piestream_rpc_client::{MetaClient, NotificationStream};
 use tokio::sync::watch::Sender;
 use tokio::task::JoinHandle;
 

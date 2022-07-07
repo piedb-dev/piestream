@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::{
+use piestream_common::array::{
     Array, BoolArray, DecimalArray, I32Array, IntervalArray, ListArray, NaiveDateArray,
     NaiveDateTimeArray, StructArray, Utf8Array,
 };
-use risingwave_common::types::*;
-use risingwave_pb::expr::expr_node::Type;
+use piestream_common::types::*;
+use piestream_pb::expr::expr_node::Type;
 
 use crate::expr::expr_binary_bytes::new_concat_op;
 use crate::expr::template::BinaryExpression;
@@ -549,14 +549,14 @@ pub fn new_like_default(
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use risingwave_common::array::column::Column;
-    use risingwave_common::array::interval_array::IntervalArray;
-    use risingwave_common::array::*;
-    use risingwave_common::types::{
+    use piestream_common::array::column::Column;
+    use piestream_common::array::interval_array::IntervalArray;
+    use piestream_common::array::*;
+    use piestream_common::types::{
         Decimal, IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper, Scalar,
     };
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::expr::expr_node::Type;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::expr::expr_node::Type;
 
     use super::super::*;
     use crate::expr::test_utils::make_expression;

@@ -17,12 +17,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::{Datum, VirtualNode, VIRTUAL_NODE_SIZE};
-use risingwave_common::util::ordered::deserialize_column_id;
-use risingwave_common::util::value_encoding::deserialize_cell;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::{Datum, VirtualNode, VIRTUAL_NODE_SIZE};
+use piestream_common::util::ordered::deserialize_column_id;
+use piestream_common::util::value_encoding::deserialize_cell;
 
 use crate::table::storage_table::DEFAULT_VNODE;
 
@@ -206,10 +206,10 @@ impl<Desc: Deref<Target = ColumnDescMapping>> CellBasedRowDeserializer<Desc> {
 mod tests {
     use bytes::Bytes;
     use itertools::Itertools;
-    use risingwave_common::array::Row;
-    use risingwave_common::catalog::{ColumnDesc, ColumnId};
-    use risingwave_common::types::{DataType, ScalarImpl};
-    use risingwave_common::util::ordered::serialize_pk_and_row_state;
+    use piestream_common::array::Row;
+    use piestream_common::catalog::{ColumnDesc, ColumnId};
+    use piestream_common::types::{DataType, ScalarImpl};
+    use piestream_common::util::ordered::serialize_pk_and_row_state;
 
     use super::make_cell_based_row_deserializer;
 

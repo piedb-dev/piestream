@@ -14,11 +14,11 @@
 
 use futures::{pin_mut, StreamExt};
 use futures_async_stream::try_stream;
-use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::catalog::{OrderedColumnDesc, Schema};
-use risingwave_storage::table::storage_table::{StorageTable, READ_ONLY};
-use risingwave_storage::table::TableIter;
-use risingwave_storage::StateStore;
+use piestream_common::array::{Op, StreamChunk};
+use piestream_common::catalog::{OrderedColumnDesc, Schema};
+use piestream_storage::table::storage_table::{StorageTable, READ_ONLY};
+use piestream_storage::table::TableIter;
+use piestream_storage::StateStore;
 
 use super::error::StreamExecutorError;
 use super::{Executor, ExecutorInfo, Message};
@@ -108,9 +108,9 @@ mod test {
     use std::vec;
 
     use futures_async_stream::for_await;
-    use risingwave_common::catalog::{ColumnDesc, ColumnId};
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::OrderType;
+    use piestream_common::catalog::{ColumnDesc, ColumnId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
 
     use super::*;
     use crate::executor::mview::test_utils::gen_basic_table;

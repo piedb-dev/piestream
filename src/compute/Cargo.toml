@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "risingwave_compute"
+name = "piestream_compute"
 version = "0.1.10"
 
 [dependencies]
@@ -28,14 +28,14 @@ paste = "1"
 prometheus = { version = "0.13" }
 prost = "0.10"
 rdkafka = { version = "0.28", features = ["cmake-build"] }
-risingwave_batch = { path = "../batch" }
-risingwave_common = { path = "../common" }
-risingwave_connector = { path = "../connector" }
-risingwave_pb = { path = "../prost" }
-risingwave_rpc_client = { path = "../rpc_client" }
-risingwave_source = { path = "../source" }
-risingwave_storage = { path = "../storage" }
-risingwave_stream = { path = "../stream" }
+piestream_batch = { path = "../batch" }
+piestream_common = { path = "../common" }
+piestream_connector = { path = "../connector" }
+piestream_pb = { path = "../prost" }
+piestream_rpc_client = { path = "../rpc_client" }
+piestream_source = { path = "../source" }
+piestream_storage = { path = "../storage" }
+piestream_stream = { path = "../stream" }
 serde = { version = "1", features = ["derive"] }
 serde-value = "0.7"
 serde_json = "1"

@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use risingwave_meta::hummock::test_utils::setup_compute_env;
-use risingwave_meta::hummock::MockHummockMetaClient;
+use piestream_meta::hummock::test_utils::setup_compute_env;
+use piestream_meta::hummock::MockHummockMetaClient;
 
 use super::*;
 use crate::hummock::compaction_group::StaticCompactionGroupId;

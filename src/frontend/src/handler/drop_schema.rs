@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::catalog::PG_CATALOG_SCHEMA_NAME;
-use risingwave_common::error::{ErrorCode, Result, TrackingIssue};
-use risingwave_sqlparser::ast::{DropMode, ObjectName};
+use piestream_common::catalog::PG_CATALOG_SCHEMA_NAME;
+use piestream_common::error::{ErrorCode, Result, TrackingIssue};
+use piestream_sqlparser::ast::{DropMode, ObjectName};
 
 use crate::binder::Binder;
 use crate::catalog::CatalogError;

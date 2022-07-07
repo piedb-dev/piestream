@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::catalog::TableId;
-use risingwave_common::util::sort_util::OrderPair;
+use piestream_common::catalog::TableId;
+use piestream_common::util::sort_util::OrderPair;
 
 use super::*;
 use crate::executor::AppendOnlyTopNExecutor;

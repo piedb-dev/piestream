@@ -15,10 +15,10 @@
 use std::collections::HashSet;
 use std::iter::Iterator;
 
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::Result;
-use risingwave_common::types::VirtualNode;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::Result;
+use piestream_common::types::VirtualNode;
 
 use super::cell_based_row_serializer::CellBasedRowSerializer;
 use super::{Encoding, KeyBytes, ValueBytes};
@@ -127,9 +127,9 @@ impl Encoding for DedupPkCellBasedRowSerializer {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use risingwave_common::array::Row;
-    use risingwave_common::catalog::{ColumnDesc, ColumnId};
-    use risingwave_common::types::DataType;
+    use piestream_common::array::Row;
+    use piestream_common::catalog::{ColumnDesc, ColumnId};
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::encoding::cell_based_row_deserializer::make_cell_based_row_deserializer;

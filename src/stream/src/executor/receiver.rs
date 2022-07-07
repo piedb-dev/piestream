@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use risingwave_common::catalog::Schema;
+use piestream_common::catalog::Schema;
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
 

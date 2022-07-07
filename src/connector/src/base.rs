@@ -20,7 +20,7 @@ use bytes::Bytes;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use prost::Message;
-use risingwave_pb::source::ConnectorSplit;
+use piestream_pb::source::ConnectorSplit;
 use serde::{Deserialize, Serialize};
 
 use crate::datagen::{
@@ -144,7 +144,7 @@ impl_split_reader! {
     { Dummy, DummySplitReader }
 }
 
-pub type DataType = risingwave_common::types::DataType;
+pub type DataType = piestream_common::types::DataType;
 
 #[derive(Clone, Debug)]
 pub struct Column {

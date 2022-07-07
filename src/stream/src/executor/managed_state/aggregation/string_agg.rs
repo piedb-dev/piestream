@@ -15,16 +15,16 @@
 use bytes::Bytes;
 use itertools::Itertools;
 use madsim::collections::BTreeMap;
-use risingwave_common::array::stream_chunk::{Op, Ops};
-use risingwave_common::array::ArrayImpl;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::types::{DataType, Datum, ScalarImpl};
-use risingwave_common::util::ordered::OrderedArraysSerializer;
-use risingwave_common::util::value_encoding::{deserialize_cell, serialize_cell};
-use risingwave_storage::storage_value::StorageValue;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::write_batch::WriteBatch;
-use risingwave_storage::{Keyspace, StateStore};
+use piestream_common::array::stream_chunk::{Op, Ops};
+use piestream_common::array::ArrayImpl;
+use piestream_common::buffer::Bitmap;
+use piestream_common::types::{DataType, Datum, ScalarImpl};
+use piestream_common::util::ordered::OrderedArraysSerializer;
+use piestream_common::util::value_encoding::{deserialize_cell, serialize_cell};
+use piestream_storage::storage_value::StorageValue;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::write_batch::WriteBatch;
+use piestream_storage::{Keyspace, StateStore};
 
 use super::super::flush_status::BtreeMapFlushStatus as FlushStatus;
 use crate::executor::error::{StreamExecutorError, StreamExecutorResult};
@@ -279,13 +279,13 @@ impl<S: StateStore> ManagedStringAggState<S> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{I64Array, Op, Utf8Array};
-    use risingwave_common::catalog::TableId;
-    use risingwave_common::types::ScalarImpl;
-    use risingwave_common::util::sort_util::{OrderPair, OrderType};
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::store::WriteOptions;
-    use risingwave_storage::StateStore;
+    use piestream_common::array::{I64Array, Op, Utf8Array};
+    use piestream_common::catalog::TableId;
+    use piestream_common::types::ScalarImpl;
+    use piestream_common::util::sort_util::{OrderPair, OrderType};
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::store::WriteOptions;
+    use piestream_storage::StateStore;
 
     use super::*;
 

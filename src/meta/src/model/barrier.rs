@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::Result;
-use risingwave_common::util::epoch::{Epoch, INVALID_EPOCH};
+use piestream_common::error::Result;
+use piestream_common::util::epoch::{Epoch, INVALID_EPOCH};
 
 use crate::storage;
 use crate::storage::{MetaStore, DEFAULT_COLUMN_FAMILY};

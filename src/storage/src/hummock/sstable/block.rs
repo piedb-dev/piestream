@@ -17,7 +17,7 @@ use std::io::{Read, Write};
 use std::ops::Range;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use risingwave_hummock_sdk::VersionedComparator;
+use piestream_hummock_sdk::VersionedComparator;
 use {lz4, zstd};
 
 use super::utils::{bytes_diff, xxhash64_verify, CompressionAlgorithm};

@@ -17,9 +17,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use itertools::enumerate;
 use prost::Message;
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::CompactionGroupId;
-use risingwave_pb::hummock::HummockVersion;
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::CompactionGroupId;
+use piestream_pb::hummock::HummockVersion;
 
 use crate::hummock::compaction::CompactStatus;
 use crate::rpc::metrics::MetaMetrics;

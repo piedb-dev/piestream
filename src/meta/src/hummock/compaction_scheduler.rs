@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use risingwave_hummock_sdk::compact::compact_task_to_string;
-use risingwave_hummock_sdk::CompactionGroupId;
+use piestream_hummock_sdk::compact::compact_task_to_string;
+use piestream_hummock_sdk::CompactionGroupId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Receiver;
 

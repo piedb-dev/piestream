@@ -75,7 +75,7 @@ impl AwsConfigInfo {
         };
 
         if let Some(AwsAssumeRole { arn, external_id }) = &self.assume_role {
-            let mut role = AssumeRoleProvider::builder(arn).session_name("RisingWave");
+            let mut role = AssumeRoleProvider::builder(arn).session_name("piestream");
             if let Some(region) = &region {
                 role = role.region(region.clone());
             }

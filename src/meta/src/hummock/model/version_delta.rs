@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use prost::Message;
-use risingwave_hummock_sdk::HummockVersionId;
-use risingwave_pb::hummock::HummockVersionDelta;
+use piestream_hummock_sdk::HummockVersionId;
+use piestream_pb::hummock::HummockVersionDelta;
 
 use crate::model::MetadataModel;
 
@@ -43,7 +43,7 @@ impl MetadataModel for HummockVersionDelta {
         prost
     }
 
-    fn key(&self) -> risingwave_common::error::Result<Self::KeyType> {
+    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
         Ok(self.id)
     }
 }

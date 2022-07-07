@@ -14,7 +14,7 @@
 
 mod version_cmp;
 
-use risingwave_pb::hummock::SstableInfo;
+use piestream_pb::hummock::SstableInfo;
 pub use version_cmp::*;
 pub mod compact;
 pub mod compaction_group;

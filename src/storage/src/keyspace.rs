@@ -16,8 +16,8 @@ use std::future::Future;
 use std::ops::RangeBounds;
 
 use bytes::{BufMut, Bytes, BytesMut};
-use risingwave_common::catalog::TableId;
-use risingwave_hummock_sdk::key::prefixed_range;
+use piestream_common::catalog::TableId;
+use piestream_hummock_sdk::key::prefixed_range;
 
 use crate::error::StorageResult;
 use crate::store::ReadOptions;

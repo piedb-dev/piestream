@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use md5 as lib_md5;
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::Result;
 
@@ -26,7 +26,7 @@ pub fn md5(s: &str, writer: BytesWriter) -> Result<BytesGuard> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::*;
 

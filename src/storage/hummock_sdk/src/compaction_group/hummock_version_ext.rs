@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use risingwave_pb::hummock::{HummockVersion, Level, SstableInfo};
+use piestream_pb::hummock::{HummockVersion, Level, SstableInfo};
 
 use crate::prost_key_range::KeyRangeExt;
 use crate::CompactionGroupId;

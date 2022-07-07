@@ -44,7 +44,7 @@ pub struct ComputeNodeConfig {
 
 pub fn load_config(path: &str) -> ComputeNodeConfig {
     if path.is_empty() {
-        tracing::warn!("risingwave.toml not found, using default config.");
+        tracing::warn!("piestream.toml not found, using default config.");
         return ComputeNodeConfig::default();
     }
 

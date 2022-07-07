@@ -19,11 +19,11 @@ use std::ops::{Index, RangeBounds};
 
 use futures::{pin_mut, Stream, StreamExt};
 use futures_async_stream::try_stream;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, TableId};
-use risingwave_common::util::ordered::{serialize_pk, OrderedRowSerializer};
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_hummock_sdk::key::range_of_prefix;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, TableId};
+use piestream_common::util::ordered::{serialize_pk, OrderedRowSerializer};
+use piestream_common::util::sort_util::OrderType;
+use piestream_hummock_sdk::key::range_of_prefix;
 
 use super::mem_table::{MemTable, RowOp};
 use super::storage_table::{StorageTableBase, READ_WRITE};

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use futures::Future;
-use risingwave_hummock_sdk::key::{Epoch, FullKey};
-use risingwave_hummock_sdk::HummockSSTableId;
+use piestream_hummock_sdk::key::{Epoch, FullKey};
+use piestream_hummock_sdk::HummockSSTableId;
 use tokio::task::JoinHandle;
 
 use super::SstableMeta;

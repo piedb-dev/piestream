@@ -34,7 +34,7 @@ impl MetaNodeService {
         let prefix_bin = env::var("PREFIX_BIN")?;
 
         if let Ok(x) = env::var("ENABLE_ALL_IN_ONE") && x == "true" {
-            Ok(Command::new(Path::new(&prefix_bin).join("risingwave").join("meta-node")))
+            Ok(Command::new(Path::new(&prefix_bin).join("piestream").join("meta-node")))
         } else {
             Ok(Command::new(Path::new(&prefix_bin).join("meta-node")))
         }
@@ -77,7 +77,7 @@ impl MetaNodeService {
 
         if config.enable_dashboard_v2 {
             cmd.arg("--dashboard-ui-path")
-                .arg(env::var("PREFIX_UI").unwrap_or_else(|_| ".risingwave/ui".to_owned()));
+                .arg(env::var("PREFIX_UI").unwrap_or_else(|_| ".piestream/ui".to_owned()));
         }
 
         if config.unsafe_disable_recovery {
@@ -106,7 +106,7 @@ impl Task for MetaNodeService {
 
         let prefix_config = env::var("PREFIX_CONFIG")?;
         cmd.arg("--config-path")
-            .arg(Path::new(&prefix_config).join("risingwave.toml"));
+            .arg(Path::new(&prefix_config).join("piestream.toml"));
 
         if !self.config.user_managed {
             ctx.run_command(ctx.tmux_run(cmd)?)?;

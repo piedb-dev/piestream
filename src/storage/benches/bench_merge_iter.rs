@@ -18,13 +18,13 @@ use std::sync::Arc;
 use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use futures::executor::block_on;
-use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-use risingwave_storage::hummock::iterator::{
+use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+use piestream_storage::hummock::iterator::{
     BoxedForwardHummockIterator, Forward, HummockIterator, MergeIterator, OrderedAwareMergeIterator,
 };
-use risingwave_storage::hummock::shared_buffer::shared_buffer_batch::SharedBufferBatch;
-use risingwave_storage::hummock::value::HummockValue;
-use risingwave_storage::monitor::StateStoreMetrics;
+use piestream_storage::hummock::shared_buffer::shared_buffer_batch::SharedBufferBatch;
+use piestream_storage::hummock::value::HummockValue;
+use piestream_storage::monitor::StateStoreMetrics;
 use tokio::sync::mpsc;
 
 fn gen_interleave_shared_buffer_batch_iter(

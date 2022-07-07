@@ -28,13 +28,13 @@ fn preflight_check_proxy() -> Result<()> {
     {
         if let Ok(x) = env::var("no_proxy") && x.contains("127.0.0.1") && x.contains("::1") {
             println!(
-                "[{}] {} - You are using proxies for all RisingWave components. Please make sure that `no_proxy` is set for all worker nodes within the cluster.",
+                "[{}] {} - You are using proxies for all piestream components. Please make sure that `no_proxy` is set for all worker nodes within the cluster.",
                 style("risedev-preflight-check").bold(),
                 style("INFO").green().bold()
             );
         } else {
             println!(
-                "[{}] {} - `no_proxy` is not set correctly, which might cause failure in RiseDev and RisingWave. Consider {}.",
+                "[{}] {} - `no_proxy` is not set correctly, which might cause failure in RiseDev and piestream. Consider {}.",
                 style("risedev-preflight-check").bold(),
                 style("WARN").yellow().bold(),
                 style("`export no_proxy=localhost,127.0.0.1,::1`").blue().bold()

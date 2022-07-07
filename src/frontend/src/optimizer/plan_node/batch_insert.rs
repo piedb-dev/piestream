@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::InsertNode;
-use risingwave_pb::plan_common::TableRefId;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::InsertNode;
+use piestream_pb::plan_common::TableRefId;
 
 use super::{LogicalInsert, PlanRef, PlanTreeNodeUnary, ToBatchProst, ToDistributedBatch};
 use crate::optimizer::plan_node::{PlanBase, ToLocalBatch};

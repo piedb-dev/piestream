@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use futures::future::{try_join_all, Either};
 use itertools::Itertools;
 use madsim::collections::HashMap;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::{ColumnId, TableId};
-use risingwave_common::error::{internal_error, Result, RwError, ToRwResult};
-use risingwave_connector::{
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::{ColumnId, TableId};
+use piestream_common::error::{internal_error, Result, RwError, ToRwResult};
+use piestream_connector::{
     Column, ConnectorProperties, ConnectorState, SourceMessage, SplitMetaData, SplitReaderImpl,
 };
 use tokio::sync::mpsc::{Receiver, Sender};

@@ -18,9 +18,9 @@ use bytes::Buf;
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
-use risingwave_hummock_sdk::key::next_key;
-use risingwave_storage::store::ReadOptions;
-use risingwave_storage::StateStore;
+use piestream_hummock_sdk::key::next_key;
+use piestream_storage::store::ReadOptions;
+use piestream_storage::StateStore;
 
 use super::Operations;
 use crate::utils::latency_stat::LatencyStat;

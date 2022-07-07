@@ -1,4 +1,4 @@
-# RisingWave Grafana Dashboard
+# piestream Grafana Dashboard
 
 The Grafana dashboard is generated with grafanalib. You'll need Python and
 

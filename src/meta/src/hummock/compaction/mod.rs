@@ -25,11 +25,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use risingwave_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
-use risingwave_hummock_sdk::prost_key_range::KeyRangeExt;
-use risingwave_hummock_sdk::{CompactionGroupId, HummockCompactionTaskId, HummockEpoch};
-use risingwave_pb::hummock::compaction_config::CompactionMode;
-use risingwave_pb::hummock::{CompactTask, CompactionConfig, HummockVersion, KeyRange, Level};
+use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
+use piestream_hummock_sdk::prost_key_range::KeyRangeExt;
+use piestream_hummock_sdk::{CompactionGroupId, HummockCompactionTaskId, HummockEpoch};
+use piestream_pb::hummock::compaction_config::CompactionMode;
+use piestream_pb::hummock::{CompactTask, CompactionConfig, HummockVersion, KeyRange, Level};
 
 use crate::hummock::compaction::level_selector::{DynamicLevelSelector, LevelSelector};
 use crate::hummock::compaction::overlap_strategy::{

@@ -17,12 +17,12 @@ use std::fmt;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::DataType;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_expr::expr::AggKind;
-use risingwave_pb::expr::AggCall as ProstAggCall;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::DataType;
+use piestream_common::util::sort_util::OrderType;
+use piestream_expr::expr::AggKind;
+use piestream_pb::expr::AggCall as ProstAggCall;
 
 use super::{
     BatchHashAgg, BatchSimpleAgg, ColPrunable, LogicalProjectBuilder, PlanBase, PlanRef,
@@ -826,8 +826,8 @@ mod tests {
 
     use std::rc::Rc;
 
-    use risingwave_common::catalog::Field;
-    use risingwave_common::types::DataType;
+    use piestream_common::catalog::Field;
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::expr::{

@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_stream"
+name = "piestream_stream"
 version = "0.1.10"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -33,14 +33,14 @@ pin-project = "1"
 prometheus = { version = "0.13", features = ["process"] }
 prost = "0.10"
 rdkafka = { version = "0.28", features = ["cmake-build"] }
-risingwave_common = { path = "../common" }
-risingwave_connector = { path = "../connector" }
-risingwave_expr = { path = "../expr" }
-risingwave_hummock_sdk = { path = "../storage/hummock_sdk" }
-risingwave_pb = { path = "../prost" }
-risingwave_rpc_client = { path = "../rpc_client" }
-risingwave_source = { path = "../source" }
-risingwave_storage = { path = "../storage" }
+piestream_common = { path = "../common" }
+piestream_connector = { path = "../connector" }
+piestream_expr = { path = "../expr" }
+piestream_hummock_sdk = { path = "../storage/hummock_sdk" }
+piestream_pb = { path = "../prost" }
+piestream_rpc_client = { path = "../rpc_client" }
+piestream_source = { path = "../source" }
+piestream_storage = { path = "../storage" }
 serde = { version = "1", features = ["derive"] }
 serde-value = "0.7"
 serde_json = "1"

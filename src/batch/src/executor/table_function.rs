@@ -15,18 +15,18 @@
 use std::sync::Arc;
 
 use futures_async_stream::try_stream;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{
+use piestream_common::array::column::Column;
+use piestream_common::array::{
     Array, ArrayBuilder, ArrayRef, DataChunk, I32Array, IntervalArray, NaiveDateTimeArray,
 };
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{ErrorCode, Result, RwError};
-use risingwave_common::types::{CheckedAdd, DataType, Scalar};
-use risingwave_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
-use risingwave_expr::expr::build_from_prost;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::table_function_node::Type::*;
-use risingwave_pb::expr::ExprNode;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::{CheckedAdd, DataType, Scalar};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
+use piestream_expr::expr::build_from_prost;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::table_function_node::Type::*;
+use piestream_pb::expr::ExprNode;
 
 use super::{BoxedExecutor, BoxedExecutorBuilder};
 use crate::executor::{BoxedDataChunkStream, Executor, ExecutorBuilder};
@@ -240,11 +240,11 @@ impl BoxedExecutorBuilder for TableFunctionExecutorBuilder {
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
-    use risingwave_common::array::{Array, ArrayImpl};
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::try_match_expand;
-    use risingwave_common::types::{DataType, IntervalUnit, NaiveDateTimeWrapper};
-    use risingwave_expr::vector_op::cast::str_to_timestamp;
+    use piestream_common::array::{Array, ArrayImpl};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::try_match_expand;
+    use piestream_common::types::{DataType, IntervalUnit, NaiveDateTimeWrapper};
+    use piestream_expr::vector_op::cast::str_to_timestamp;
 
     use super::*;
 

@@ -127,7 +127,7 @@ export default function Layout({ children }) {
   return (
     <>
       <Head>
-        <title>Dashboard | RisingWave</title>
+        <title>Dashboard | piestream</title>
         <link rel="icon" href="/singularitydata.svg" />
       </Head>
       <Box sx={{ display: 'flex', height: "100vh", width: "100vw" }}>
@@ -166,7 +166,7 @@ export default function Layout({ children }) {
             <div style={{ display: "flex", flexDirection: "column", marginLeft: "5px" }}>
               <div style={{ display: "flex", flexDirection: "row", alignItems: "center" }}>
                 <img src="/singularitydata.svg" width="20px" height="20px" />
-                <span style={{ fontSize: "15px", fontWeight: "700", marginLeft: "5px" }}>RisingWave</span>
+                <span style={{ fontSize: "15px", fontWeight: "700", marginLeft: "5px" }}>piestream</span>
               </div>
               <div>
                 <span style={{ fontSize: "13px" }}>Dashboard </span>

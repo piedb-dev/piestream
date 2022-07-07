@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use risingwave_common::error::{ErrorCode, Result, RwError};
+use piestream_common::error::{ErrorCode, Result, RwError};
 
 use super::{
     gen_filter_and_pushdown, BatchLimit, ColPrunable, PlanBase, PlanRef, PlanTreeNodeUnary,

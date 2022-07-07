@@ -16,16 +16,16 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures::future::try_join_all;
-use risingwave_common::catalog::TableId;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::util::epoch::Epoch;
-use risingwave_connector::SplitImpl;
-use risingwave_pb::common::ActorInfo;
-use risingwave_pb::data::barrier::Mutation;
-use risingwave_pb::data::{AddMutation, DispatcherMutation, StopMutation};
-use risingwave_pb::source::{ConnectorSplit, ConnectorSplits};
-use risingwave_pb::stream_service::DropActorsRequest;
-use risingwave_rpc_client::StreamClientPoolRef;
+use piestream_common::catalog::TableId;
+use piestream_common::error::{Result, RwError};
+use piestream_common::util::epoch::Epoch;
+use piestream_connector::SplitImpl;
+use piestream_pb::common::ActorInfo;
+use piestream_pb::data::barrier::Mutation;
+use piestream_pb::data::{AddMutation, DispatcherMutation, StopMutation};
+use piestream_pb::source::{ConnectorSplit, ConnectorSplits};
+use piestream_pb::stream_service::DropActorsRequest;
+use piestream_rpc_client::StreamClientPoolRef;
 use uuid::Uuid;
 
 use super::info::BarrierActorInfo;

@@ -17,9 +17,9 @@ use std::future::Future;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_hummock_sdk::compaction_group::StateTableId;
-use risingwave_hummock_sdk::key::{get_table_id, FullKey};
-use risingwave_hummock_sdk::CompactionGroupId;
+use piestream_hummock_sdk::compaction_group::StateTableId;
+use piestream_hummock_sdk::key::{get_table_id, FullKey};
+use piestream_hummock_sdk::CompactionGroupId;
 
 use crate::hummock::multi_builder::{CapacitySplitTableBuilder, SealedSstableBuilder};
 use crate::hummock::sstable_store::SstableStoreRef;
@@ -183,7 +183,7 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering::SeqCst;
 
-    use risingwave_common::types::VirtualNode;
+    use piestream_common::types::VirtualNode;
 
     use super::*;
     use crate::hummock::iterator::test_utils::mock_sstable_store;

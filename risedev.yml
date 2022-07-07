@@ -290,7 +290,7 @@ risedev:
       persist-data: true
 
 compose:
-  risingwave: "ghcr.io/singularity-data/risingwave:latest"
+  piestream: "ghcr.io/singularity-data/piestream:latest"
   prometheus: "prom/prometheus:latest"
   minio: "quay.io/minio/minio:latest"
   redpanda: "docker.vectorized.io/vectorized/redpanda:latest"

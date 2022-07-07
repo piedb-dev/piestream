@@ -890,7 +890,7 @@ pub enum Statement {
     CreateUser(CreateUserStatement),
     /// FLUSH the current barrier.
     ///
-    /// Note: RisingWave specific statement.
+    /// Note: piestream specific statement.
     Flush,
 }
 

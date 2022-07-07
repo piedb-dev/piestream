@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_pb::catalog::Table as ProstTable;
-use risingwave_sqlparser::ast::{ObjectName, Query, WithProperties};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_pb::catalog::Table as ProstTable;
+use piestream_sqlparser::ast::{ObjectName, Query, WithProperties};
 
 use super::util::handle_with_properties;
 use crate::binder::{Binder, BoundSetExpr};
@@ -111,8 +111,8 @@ pub mod tests {
     use std::collections::HashMap;
 
     use itertools::Itertools;
-    use risingwave_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
-    use risingwave_common::types::DataType;
+    use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+    use piestream_common::types::DataType;
 
     use crate::catalog::row_id_column_name;
     use crate::test_utils::{create_proto_file, LocalFrontend, PROTO_FILE_DATA};

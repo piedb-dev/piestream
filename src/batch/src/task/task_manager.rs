@@ -17,12 +17,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use risingwave_common::error::ErrorCode::{self, TaskNotFound};
-use risingwave_common::error::{Result, RwError};
-use risingwave_pb::batch_plan::{
+use piestream_common::error::ErrorCode::{self, TaskNotFound};
+use piestream_common::error::{Result, RwError};
+use piestream_pb::batch_plan::{
     PlanFragment, TaskId as ProstTaskId, TaskOutputId as ProstTaskOutputId,
 };
-use risingwave_pb::task_service::GetDataResponse;
+use piestream_pb::task_service::GetDataResponse;
 use tokio::sync::mpsc::Sender;
 use tonic::Status;
 
@@ -174,12 +174,12 @@ impl Default for BatchManager {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::make_i32_literal;
-    use risingwave_pb::batch_plan::exchange_info::DistributionMode;
-    use risingwave_pb::batch_plan::plan_node::NodeBody;
-    use risingwave_pb::batch_plan::table_function_node::Type;
-    use risingwave_pb::batch_plan::{
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::make_i32_literal;
+    use piestream_pb::batch_plan::exchange_info::DistributionMode;
+    use piestream_pb::batch_plan::plan_node::NodeBody;
+    use piestream_pb::batch_plan::table_function_node::Type;
+    use piestream_pb::batch_plan::{
         ExchangeInfo, PlanFragment, PlanNode, TableFunctionNode, TaskId as ProstTaskId,
         TaskOutputId as ProstTaskOutputId, ValuesNode,
     };
@@ -203,7 +203,7 @@ mod tests {
         );
 
         let output_id = ProstTaskOutputId {
-            task_id: Some(risingwave_pb::batch_plan::TaskId {
+            task_id: Some(piestream_pb::batch_plan::TaskId {
                 stage_id: 0,
                 task_id: 0,
                 query_id: "".to_owned(),

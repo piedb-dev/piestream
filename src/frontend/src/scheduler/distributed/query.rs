@@ -17,9 +17,9 @@ use std::mem;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use risingwave_common::bail;
-use risingwave_pb::batch_plan::{TaskId as TaskIdProst, TaskOutputId as TaskOutputIdProst};
-use risingwave_rpc_client::ComputeClientPoolRef;
+use piestream_common::bail;
+use piestream_pb::batch_plan::{TaskId as TaskIdProst, TaskOutputId as TaskOutputIdProst};
+use piestream_rpc_client::ComputeClientPoolRef;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, RwLock};
 use tokio::task::JoinHandle;
@@ -346,13 +346,13 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    use risingwave_common::catalog::{ColumnDesc, TableDesc};
-    use risingwave_common::types::DataType;
-    use risingwave_pb::common::{
+    use piestream_common::catalog::{ColumnDesc, TableDesc};
+    use piestream_common::types::DataType;
+    use piestream_pb::common::{
         HostAddress, ParallelUnit, ParallelUnitType, WorkerNode, WorkerType,
     };
-    use risingwave_pb::plan_common::JoinType;
-    use risingwave_rpc_client::ComputeClientPool;
+    use piestream_pb::plan_common::JoinType;
+    use piestream_rpc_client::ComputeClientPool;
 
     use crate::expr::InputRef;
     use crate::optimizer::plan_node::{
@@ -488,7 +488,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5687,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(0, 0),
         };
         let worker2 = WorkerNode {
@@ -498,7 +498,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5688,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(8, 1),
         };
         let worker3 = WorkerNode {
@@ -508,7 +508,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5689,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(16, 2),
         };
         let workers = vec![worker1, worker2, worker3];

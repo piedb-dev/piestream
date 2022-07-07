@@ -61,7 +61,7 @@ pub async fn epoch_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
 mod tests {
     use assert_matches::assert_matches;
     use futures::{pin_mut, StreamExt};
-    use risingwave_common::array::StreamChunk;
+    use piestream_common::array::StreamChunk;
 
     use super::*;
     use crate::executor::test_utils::MockSource;

@@ -22,7 +22,7 @@ mod sort_merge_join;
 pub use chunked_data::*;
 pub use hash_join::*;
 pub use nested_loop_join::*;
-use risingwave_pb::plan_common::JoinType as JoinTypeProst;
+use piestream_pb::plan_common::JoinType as JoinTypeProst;
 pub use sort_merge_join::*;
 
 use crate::executor::join::JoinType::Inner;

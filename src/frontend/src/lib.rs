@@ -55,7 +55,7 @@ extern crate log;
 mod meta_client;
 pub mod test_utils;
 extern crate core;
-extern crate risingwave_common;
+extern crate piestream_common;
 
 pub mod user;
 

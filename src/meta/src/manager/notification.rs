@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use risingwave_pb::common::WorkerNode;
-use risingwave_pb::meta::subscribe_response::{Info, Operation};
-use risingwave_pb::meta::SubscribeResponse;
+use piestream_pb::common::WorkerNode;
+use piestream_pb::meta::subscribe_response::{Info, Operation};
+use piestream_pb::meta::SubscribeResponse;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::{oneshot, Mutex};
 use tonic::Status;

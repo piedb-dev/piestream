@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::array::Row;
-use risingwave_common::types::{DataType, ScalarImpl};
+use piestream_common::array::Row;
+use piestream_common::types::{DataType, ScalarImpl};
 
 use crate::catalog::pg_catalog::PgCatalogColumnsDef;
 

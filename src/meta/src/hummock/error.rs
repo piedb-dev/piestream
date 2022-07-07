@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::error::{ErrorCode, RwError, ToErrorStr};
-use risingwave_hummock_sdk::compaction_group::StateTableId;
-use risingwave_hummock_sdk::{CompactionGroupId, HummockContextId};
+use piestream_common::error::{ErrorCode, RwError, ToErrorStr};
+use piestream_hummock_sdk::compaction_group::StateTableId;
+use piestream_hummock_sdk::{CompactionGroupId, HummockContextId};
 use thiserror::Error;
 
 use crate::storage::meta_store;
@@ -93,14 +93,14 @@ impl From<Error> for ErrorCode {
     }
 }
 
-impl From<Error> for risingwave_common::error::RwError {
+impl From<Error> for piestream_common::error::RwError {
     fn from(error: Error) -> Self {
         ErrorCode::from(error).into()
     }
 }
 
 // TODO: as a workaround before refactoring `MetadataModel` error
-impl From<risingwave_common::error::RwError> for Error {
+impl From<piestream_common::error::RwError> for Error {
     fn from(error: RwError) -> Self {
         match error.inner() {
             ErrorCode::InternalError(err) => Error::InternalError(err.to_owned()),

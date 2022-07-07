@@ -14,7 +14,7 @@
 
 use core::fmt;
 
-use risingwave_common::types::DataType;
+use piestream_common::types::DataType;
 
 use super::Expr;
 
@@ -59,7 +59,7 @@ impl Expr for CorrelatedInputRef {
         self.data_type.clone()
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
         unreachable!("CorrelatedInputRef {:?} has not been decorrelated", self)
     }
 }

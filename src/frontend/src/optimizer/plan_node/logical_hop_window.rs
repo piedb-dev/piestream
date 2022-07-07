@@ -16,9 +16,9 @@ use std::fmt;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::Result;
-use risingwave_common::types::{DataType, IntervalUnit};
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::Result;
+use piestream_common::types::{DataType, IntervalUnit};
 
 use super::{
     gen_filter_and_pushdown, BatchHopWindow, ColPrunable, PlanBase, PlanRef, PlanTreeNodeUnary,
@@ -369,8 +369,8 @@ impl ToStream for LogicalHopWindow {
 
 #[cfg(test)]
 mod test {
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
 
     use super::*;
     use crate::expr::InputRef;

@@ -16,8 +16,8 @@
 
 #[macro_use]
 mod test_utils;
-use risingwave_sqlparser::ast::*;
-use risingwave_sqlparser::parser::ParserError;
+use piestream_sqlparser::ast::*;
+use piestream_sqlparser::parser::ParserError;
 use test_utils::*;
 
 #[test]

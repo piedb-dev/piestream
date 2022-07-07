@@ -18,7 +18,7 @@
 //! into an Abstract Syntax Tree (AST).
 //!
 //! ```
-//! use risingwave_sqlparser::parser::Parser;
+//! use piestream_sqlparser::parser::Parser;
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \

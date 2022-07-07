@@ -15,8 +15,8 @@
 use std::collections::BTreeSet;
 
 use bytes::{BufMut, Bytes, BytesMut};
-use risingwave_common::config::StorageConfig;
-use risingwave_hummock_sdk::key::{get_table_id, user_key};
+use piestream_common::config::StorageConfig;
+use piestream_hummock_sdk::key::{get_table_id, user_key};
 
 use super::bloom::Bloom;
 use super::utils::CompressionAlgorithm;

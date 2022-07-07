@@ -16,11 +16,11 @@ use std::collections::HashSet;
 
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
-use risingwave_common::types::DataType;
-use risingwave_common::util::ordered::{serialize_pk, OrderedRowSerializer};
-use risingwave_common::util::sort_util::OrderType;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, TableId};
+use piestream_common::types::DataType;
+use piestream_common::util::ordered::{serialize_pk, OrderedRowSerializer};
+use piestream_common::util::sort_util::OrderType;
 
 use crate::encoding::cell_based_row_serializer::CellBasedRowSerializer;
 use crate::encoding::Encoding;

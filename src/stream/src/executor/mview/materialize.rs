@@ -17,14 +17,14 @@ use std::sync::Arc;
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::Op::*;
-use risingwave_common::array::Row;
-use risingwave_common::buffer::Bitmap;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Schema, TableId};
-use risingwave_common::util::sort_util::OrderPair;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::table::Distribution;
-use risingwave_storage::StateStore;
+use piestream_common::array::Op::*;
+use piestream_common::array::Row;
+use piestream_common::buffer::Bitmap;
+use piestream_common::catalog::{ColumnDesc, ColumnId, Schema, TableId};
+use piestream_common::util::sort_util::OrderPair;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::table::Distribution;
+use piestream_storage::StateStore;
 
 use crate::executor::error::StreamExecutorError;
 use crate::executor::{
@@ -199,13 +199,13 @@ impl<S: StateStore> std::fmt::Debug for MaterializeExecutor<S> {
 mod tests {
 
     use futures::stream::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::Row;
-    use risingwave_common::catalog::{ColumnDesc, Field, Schema, TableId};
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::{OrderPair, OrderType};
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::table::storage_table::StorageTable;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::Row;
+    use piestream_common::catalog::{ColumnDesc, Field, Schema, TableId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::{OrderPair, OrderType};
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::storage_table::StorageTable;
 
     use crate::executor::test_utils::*;
     use crate::executor::*;

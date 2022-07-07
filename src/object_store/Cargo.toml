@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_object_store"
+name = "piestream_object_store"
 version = "0.1.10"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,7 +17,7 @@ fail = "0.5"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 itertools = "0.10"
 prometheus = { version = "0.13", features = ["process"] }
-risingwave_common = { path = "../common" }
+piestream_common = { path = "../common" }
 spin = "0.9"
 tempfile = "3"
 thiserror = "1"

@@ -16,12 +16,12 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use risingwave_common::buffer::BitmapBuilder;
-use risingwave_common::types::ParallelUnitId;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::ExchangeInfo;
-use risingwave_pb::common::Buffer;
-use risingwave_pb::plan_common::Field as FieldProst;
+use piestream_common::buffer::BitmapBuilder;
+use piestream_common::types::ParallelUnitId;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::ExchangeInfo;
+use piestream_pb::common::Buffer;
+use piestream_pb::plan_common::Field as FieldProst;
 use uuid::Uuid;
 
 use crate::optimizer::plan_node::{PlanNodeId, PlanNodeType};
@@ -396,7 +396,7 @@ impl BatchPlanFragmenter {
 
                     // FIXME: workaround because batch parallel scan on ordered mv may have unorderd
                     // results. should do a merge sort after parallel scan.
-                    // Tracking issue: <https://github.com/singularity-data/risingwave/issues/3583>
+                    // Tracking issue: <https://github.com/singularity-data/piestream/issues/3583>
                     let is_singleton = true;
                     // let is_singleton = builder.parallelism == 1;
 
@@ -468,13 +468,13 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    use risingwave_common::catalog::{ColumnDesc, TableDesc};
-    use risingwave_common::types::DataType;
-    use risingwave_pb::batch_plan::plan_node::NodeBody;
-    use risingwave_pb::common::{
+    use piestream_common::catalog::{ColumnDesc, TableDesc};
+    use piestream_common::types::DataType;
+    use piestream_pb::batch_plan::plan_node::NodeBody;
+    use piestream_pb::common::{
         HostAddress, ParallelUnit, ParallelUnitType, WorkerNode, WorkerType,
     };
-    use risingwave_pb::plan_common::JoinType;
+    use piestream_pb::plan_common::JoinType;
 
     use crate::expr::InputRef;
     use crate::optimizer::plan_node::{
@@ -600,7 +600,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5687,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(0, 0),
         };
         let worker2 = WorkerNode {
@@ -610,7 +610,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5688,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(8, 1),
         };
         let worker3 = WorkerNode {
@@ -620,7 +620,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 5689,
             }),
-            state: risingwave_pb::common::worker_node::State::Running as i32,
+            state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(16, 2),
         };
         let workers = vec![worker1, worker2, worker3];

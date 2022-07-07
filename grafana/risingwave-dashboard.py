@@ -1310,10 +1310,10 @@ def section_grpc_hummock_meta_client(outer_panels):
 
 
 dashboard = Dashboard(
-    title="risingwave_dashboard",
-    description="RisingWave Dashboard",
+    title="piestream_dashboard",
+    description="piestream Dashboard",
     tags=[
-        'risingwave'
+        'piestream'
     ],
     timezone="browser",
     editable=True,

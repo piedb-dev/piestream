@@ -8,7 +8,7 @@ State Store Benchmark (ss-bench)
 We use a mock meta-service for `ss_bench`, and it may not be fully functional.
 
 ```shell
-~/code/risingwave/rust: cargo run --bin ss-bench -- \
+~/code/piestream/rust: cargo run --bin ss-bench -- \
  --benchmarks "writebatch,getseq,getrandom,prefixscanrandom,deleterandom" \
  --batch-size 1000 \
  --writes 10000 \

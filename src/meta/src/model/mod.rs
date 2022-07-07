@@ -26,7 +26,7 @@ pub use barrier::*;
 pub use catalog::*;
 pub use cluster::*;
 use prost::Message;
-use risingwave_common::error::Result;
+use piestream_common::error::Result;
 pub use stream::*;
 pub use user::*;
 
@@ -42,8 +42,8 @@ pub type DispatcherId = u64;
 pub type FragmentId = u32;
 
 pub trait Transactional {
-    fn upsert_in_transaction(&self, trx: &mut Transaction) -> risingwave_common::error::Result<()>;
-    fn delete_in_transaction(&self, trx: &mut Transaction) -> risingwave_common::error::Result<()>;
+    fn upsert_in_transaction(&self, trx: &mut Transaction) -> piestream_common::error::Result<()>;
+    fn delete_in_transaction(&self, trx: &mut Transaction) -> piestream_common::error::Result<()>;
 }
 
 /// `MetadataModel` defines basic model operations in CRUD.

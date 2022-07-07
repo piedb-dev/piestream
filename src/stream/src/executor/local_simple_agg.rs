@@ -17,10 +17,10 @@ use std::sync::Arc;
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{Op, StreamChunk};
-use risingwave_common::catalog::Schema;
-use risingwave_common::error::Result;
+use piestream_common::array::column::Column;
+use piestream_common::array::{Op, StreamChunk};
+use piestream_common::catalog::Schema;
+use piestream_common::error::Result;
 
 use super::aggregation::{
     create_streaming_agg_state, generate_agg_schema, AggCall, StreamingAggStateImpl,
@@ -162,12 +162,12 @@ impl LocalSimpleAggExecutor {
 mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::schema_test_utils;
-    use risingwave_common::error::Result;
-    use risingwave_common::types::DataType;
-    use risingwave_expr::expr::AggKind;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::schema_test_utils;
+    use piestream_common::error::Result;
+    use piestream_common::types::DataType;
+    use piestream_expr::expr::AggKind;
 
     use super::*;
     use crate::executor::aggregation::{AggArgs, AggCall};

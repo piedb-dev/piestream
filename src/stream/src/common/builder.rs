@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::{
+use piestream_common::array::column::Column;
+use piestream_common::array::{
     ArrayBuilderImpl, ArrayImpl, ArrayResult, Op, Row, RowRef, StreamChunk,
 };
-use risingwave_common::types::DataType;
+use piestream_common::types::DataType;
 
 /// Build a array and it's corresponding operations.
 pub struct StreamChunkBuilder {

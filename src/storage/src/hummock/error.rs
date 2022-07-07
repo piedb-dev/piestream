@@ -14,7 +14,7 @@
 
 use std::backtrace::Backtrace;
 
-use risingwave_object_store::object::ObjectError;
+use piestream_object_store::object::ObjectError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use rand::Rng;
-use risingwave_common::error::{ErrorCode, Result, ToErrorStr};
-use risingwave_hummock_sdk::HummockContextId;
-use risingwave_pb::hummock::{CompactTask, SubscribeCompactTasksResponse, VacuumTask};
+use piestream_common::error::{ErrorCode, Result, ToErrorStr};
+use piestream_hummock_sdk::HummockContextId;
+use piestream_pb::hummock::{CompactTask, SubscribeCompactTasksResponse, VacuumTask};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 const STREAM_BUFFER_SIZE: usize = 4;
@@ -145,8 +145,8 @@ impl CompactorManager {
 mod tests {
     use std::collections::HashMap;
 
-    use risingwave_hummock_sdk::compaction_group::StaticCompactionGroupId;
-    use risingwave_pb::hummock::CompactTask;
+    use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
+    use piestream_pb::hummock::CompactTask;
     use tokio::sync::mpsc::error::TryRecvError;
 
     use crate::hummock::test_utils::{

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId};
-use risingwave_common::error::Result;
-use risingwave_common::types::VirtualNode;
-use risingwave_common::util::ordered::serialize_pk_and_row;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId};
+use piestream_common::error::Result;
+use piestream_common::types::VirtualNode;
+use piestream_common::util::ordered::serialize_pk_and_row;
 
 use crate::encoding::{Encoding, KeyBytes, ValueBytes};
 

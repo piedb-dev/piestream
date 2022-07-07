@@ -23,13 +23,13 @@ shift $((OPTIND -1))
 
 echo "--- Download artifacts"
 mkdir -p target/debug
-buildkite-agent artifact download risingwave-"$profile" target/debug/
+buildkite-agent artifact download piestream-"$profile" target/debug/
 buildkite-agent artifact download risedev-playground-"$profile" target/debug/
-mv target/debug/risingwave-"$profile" target/debug/risingwave
+mv target/debug/piestream-"$profile" target/debug/piestream
 mv target/debug/risedev-playground-"$profile" target/debug/risedev-playground
 
 echo "--- Adjust permission"
-chmod +x ./target/debug/risingwave
+chmod +x ./target/debug/piestream
 chmod +x ./target/debug/risedev-playground
 
 echo "--- Generate RiseDev CI config"

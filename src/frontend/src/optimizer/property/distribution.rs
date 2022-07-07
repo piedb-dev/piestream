@@ -43,11 +43,11 @@
 //!                                 x
 //!                                 x
 use fixedbitset::FixedBitSet;
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::exchange_info::{
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::exchange_info::{
     Distribution as DistributionProst, DistributionMode, HashInfo,
 };
-use risingwave_pb::batch_plan::ExchangeInfo;
+use piestream_pb::batch_plan::ExchangeInfo;
 
 use super::super::plan_node::*;
 use crate::optimizer::property::Order;

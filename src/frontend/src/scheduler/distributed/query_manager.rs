@@ -17,11 +17,11 @@ use std::fmt::{Debug, Formatter};
 use futures::StreamExt;
 use futures_async_stream::try_stream;
 use log::debug;
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::RwError;
-use risingwave_pb::batch_plan::{PlanNode as BatchPlanProst, TaskId, TaskOutputId};
-use risingwave_pb::common::HostAddress;
-use risingwave_rpc_client::ComputeClientPoolRef;
+use piestream_common::array::DataChunk;
+use piestream_common::error::RwError;
+use piestream_pb::batch_plan::{PlanNode as BatchPlanProst, TaskId, TaskOutputId};
+use piestream_pb::common::HostAddress;
+use piestream_rpc_client::ComputeClientPoolRef;
 use uuid::Uuid;
 
 use super::QueryExecution;

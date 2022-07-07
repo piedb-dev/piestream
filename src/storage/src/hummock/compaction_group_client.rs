@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use parking_lot::RwLock;
-use risingwave_hummock_sdk::compaction_group::StateTableId;
-use risingwave_hummock_sdk::CompactionGroupId;
-use risingwave_pb::hummock::CompactionGroup;
-use risingwave_rpc_client::HummockMetaClient;
+use piestream_hummock_sdk::compaction_group::StateTableId;
+use piestream_hummock_sdk::CompactionGroupId;
+use piestream_pb::hummock::CompactionGroup;
+use piestream_rpc_client::HummockMetaClient;
 
 use crate::hummock::{HummockError, HummockResult};
 

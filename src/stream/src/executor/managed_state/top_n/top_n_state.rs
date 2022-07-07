@@ -18,13 +18,13 @@ use futures::pin_mut;
 use futures::stream::StreamExt;
 use itertools::Itertools;
 use madsim::collections::BTreeMap;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, ColumnId, TableId};
-use risingwave_common::types::DataType;
-use risingwave_common::util::ordered::*;
-use risingwave_common::util::sort_util::OrderType;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::StateStore;
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+use piestream_common::types::DataType;
+use piestream_common::util::ordered::*;
+use piestream_common::util::sort_util::OrderType;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::StateStore;
 
 use super::variants::*;
 use crate::executor::error::StreamExecutorResult;
@@ -305,11 +305,11 @@ impl<S: StateStore, const TOP_N_TYPE: usize> ManagedTopNState<S, TOP_N_TYPE> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::TableId;
-    use risingwave_common::types::DataType;
-    use risingwave_common::util::sort_util::OrderType;
-    use risingwave_storage::memory::MemoryStateStore;
-    use risingwave_storage::StateStore;
+    use piestream_common::catalog::TableId;
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::StateStore;
 
     use super::super::variants::TOP_N_MAX;
     use super::*;

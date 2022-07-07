@@ -1,5 +1,5 @@
 [package]
-name = "risingwave_regress_test"
+name = "piestream_regress_test"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,5 +15,5 @@ tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = ["rt"
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [[bin]]
-name = "risingwave_regress_test"
+name = "piestream_regress_test"
 path = "src/bin/main.rs"

@@ -16,7 +16,7 @@ use std::backtrace::Backtrace;
 use std::io;
 use std::marker::{Send, Sync};
 
-use risingwave_common::error::BoxedError;
+use piestream_common::error::BoxedError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

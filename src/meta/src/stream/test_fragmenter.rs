@@ -16,22 +16,22 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::vec;
 
-use risingwave_common::catalog::{DatabaseId, SchemaId, TableId};
-use risingwave_common::error::Result;
-use risingwave_pb::catalog::Table as ProstTable;
-use risingwave_pb::data::data_type::TypeName;
-use risingwave_pb::data::DataType;
-use risingwave_pb::expr::agg_call::{Arg, Type};
-use risingwave_pb::expr::expr_node::RexNode;
-use risingwave_pb::expr::expr_node::Type::{Add, GreaterThan, InputRef};
-use risingwave_pb::expr::{AggCall, ExprNode, FunctionCall, InputRefExpr};
-use risingwave_pb::plan_common::{
+use piestream_common::catalog::{DatabaseId, SchemaId, TableId};
+use piestream_common::error::Result;
+use piestream_pb::catalog::Table as ProstTable;
+use piestream_pb::data::data_type::TypeName;
+use piestream_pb::data::DataType;
+use piestream_pb::expr::agg_call::{Arg, Type};
+use piestream_pb::expr::expr_node::RexNode;
+use piestream_pb::expr::expr_node::Type::{Add, GreaterThan, InputRef};
+use piestream_pb::expr::{AggCall, ExprNode, FunctionCall, InputRefExpr};
+use piestream_pb::plan_common::{
     ColumnCatalog, ColumnDesc, ColumnOrder, DatabaseRefId, Field, OrderType, SchemaRefId,
     TableRefId,
 };
-use risingwave_pb::stream_plan::source_node::SourceType;
-use risingwave_pb::stream_plan::stream_node::NodeBody;
-use risingwave_pb::stream_plan::{
+use piestream_pb::stream_plan::source_node::SourceType;
+use piestream_pb::stream_plan::stream_node::NodeBody;
+use piestream_pb::stream_plan::{
     DispatchStrategy, DispatcherType, ExchangeNode, FilterNode, MaterializeNode, ProjectNode,
     SimpleAggNode, SourceNode, StreamNode,
 };
@@ -290,7 +290,7 @@ fn make_stream_node() -> StreamNode {
 #[cfg(not(madsim))]
 #[tokio::test]
 async fn test_fragmenter() -> Result<()> {
-    use risingwave_frontend::stream_fragmenter::StreamFragmenter;
+    use piestream_frontend::stream_fragmenter::StreamFragmenter;
 
     use crate::model::FragmentId;
 

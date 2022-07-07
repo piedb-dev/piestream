@@ -219,9 +219,9 @@ impl AwsConfigV2 {
     /// Load configuration from environment vars by default. The use of the authentication part is
     /// divided into the next cases:
     /// - Connection is the external data source. for example kinesis Source, S3 Source.
-    ///  At this time `RisingWave` is a third party. It is reasonable to use `session_token` or
+    ///  At this time `piestream` is a third party. It is reasonable to use `session_token` or
     ///  `external_id` for security reasons.
-    /// - For `RisingWave` storage, internal storage formats are un visible to the client.
+    /// - For `piestream` storage, internal storage formats are un visible to the client.
     ///  Just follow by default way.
     pub async fn load_config(&self, external_id: Option<String>) -> aws_types::SdkConfig {
         let region = self.build_region().await.unwrap();
@@ -263,7 +263,7 @@ impl AwsConfigV2 {
     ) -> Option<AssumeRoleProvider> {
         if let Some(role_name) = &self.arn {
             let mut role = AssumeRoleProvider::builder(role_name)
-                .session_name("RisingWave")
+                .session_name("piestream")
                 .region(region);
             if let Some(e_id) = external_id {
                 role = role.external_id(e_id.as_str());

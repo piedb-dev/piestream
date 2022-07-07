@@ -22,7 +22,7 @@ dashboard/
 TODO: Find a suitable testing framework
 
 ## Development
-Start the RisingWave database.
+Start the piestream database.
 ```bash
 ./risedev d
 sqllogictest -p 4566 -d dev './e2e_test/streaming/tpch_snapshot.slt'
@@ -36,8 +36,8 @@ The website will be served at port 3000.
 npm run dev
 ```
 
-## Test with RisingWave meta node
-To replace the built static files in RisingWave with your newest code, 
+## Test with piestream meta node
+To replace the built static files in piestream with your newest code, 
 run the following scripts in the root directory.
 ```
 ./risedev export-dashboard-v2

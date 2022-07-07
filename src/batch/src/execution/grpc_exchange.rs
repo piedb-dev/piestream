@@ -16,12 +16,12 @@ use std::fmt::{Debug, Formatter};
 use std::future::Future;
 
 use futures::StreamExt;
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::Result;
-use risingwave_pb::batch_plan::exchange_source::LocalExecutePlan::Plan;
-use risingwave_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskOutputId};
-use risingwave_pb::task_service::{ExecuteRequest, GetDataResponse};
-use risingwave_rpc_client::ComputeClient;
+use piestream_common::array::DataChunk;
+use piestream_common::error::Result;
+use piestream_pb::batch_plan::exchange_source::LocalExecutePlan::Plan;
+use piestream_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskOutputId};
+use piestream_pb::task_service::{ExecuteRequest, GetDataResponse};
+use piestream_rpc_client::ComputeClient;
 use tonic::Streaming;
 
 use crate::exchange_source::ExchangeSource;

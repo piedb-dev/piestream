@@ -22,10 +22,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use risingwave_common::array::Row;
-use risingwave_common::catalog::{ColumnDesc, SysCatalogReader, TableId, DEFAULT_SUPPER_USER};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::{DataType, ScalarImpl};
+use piestream_common::array::Row;
+use piestream_common::catalog::{ColumnDesc, SysCatalogReader, TableId, DEFAULT_SUPPER_USER};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::{DataType, ScalarImpl};
 use serde_json::json;
 
 use crate::catalog::catalog_service::CatalogReader;

@@ -14,9 +14,9 @@
 
 use anyhow::anyhow;
 use either::Either;
-use risingwave_common::array::DataChunk;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_pb::data::DataChunk as ProstDataChunk;
+use piestream_common::array::DataChunk;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_pb::data::DataChunk as ProstDataChunk;
 use tokio::sync::OnceCell;
 
 #[derive(Debug, Clone)]

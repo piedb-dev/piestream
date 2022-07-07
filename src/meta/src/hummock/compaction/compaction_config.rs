@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::config::constant::hummock::CompactionFilterFlag;
-use risingwave_pb::hummock::compaction_config::CompactionMode;
-use risingwave_pb::hummock::CompactionConfig;
+use piestream_common::config::constant::hummock::CompactionFilterFlag;
+use piestream_pb::hummock::compaction_config::CompactionMode;
+use piestream_pb::hummock::CompactionConfig;
 
 const DEFAULT_MAX_COMPACTION_BYTES: u64 = 4 * 1024 * 1024 * 1024; // 4GB
 const DEFAULT_MIN_COMPACTION_BYTES: u64 = 128 * 1024 * 1024; // 128MB

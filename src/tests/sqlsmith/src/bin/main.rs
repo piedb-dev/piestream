@@ -15,9 +15,9 @@
 use std::time::Duration;
 
 use clap::Parser as ClapParser;
-use risingwave_sqlparser::ast::Statement;
-use risingwave_sqlparser::parser::Parser;
-use risingwave_sqlsmith::{sql_gen, Table};
+use piestream_sqlparser::ast::Statement;
+use piestream_sqlparser::parser::Parser;
+use piestream_sqlsmith::{sql_gen, Table};
 use tokio_postgres::NoTls;
 
 #[derive(ClapParser, Debug, Clone)]

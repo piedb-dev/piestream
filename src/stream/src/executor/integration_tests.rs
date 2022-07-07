@@ -16,11 +16,11 @@ use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::*;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::types::*;
-use risingwave_expr::expr::*;
+use piestream_common::array::column::Column;
+use piestream_common::array::*;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::types::*;
+use piestream_expr::expr::*;
 use tokio::sync::mpsc::channel;
 
 use super::*;

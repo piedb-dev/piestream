@@ -18,26 +18,26 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use paste::paste;
-use risingwave_common::catalog::{CatalogVersion, TableId};
-use risingwave_common::util::addr::HostAddr;
-use risingwave_hummock_sdk::{HummockEpoch, HummockSSTableId, HummockVersionId, LocalSstableInfo};
-use risingwave_pb::catalog::{
+use piestream_common::catalog::{CatalogVersion, TableId};
+use piestream_common::util::addr::HostAddr;
+use piestream_hummock_sdk::{HummockEpoch, HummockSSTableId, HummockVersionId, LocalSstableInfo};
+use piestream_pb::catalog::{
     Database as ProstDatabase, Schema as ProstSchema, Source as ProstSource, Table as ProstTable,
 };
-use risingwave_pb::common::WorkerType;
-use risingwave_pb::ddl_service::ddl_service_client::DdlServiceClient;
-use risingwave_pb::ddl_service::*;
-use risingwave_pb::hummock::hummock_manager_service_client::HummockManagerServiceClient;
-use risingwave_pb::hummock::*;
-use risingwave_pb::meta::cluster_service_client::ClusterServiceClient;
-use risingwave_pb::meta::heartbeat_service_client::HeartbeatServiceClient;
-use risingwave_pb::meta::list_table_fragments_response::TableFragmentInfo;
-use risingwave_pb::meta::notification_service_client::NotificationServiceClient;
-use risingwave_pb::meta::stream_manager_service_client::StreamManagerServiceClient;
-use risingwave_pb::meta::*;
-use risingwave_pb::stream_plan::StreamFragmentGraph;
-use risingwave_pb::user::user_service_client::UserServiceClient;
-use risingwave_pb::user::*;
+use piestream_pb::common::WorkerType;
+use piestream_pb::ddl_service::ddl_service_client::DdlServiceClient;
+use piestream_pb::ddl_service::*;
+use piestream_pb::hummock::hummock_manager_service_client::HummockManagerServiceClient;
+use piestream_pb::hummock::*;
+use piestream_pb::meta::cluster_service_client::ClusterServiceClient;
+use piestream_pb::meta::heartbeat_service_client::HeartbeatServiceClient;
+use piestream_pb::meta::list_table_fragments_response::TableFragmentInfo;
+use piestream_pb::meta::notification_service_client::NotificationServiceClient;
+use piestream_pb::meta::stream_manager_service_client::StreamManagerServiceClient;
+use piestream_pb::meta::*;
+use piestream_pb::stream_plan::StreamFragmentGraph;
+use piestream_pb::user::user_service_client::UserServiceClient;
+use piestream_pb::user::*;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;

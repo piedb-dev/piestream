@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::Future;
-use risingwave_hummock_sdk::LocalSstableInfo;
+use piestream_hummock_sdk::LocalSstableInfo;
 use tracing::error;
 
 use super::StateStoreMetrics;

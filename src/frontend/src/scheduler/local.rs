@@ -18,19 +18,19 @@ use std::sync::Arc;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_batch::executor::ExecutorBuilder;
-use risingwave_batch::task::TaskId;
-use risingwave_common::array::DataChunk;
-use risingwave_common::bail;
-use risingwave_common::error::RwError;
-use risingwave_pb::batch_plan::exchange_info::DistributionMode;
-use risingwave_pb::batch_plan::exchange_source::LocalExecutePlan::Plan;
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::{
+use piestream_batch::executor::ExecutorBuilder;
+use piestream_batch::task::TaskId;
+use piestream_common::array::DataChunk;
+use piestream_common::bail;
+use piestream_common::error::RwError;
+use piestream_pb::batch_plan::exchange_info::DistributionMode;
+use piestream_pb::batch_plan::exchange_source::LocalExecutePlan::Plan;
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::{
     ExchangeInfo, ExchangeSource, LocalExecutePlan, PlanFragment, PlanNode as PlanNodeProst,
     TaskId as ProstTaskId, TaskOutputId,
 };
-use risingwave_pb::common::Buffer;
+use piestream_pb::common::Buffer;
 use tracing::debug;
 use uuid::Uuid;
 

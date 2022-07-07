@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::catalog::Schema;
-use risingwave_common::util::select_all;
+use piestream_common::catalog::Schema;
+use piestream_common::util::select_all;
 
 use super::*;
 use crate::executor::{BoxedMessageStream, ExecutorInfo};
@@ -99,8 +99,8 @@ pub fn merge(inputs: Vec<BoxedMessageStream>) -> BoxedMessageStream {
 mod tests {
     use async_stream::try_stream;
     use futures::TryStreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
 
     use super::*;
 

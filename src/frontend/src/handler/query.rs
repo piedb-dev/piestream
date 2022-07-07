@@ -16,10 +16,10 @@ use futures_async_stream::for_await;
 use log::debug;
 use pgwire::pg_field_descriptor::PgFieldDescriptor;
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_batch::executor::BoxedDataChunkStream;
-use risingwave_common::error::Result;
-use risingwave_common::session_config::QueryMode;
-use risingwave_sqlparser::ast::Statement;
+use piestream_batch::executor::BoxedDataChunkStream;
+use piestream_common::error::Result;
+use piestream_common::session_config::QueryMode;
+use piestream_sqlparser::ast::Statement;
 use tracing::info;
 
 use crate::binder::{Binder, BoundStatement};

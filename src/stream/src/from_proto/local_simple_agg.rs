@@ -14,8 +14,8 @@
 
 use std::convert::TryFrom;
 
-use risingwave_common::types::DataType;
-use risingwave_expr::expr::AggKind;
+use piestream_common::types::DataType;
+use piestream_expr::expr::AggKind;
 
 use super::*;
 use crate::executor::aggregation::{AggArgs, AggCall};
@@ -49,7 +49,7 @@ impl ExecutorBuilder for LocalSimpleAggExecutorBuilder {
 
 pub fn build_agg_call_from_prost(
     append_only: bool,
-    agg_call_proto: &risingwave_pb::expr::AggCall,
+    agg_call_proto: &piestream_pb::expr::AggCall,
 ) -> Result<AggCall> {
     let args = match &agg_call_proto.get_args()[..] {
         [] => AggArgs::None,

@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 
 use bytes::BytesMut;
-use risingwave_hummock_sdk::VersionedComparator;
+use piestream_hummock_sdk::VersionedComparator;
 
 use super::KeyPrefix;
 use crate::hummock::BlockHolder;

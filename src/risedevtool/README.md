@@ -9,7 +9,7 @@ This document will introduce RiseDev from two perspectives: usage-level and dev-
 
 ## Usage-Level Guide
 
-As a RisingWave developer, you may need to start components and debug components. RiseDev makes your life easier with a flexible scene configuration and a service bootstrapper.
+As a piestream developer, you may need to start components and debug components. RiseDev makes your life easier with a flexible scene configuration and a service bootstrapper.
 
 ### Service Bootstrapper
 
@@ -91,7 +91,7 @@ That's all! RiseDev will generate a new `server.properties` for the frontend nod
 
 ### Logs and Artifacts
 
-- All artifacts of RiseDev will be stored in .risingwave folder.
+- All artifacts of RiseDev will be stored in .piestream folder.
 - The log folder contains log of all components.
 - RiseDev uses tmux to manage all components. Use tmux a to attach to the tmux session, and you will find all components running in the background.
 
@@ -116,11 +116,11 @@ This environment file will then be read by cargo-make, which decides whether or 
 [cargo-make] INFO - Running Task: download-mcli
 [cargo-make] INFO - Skipping Task: download-grafana
 [cargo-make] INFO - Skipping Task: download-prometheus
-[cargo-make] INFO - Running Task: build-risingwave
+[cargo-make] INFO - Running Task: build-piestream
 ```
 
 As `ENABLE_PROMETHEUS_GRAFANA` is not set, download-grafana step is skipped.
-All steps for downloading components, copying config, and building RisingWave are described as cargo-make's toml config. See `risedev/*.toml` and `Makefile.toml` for more information.
+All steps for downloading components, copying config, and building piestream are described as cargo-make's toml config. See `risedev/*.toml` and `Makefile.toml` for more information.
 
 ### Config Expander
 
@@ -266,20 +266,20 @@ This expanded config will serve as a base config for the following config genera
 
 ### Config Generator
 
-RiseDev will generate config of each service using modules in risedev/src/config_gen. Given the above frontend meta-config, the server.properties will be generated (`risingwave.leader.computenodes` is no longer used):
+RiseDev will generate config of each service using modules in risedev/src/config_gen. Given the above frontend meta-config, the server.properties will be generated (`piestream.leader.computenodes` is no longer used):
 
 ```apache
-risingwave.pgserver.ip=127.0.0.1
-risingwave.pgserver.port=4567
-risingwave.leader.clustermode=Distributed
-risingwave.leader.computenodes=127.0.0.1:5687,127.0.0.1:5688,127.0.0.1:5689
+piestream.pgserver.ip=127.0.0.1
+piestream.pgserver.port=4567
+piestream.leader.clustermode=Distributed
+piestream.leader.computenodes=127.0.0.1:5687,127.0.0.1:5688,127.0.0.1:5689
 
-risingwave.catalog.mode=Remote
-risingwave.meta.node=127.0.0.1:5690
+piestream.catalog.mode=Remote
+piestream.meta.node=127.0.0.1:5690
 ```
 
 ### RiseDev Service
 
-The RiseDev playground will read the config and start all the services in sequence. The tasks will be started in tmux. All commands run by playground can be found in `risedev.log` in `.risingwave/log`. After starting each service, it will check liveness and return code of the program, so as to ensure a service is running.
+The RiseDev playground will read the config and start all the services in sequence. The tasks will be started in tmux. All commands run by playground can be found in `risedev.log` in `.piestream/log`. After starting each service, it will check liveness and return code of the program, so as to ensure a service is running.
 
 These components conclude the internal implementation of RiseDev.

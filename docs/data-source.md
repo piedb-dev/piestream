@@ -8,17 +8,17 @@
     - [SourceExecutor](#sourceexecutor)
   - [How It Works](#how-it-works)
 
-This page describes RisingWave's Data Source API and the architecture behind it. This may help if you are interested in how data sources work, or if you want to implement a new Data Source.
+This page describes piestream's Data Source API and the architecture behind it. This may help if you are interested in how data sources work, or if you want to implement a new Data Source.
 
 ## Components
 
-RisingWave's data source covers four parts: connectors, enumerators, ConnectorSource and SourceExecutor.
+piestream's data source covers four parts: connectors, enumerators, ConnectorSource and SourceExecutor.
 
 ![data source arch](../docs/images/data-source/data-source-arch.svg)
 
 ### Connectors
 
-`Connector` serves as an interface to upstream data pipeline, including the message queue and file system. In the current design, it can only have a limited concurrency. One connector instance only reads from one split from the upstream. For example, if upstream is a Kafka and it has three partitions so, in RisingWave, there should be three connectors.
+`Connector` serves as an interface to upstream data pipeline, including the message queue and file system. In the current design, it can only have a limited concurrency. One connector instance only reads from one split from the upstream. For example, if upstream is a Kafka and it has three partitions so, in piestream, there should be three connectors.
 
 All connectors need to implement the following trait and it exposes two methods to the upper layer.
 

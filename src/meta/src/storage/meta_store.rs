@@ -16,7 +16,7 @@ use std::fmt::{Display, Formatter};
 use std::str;
 
 use async_trait::async_trait;
-use risingwave_common::error::{ErrorCode, RwError};
+use piestream_common::error::{ErrorCode, RwError};
 use thiserror::Error;
 
 use crate::storage::transaction::Transaction;

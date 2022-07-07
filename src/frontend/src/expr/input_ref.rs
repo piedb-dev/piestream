@@ -15,9 +15,9 @@
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::types::DataType;
-use risingwave_pb::expr::agg_call::Arg as ProstAggCallArg;
-use risingwave_pb::expr::InputRefExpr;
+use piestream_common::types::DataType;
+use piestream_pb::expr::agg_call::Arg as ProstAggCallArg;
+use piestream_pb::expr::InputRefExpr;
 
 use super::Expr;
 use crate::expr::ExprType;
@@ -123,9 +123,9 @@ impl Expr for InputRef {
         self.data_type.clone()
     }
 
-    fn to_expr_proto(&self) -> risingwave_pb::expr::ExprNode {
-        use risingwave_pb::expr::expr_node::*;
-        use risingwave_pb::expr::*;
+    fn to_expr_proto(&self) -> piestream_pb::expr::ExprNode {
+        use piestream_pb::expr::expr_node::*;
+        use piestream_pb::expr::*;
         ExprNode {
             expr_type: ExprType::InputRef.into(),
             return_type: Some(self.return_type().to_protobuf()),

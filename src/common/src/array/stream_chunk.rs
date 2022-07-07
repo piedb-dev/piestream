@@ -17,7 +17,7 @@ use std::hash::BuildHasher;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use risingwave_pb::data::{Op as ProstOp, StreamChunk as ProstStreamChunk};
+use piestream_pb::data::{Op as ProstOp, StreamChunk as ProstStreamChunk};
 
 use super::ArrayResult;
 use crate::array::column::Column;
@@ -319,8 +319,8 @@ impl StreamChunkTestExt for StreamChunk {
     ///
     /// # Example
     /// ```
-    /// use risingwave_common::array::stream_chunk::StreamChunkTestExt as _;
-    /// use risingwave_common::array::StreamChunk;
+    /// use piestream_common::array::stream_chunk::StreamChunkTestExt as _;
+    /// use piestream_common::array::StreamChunk;
     /// let chunk = StreamChunk::from_pretty(
     ///     "  I I I I      // type chars
     ///     U- 2 5 . .      // '.' means NULL

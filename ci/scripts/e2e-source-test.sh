@@ -7,17 +7,17 @@ source ci/scripts/common.env.sh
 
 echo "--- Download artifacts"
 mkdir -p target/debug
-buildkite-agent artifact download risingwave-dev target/debug/
+buildkite-agent artifact download piestream-dev target/debug/
 buildkite-agent artifact download risedev-playground-dev target/debug/
-buildkite-agent artifact download risingwave_regress_test-dev target/debug/
-mv target/debug/risingwave-dev target/debug/risingwave
+buildkite-agent artifact download piestream_regress_test-dev target/debug/
+mv target/debug/piestream-dev target/debug/piestream
 mv target/debug/risedev-playground-dev target/debug/risedev-playground
-mv target/debug/risingwave_regress_test-dev target/debug/risingwave_regress_test
+mv target/debug/piestream_regress_test-dev target/debug/piestream_regress_test
 
 echo "--- Adjust permission"
-chmod +x ./target/debug/risingwave
+chmod +x ./target/debug/piestream
 chmod +x ./target/debug/risedev-playground
-chmod +x ./target/debug/risingwave_regress_test
+chmod +x ./target/debug/piestream_regress_test
 
 echo "--- Generate RiseDev CI config"
 cp risedev-components.ci.env risedev-components.user.env

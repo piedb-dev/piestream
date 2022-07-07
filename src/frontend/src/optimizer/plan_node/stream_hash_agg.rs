@@ -15,8 +15,8 @@
 use std::fmt;
 
 use itertools::Itertools;
-use risingwave_common::catalog::{DatabaseId, SchemaId};
-use risingwave_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
+use piestream_common::catalog::{DatabaseId, SchemaId};
+use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
 use super::logical_agg::PlanAggCall;
 use super::{LogicalAgg, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
@@ -91,7 +91,7 @@ impl_plan_tree_node_for_unary! { StreamHashAgg }
 
 impl ToStreamProst for StreamHashAgg {
     fn to_stream_prost_body(&self) -> ProstStreamNode {
-        use risingwave_pb::stream_plan::*;
+        use piestream_pb::stream_plan::*;
         let (internal_tables, column_mapping) = self.logical.infer_internal_table_catalog();
         ProstStreamNode::HashAgg(HashAggNode {
             group_keys: self

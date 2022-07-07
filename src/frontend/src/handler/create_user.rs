@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::Result;
-use risingwave_pb::user::UserInfo;
-use risingwave_sqlparser::ast::{
+use piestream_common::error::Result;
+use piestream_pb::user::UserInfo;
+use piestream_sqlparser::ast::{
     CreateUserOption, CreateUserStatement, CreateUserWithOptions, ObjectName,
 };
 
@@ -77,8 +77,8 @@ pub async fn handle_create_user(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_pb::user::auth_info::EncryptionType;
-    use risingwave_pb::user::AuthInfo;
+    use piestream_pb::user::auth_info::EncryptionType;
+    use piestream_pb::user::AuthInfo;
 
     use crate::test_utils::LocalFrontend;
 

@@ -14,8 +14,8 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use risingwave_common::array::StreamChunk;
-use risingwave_common::catalog::Schema;
+use piestream_common::array::StreamChunk;
+use piestream_common::catalog::Schema;
 
 use super::error::StreamExecutorError;
 use super::{expect_first_barrier, BoxedExecutor, Executor, ExecutorInfo, Message};
@@ -140,10 +140,10 @@ mod test {
     use std::sync::Arc;
 
     use futures::StreamExt;
-    use risingwave_common::array::stream_chunk::StreamChunkTestExt;
-    use risingwave_common::array::StreamChunk;
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::types::DataType;
+    use piestream_common::array::stream_chunk::StreamChunkTestExt;
+    use piestream_common::array::StreamChunk;
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::types::DataType;
 
     use super::ChainExecutor;
     use crate::executor::test_utils::MockSource;

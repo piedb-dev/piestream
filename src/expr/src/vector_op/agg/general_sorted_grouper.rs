@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::*;
-use risingwave_common::ensure;
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_common::types::*;
+use piestream_common::array::*;
+use piestream_common::ensure;
+use piestream_common::error::{ErrorCode, Result};
+use piestream_common::types::*;
 
 /// `EqGroups` encodes the grouping information in the sort aggregate algorithm.
 ///
@@ -307,10 +307,10 @@ impl_sorted_grouper! { I64Array, Int64 }
 mod tests {
     use std::sync::Arc;
 
-    use risingwave_common::array::column::Column;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::expr::agg_call::Type;
-    use risingwave_pb::expr::AggCall;
+    use piestream_common::array::column::Column;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::expr::agg_call::Type;
+    use piestream_pb::expr::AggCall;
 
     use super::*;
     use crate::vector_op::agg::functions::*;
@@ -406,7 +406,7 @@ mod tests {
         let prost = AggCall {
             r#type: Type::Count as i32,
             args: vec![],
-            return_type: Some(risingwave_pb::data::DataType {
+            return_type: Some(piestream_pb::data::DataType {
                 type_name: TypeName::Int64 as i32,
                 ..Default::default()
             }),

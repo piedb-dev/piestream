@@ -11,7 +11,7 @@
 // limitations under the License.
 
 // Re-export everything from `src/test_utils.rs`.
-pub use risingwave_sqlparser::test_utils::*;
+pub use piestream_sqlparser::test_utils::*;
 
 // For the test-only macros we take a different approach of keeping them here
 // rather than in the library crate.

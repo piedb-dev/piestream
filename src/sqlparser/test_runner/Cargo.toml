@@ -1,12 +1,12 @@
 [package]
-name = "risingwave_sqlparser_test_runner"
+name = "piestream_sqlparser_test_runner"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1"
 itertools = "0.10"
-risingwave_sqlparser = { path = "../" }
+piestream_sqlparser = { path = "../" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 tempfile = "3"

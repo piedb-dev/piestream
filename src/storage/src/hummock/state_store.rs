@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use itertools::Itertools;
-use risingwave_hummock_sdk::key::key_with_epoch;
-use risingwave_hummock_sdk::LocalSstableInfo;
+use piestream_hummock_sdk::key::key_with_epoch;
+use piestream_hummock_sdk::LocalSstableInfo;
 
 use super::iterator::{
     BackwardUserIterator, ConcatIteratorInner, DirectedUserIterator, UserIterator,

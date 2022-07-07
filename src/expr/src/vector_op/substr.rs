@@ -14,7 +14,7 @@
 
 use std::cmp::{max, min};
 
-use risingwave_common::array::{BytesGuard, BytesWriter};
+use piestream_common::array::{BytesGuard, BytesWriter};
 
 use crate::{bail, Result};
 
@@ -47,7 +47,7 @@ pub fn substr_start_for(
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
+    use piestream_common::array::{Array, ArrayBuilder, Utf8ArrayBuilder};
 
     use super::*;
 

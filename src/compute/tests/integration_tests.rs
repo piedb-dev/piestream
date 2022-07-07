@@ -20,27 +20,27 @@ use std::sync::Arc;
 use futures::stream::StreamExt;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_batch::executor::monitor::BatchMetrics;
-use risingwave_batch::executor::{
+use piestream_batch::executor::monitor::BatchMetrics;
+use piestream_batch::executor::{
     BoxedDataChunkStream, BoxedExecutor, DeleteExecutor, Executor as BatchExecutor, InsertExecutor,
     RowSeqScanExecutor, ScanType,
 };
-use risingwave_common::array::{Array, DataChunk, F64Array, I64Array, Row};
-use risingwave_common::catalog::{ColumnDesc, ColumnId, Field, OrderedColumnDesc, Schema, TableId};
-use risingwave_common::column_nonnull;
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::test_prelude::DataChunkTestExt;
-use risingwave_common::types::{DataType, IntoOrdered};
-use risingwave_common::util::sort_util::{OrderPair, OrderType};
-use risingwave_pb::data::data_type::TypeName;
-use risingwave_pb::plan_common::ColumnDesc as ProstColumnDesc;
-use risingwave_source::{MemSourceManager, SourceManager};
-use risingwave_storage::memory::MemoryStateStore;
-use risingwave_storage::table::state_table::StateTable;
-use risingwave_storage::table::storage_table::StorageTable;
-use risingwave_storage::Keyspace;
-use risingwave_stream::executor::monitor::StreamingMetrics;
-use risingwave_stream::executor::{
+use piestream_common::array::{Array, DataChunk, F64Array, I64Array, Row};
+use piestream_common::catalog::{ColumnDesc, ColumnId, Field, OrderedColumnDesc, Schema, TableId};
+use piestream_common::column_nonnull;
+use piestream_common::error::{Result, RwError};
+use piestream_common::test_prelude::DataChunkTestExt;
+use piestream_common::types::{DataType, IntoOrdered};
+use piestream_common::util::sort_util::{OrderPair, OrderType};
+use piestream_pb::data::data_type::TypeName;
+use piestream_pb::plan_common::ColumnDesc as ProstColumnDesc;
+use piestream_source::{MemSourceManager, SourceManager};
+use piestream_storage::memory::MemoryStateStore;
+use piestream_storage::table::state_table::StateTable;
+use piestream_storage::table::storage_table::StorageTable;
+use piestream_storage::Keyspace;
+use piestream_stream::executor::monitor::StreamingMetrics;
+use piestream_stream::executor::{
     Barrier, Executor, MaterializeExecutor, Message, PkIndices, SourceExecutor,
 };
 use tokio::sync::mpsc::unbounded_channel;
@@ -86,7 +86,7 @@ impl SingleChunkExecutor {
 /// insertion, deletion, and materialization.
 #[tokio::test]
 async fn test_table_v2_materialize() -> Result<()> {
-    use risingwave_pb::data::DataType;
+    use piestream_pb::data::DataType;
 
     let memory_state_store = MemoryStateStore::new();
     let source_manager = Arc::new(MemSourceManager::default());

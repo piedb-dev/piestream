@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use risingwave_common::error::{ErrorCode, Result};
-use risingwave_sqlparser::ast::{DropMode, ObjectName};
+use piestream_common::error::{ErrorCode, Result};
+use piestream_sqlparser::ast::{DropMode, ObjectName};
 
 use crate::catalog::CatalogError;
 use crate::session::OptimizerContext;

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risingwave_common::array::ArrayError;
-use risingwave_common::error::{ErrorCode, RwError};
+use piestream_common::array::ArrayError;
+use piestream_common::error::{ErrorCode, RwError};
 use thiserror::Error;
 
 use crate::hummock::HummockError;

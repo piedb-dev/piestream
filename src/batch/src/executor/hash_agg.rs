@@ -19,18 +19,18 @@ use std::vec;
 
 use futures_async_stream::try_stream;
 use itertools::Itertools;
-use risingwave_common::array::column::Column;
-use risingwave_common::array::DataChunk;
-use risingwave_common::catalog::{Field, Schema};
-use risingwave_common::error::{Result, RwError};
-use risingwave_common::hash::{
+use piestream_common::array::column::Column;
+use piestream_common::array::DataChunk;
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::error::{Result, RwError};
+use piestream_common::hash::{
     calc_hash_key_kind, HashKey, HashKeyDispatcher, PrecomputedBuildHasher,
 };
-use risingwave_common::types::DataType;
-use risingwave_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
-use risingwave_expr::vector_op::agg::{AggStateFactory, BoxedAggState};
-use risingwave_pb::batch_plan::plan_node::NodeBody;
-use risingwave_pb::batch_plan::HashAggNode;
+use piestream_common::types::DataType;
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
+use piestream_expr::vector_op::agg::{AggStateFactory, BoxedAggState};
+use piestream_pb::batch_plan::plan_node::NodeBody;
+use piestream_pb::batch_plan::HashAggNode;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -260,12 +260,12 @@ impl<K: HashKey + Send + Sync> HashAggExecutor<K> {
 
 #[cfg(test)]
 mod tests {
-    use risingwave_common::catalog::{Field, Schema};
-    use risingwave_common::test_prelude::DataChunkTestExt;
-    use risingwave_pb::data::data_type::TypeName;
-    use risingwave_pb::data::DataType as ProstDataType;
-    use risingwave_pb::expr::agg_call::{Arg, Type};
-    use risingwave_pb::expr::{AggCall, InputRefExpr};
+    use piestream_common::catalog::{Field, Schema};
+    use piestream_common::test_prelude::DataChunkTestExt;
+    use piestream_pb::data::data_type::TypeName;
+    use piestream_pb::data::DataType as ProstDataType;
+    use piestream_pb::expr::agg_call::{Arg, Type};
+    use piestream_pb::expr::{AggCall, InputRefExpr};
 
     use super::*;
     use crate::executor::test_utils::{diff_executor_output, MockExecutor};

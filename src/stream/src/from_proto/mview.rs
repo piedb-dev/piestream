@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use risingwave_common::catalog::{ColumnId, TableId};
-use risingwave_common::util::sort_util::OrderPair;
+use piestream_common::catalog::{ColumnId, TableId};
+use piestream_common::util::sort_util::OrderPair;
 
 use super::*;
 use crate::executor::MaterializeExecutor;

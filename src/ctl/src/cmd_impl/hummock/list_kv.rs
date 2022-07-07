@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use bytes::{Buf, BufMut, BytesMut};
-use risingwave_common::catalog::TableId;
-use risingwave_hummock_sdk::key::next_key;
-use risingwave_storage::store::ReadOptions;
-use risingwave_storage::StateStore;
+use piestream_common::catalog::TableId;
+use piestream_hummock_sdk::key::next_key;
+use piestream_storage::store::ReadOptions;
+use piestream_storage::StateStore;
 
 use crate::common::HummockServiceOpts;
 

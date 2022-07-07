@@ -5,7 +5,7 @@ authors = ["Dandandan <danielheres@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-risingwave_sqlparser = { path = "../" }
+piestream_sqlparser = { path = "../" }
 
 [dev-dependencies]
 criterion = "0.3"
