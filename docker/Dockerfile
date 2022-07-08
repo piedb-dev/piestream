@@ -12,6 +12,11 @@ RUN mkdir -p /piestream
 
 WORKDIR /piestream
 
+COPY proto proto
+COPY src src
+COPY rust-toolchain rust-toolchain
+COPY Cargo.toml Cargo.toml
+
 COPY ./ /piestream
 
 ENV PATH /root/.cargo/bin/:$PATH
