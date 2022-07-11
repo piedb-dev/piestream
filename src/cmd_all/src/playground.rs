@@ -43,7 +43,7 @@ async fn load_risedev_config(
     Ok((steps, services))
 }
 
-pub enum piestreamService {
+pub enum PiestreamService {
     Compute(Vec<OsString>),
     Meta(Vec<OsString>),
     Frontend(Vec<OsString>),
@@ -78,28 +78,28 @@ pub async fn playground() -> Result<()> {
                     ServiceConfig::ComputeNode(c) => {
                         let mut command = Command::new("compute-node");
                         ComputeNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(piestreamService::Compute(
+                        rw_services.push(PiestreamService::Compute(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::MetaNode(c) => {
                         let mut command = Command::new("meta-node");
                         MetaNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(piestreamService::Meta(
+                        rw_services.push(PiestreamService::Meta(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::FrontendV2(c) => {
                         let mut command = Command::new("frontend-node");
                         FrontendService::apply_command_args(&mut command, c)?;
-                        rw_services.push(piestreamService::Frontend(
+                        rw_services.push(PiestreamService::Frontend(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::Compactor(c) => {
                         let mut command = Command::new("compactor");
                         CompactorService::apply_command_args(&mut command, c)?;
-                        rw_services.push(piestreamService::Compactor(
+                        rw_services.push(PiestreamService::Compactor(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
@@ -113,16 +113,16 @@ pub async fn playground() -> Result<()> {
         Err(e) => {
             tracing::warn!("Failed to load risedev config. All components will be started using the default command line options.\n{}", e);
             vec![
-                piestreamService::Meta(vec!["--backend".into(), "mem".into()]),
-                piestreamService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
-                piestreamService::Frontend(vec![]),
+                PiestreamService::Meta(vec!["--backend".into(), "mem".into()]),
+                PiestreamService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
+                PiestreamService::Frontend(vec![]),
             ]
         }
     };
 
     for service in services {
         match service {
-            piestreamService::Meta(mut opts) => {
+            PiestreamService::Meta(mut opts) => {
                 opts.insert(0, "meta-node".into());
                 tracing::info!("starting meta-node thread with cli args: {:?}", opts);
                 let opts = piestream_meta::MetaNodeOpts::parse_from(opts);
@@ -136,7 +136,7 @@ pub async fn playground() -> Result<()> {
                 // wait for the service to be ready
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-            piestreamService::Compute(mut opts) => {
+            PiestreamService::Compute(mut opts) => {
                 opts.insert(0, "compute-node".into());
                 tracing::info!("starting compute-node thread with cli args: {:?}", opts);
                 let opts = piestream_compute::ComputeNodeOpts::parse_from(opts);
@@ -144,7 +144,7 @@ pub async fn playground() -> Result<()> {
                 let _compute_handle =
                     tokio::spawn(async move { piestream_compute::start(opts).await });
             }
-            piestreamService::Frontend(mut opts) => {
+            PiestreamService::Frontend(mut opts) => {
                 opts.insert(0, "frontend-node".into());
                 tracing::info!("starting frontend-node thread with cli args: {:?}", opts);
                 let opts = piestream_frontend::FrontendOpts::parse_from(opts);
@@ -152,7 +152,7 @@ pub async fn playground() -> Result<()> {
                 let _frontend_handle =
                     tokio::spawn(async move { piestream_frontend::start(opts).await });
             }
-            piestreamService::Compactor(mut opts) => {
+            PiestreamService::Compactor(mut opts) => {
                 opts.insert(0, "compactor".into());
                 tracing::info!("starting compactor thread with cli args: {:?}", opts);
                 let opts = piestream_compactor::CompactorOpts::parse_from(opts);
