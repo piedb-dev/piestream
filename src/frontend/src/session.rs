@@ -498,22 +498,29 @@ impl Session for SessionImpl {
         sql: &str,
     ) -> std::result::Result<PgResponse, BoxedError> {
         // Parse sql.
+        //SQL解析成Statement类型
+        //sql解析由sqlparser模块的Parser执行，
+        //Statement结构体包含所有记录的参数，可自行查看
         let mut stmts = Parser::parse_sql(sql).map_err(|e| {
             tracing::error!("failed to parse sql:\n{}:\n{}", sql, e);
             e
         })?;
+        //判断是否为空，此时的stmt还是一个vec,且vec中只有一个值
         if stmts.is_empty() {
             return Ok(PgResponse::empty_result(
                 pgwire::pg_response::StatementType::EMPTY,
             ));
         }
+        //此时stmts中含有多个stmt，提示不能在一个sql语句中，处理多个任务
         if stmts.len() > 1 {
             return Ok(PgResponse::empty_result_with_notice(
                 pgwire::pg_response::StatementType::EMPTY,
                 "cannot insert multiple commands into statement".to_string(),
             ));
         }
+        // 获取stmts中第一个值,
         let stmt = stmts.swap_remove(0);
+        // 交给handler处理下面逻辑
         let rsp = handle(self, stmt, sql).await.map_err(|e| {
             tracing::error!("failed to handle sql:\n{}:\n{}", sql, e);
             e

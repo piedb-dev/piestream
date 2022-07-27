@@ -103,7 +103,10 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     // WARNING: don't change the function signature. Making it `async fn` will cause
     // slow compile in release mode.
     Box::pin(async move {
+        //初始化记录环境变量等基础参数的session
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+        //启动pgwire的pg_serve服务
+        //use pgwire::pg_server::pg_serve;
         pg_serve(&opts.host, session_mgr).await.unwrap();
     })
 }

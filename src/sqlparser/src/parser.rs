@@ -133,8 +133,20 @@ impl Parser {
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
+    /// 解析SQL语句并生成抽象语法树(AST)
     pub fn parse_sql(sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(sql);
+        //SQL标记枚举,拆分sql中的关键信息，使用Token保存，包括关键词、符号、聚合函数等，
+        // 案例客户端输入sql = create table t2 (v2 int);
+        // tokens = [ Word(Word { value: "create", quote_style: None, keyword: CREATE }), 
+        // Whitespace(Space), 
+        // Word(Word { value: "table", quote_style: None, keyword: TABLE }), 
+        // Whitespace(Space), 
+        // Word(Word { value: "t2", quote_style: None, keyword: NoKeyword }), 
+        // Whitespace(Space), LParen, 
+        // Word(Word { value: "v2", quote_style: None, keyword: NoKeyword }), 
+        // Whitespace(Space), Word(Word { value: "int", quote_style: None, keyword: INT }), 
+        // RParen, SemiColon]
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
         let mut stmts = Vec::new();
@@ -152,7 +164,7 @@ impl Parser {
             if expecting_statement_delimiter {
                 return parser.expected("end of statement", parser.peek_token());
             }
-
+            //根据keyword选择对应的解析函数，keyword有多个，每个代表不同的含义，多次选择执行函数
             let statement = parser.parse_statement()?;
             stmts.push(statement);
             expecting_statement_delimiter = true;
@@ -162,6 +174,7 @@ impl Parser {
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
+    /// 解析单个顶级语句(如SELECT、INSERT、CREATE等)，在语句分隔符之前停止(如果有的话)
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {

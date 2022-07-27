@@ -18,16 +18,20 @@ use tikv_jemallocator::Jemalloc;
 
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
+//前端节点启动入口
 #[cfg_attr(coverage, no_coverage)]
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() {
     use clap::StructOpt;
-
+    //设置数据库启动环境，
+    //piestream_frontend = { path = "../frontend" }
+    //piestream_rt = { path = "../utils/runtime" }
+    //在每个toml文件中，依赖的定义，可以基于本地项目的绝对路径或者相对路径
     let opts = piestream_frontend::FrontendOpts::parse();
 
     piestream_rt::oneshot_common();
+    //初始化日志
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
-
+    //程序启动 
     piestream_frontend::start(opts).await
 }

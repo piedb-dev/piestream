@@ -71,9 +71,11 @@ impl UserAuthenticator {
 }
 
 /// Binds a Tcp listener at `addr`. Spawn a coroutine to serve every new connection.
+/// 绑定Tcp侦听器地址为addr。生成一个协同程序来服务于每一个新的连接
 pub async fn pg_serve(addr: &str, session_mgr: Arc<impl SessionManager>) -> io::Result<()> {
     let listener = TcpListener::bind(addr).await.unwrap();
     // accept connections and process them, spawning a new thread for each one
+    // 接收连接并处理它们，为每个连接生成一个新线程
     tracing::info!("Server Listening at {}", addr);
     loop {
         let session_mgr = session_mgr.clone();
@@ -81,6 +83,7 @@ pub async fn pg_serve(addr: &str, session_mgr: Arc<impl SessionManager>) -> io::
         match conn_ret {
             Ok((stream, peer_addr)) => {
                 tracing::info!("New connection: {}", peer_addr);
+                //tokio启动新任务的方法tokio::spawn(),参数是pg_serve_conn，可以不断的启动一个服务程序
                 tokio::spawn(async move {
                     // connection succeeded
                     pg_serve_conn(stream, session_mgr).await;
@@ -96,14 +99,16 @@ pub async fn pg_serve(addr: &str, session_mgr: Arc<impl SessionManager>) -> io::
 }
 
 async fn pg_serve_conn(socket: TcpStream, session_mgr: Arc<impl SessionManager>) {
+    //初始化一个psql连接的状态机，从tcp流读取pg消息并写回结果。
     let mut pg_proto = PgProtocol::new(socket, session_mgr);
 
     let mut unnamed_statement = Default::default();
     let mut unnamed_portal = Default::default();
     let mut named_statements = Default::default();
     let mut named_portals = Default::default();
-
+    //loop循环接收
     loop {
+        //调用g_proto.process()函数，进行消息处理
         let terminate = pg_proto
             .process(
                 &mut unnamed_statement,
@@ -112,6 +117,7 @@ async fn pg_serve_conn(socket: TcpStream, session_mgr: Arc<impl SessionManager>)
                 &mut named_portals,
             )
             .await;
+        //match 结果的枚举类型
         match terminate {
             Ok(is_ter) => {
                 if is_ter {

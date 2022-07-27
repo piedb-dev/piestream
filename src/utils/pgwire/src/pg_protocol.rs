@@ -82,6 +82,7 @@ where
         }
     }
 
+    //数据库服务器启动之后，循环接收客户端输入消息的函数
     pub async fn process(
         &mut self,
         unnamed_statement: &mut PgStatement,
@@ -111,6 +112,7 @@ where
         named_statements: &mut HashMap<String, PgStatement>,
         named_portals: &mut HashMap<String, PgPortal>,
     ) -> Result<bool> {
+        //获取客户端传入的信息msg，先调用read_message获取sql，
         let msg = match self.read_message().await {
             Ok(msg) => msg,
             Err(e) => {
@@ -149,8 +151,11 @@ where
                 }
                 self.state = PgProtocolState::Regular;
             }
+            //常规sql类型都是FeMessage::Query
             FeMessage::Query(query_msg) => {
+                //sql消息的处理
                 self.process_query_msg_simple(query_msg.get_sql()).await?;
+                //sql执行结果返回
                 self.write_message_no_flush(&BeMessage::ReadyForQuery)?;
             }
             FeMessage::CancelQuery => {
@@ -346,6 +351,7 @@ where
     }
 
     async fn read_message(&mut self) -> Result<FeMessage> {
+        //客户端第一次连接是Startup、后面都是Regular常规sql
         match self.state {
             PgProtocolState::Startup => FeStartupMessage::read(&mut self.stream).await,
             PgProtocolState::Regular => FeMessage::read(&mut self.stream).await,
@@ -431,6 +437,7 @@ where
                 tracing::trace!("(simple query)receive query: {}", sql);
                 let session = self.session.clone().unwrap();
                 // execute query
+                //跳转session里执行sql，run_statement
                 let process_res = session.run_statement(sql).await;
                 self.process_query_response(process_res, false).await?;
             }

@@ -228,6 +228,7 @@ impl FeCloseMessage {
 impl FeMessage {
     /// Read one message from the stream.
     pub async fn read(stream: &mut (impl AsyncRead + Unpin)) -> Result<FeMessage> {
+        //先查询sql的长度，和字符
         let val = stream.read_u8().await?;
         let len = stream.read_i32().await?;
 
@@ -236,6 +237,7 @@ impl FeMessage {
         if payload_len > 0 {
             stream.read_exact(&mut payload).await?;
         }
+        //接收的sql字符串
         let sql_bytes = Bytes::from(payload);
 
         match val {
