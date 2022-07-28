@@ -29,6 +29,7 @@ use crate::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
 use crate::stream_fragmenter::StreamFragmenter;
 
 /// Generate create MV plan, return plan and mv table info.
+/// 生成创建MV计划，返回计划和MV表信息
 pub fn gen_create_mv_plan(
     session: &SessionImpl,
     context: OptimizerContextRef,
@@ -36,6 +37,7 @@ pub fn gen_create_mv_plan(
     name: ObjectName,
     properties: HashMap<String, String>,
 ) -> Result<(PlanRef, ProstTable)> {
+    // 解析出schema、table_name
     let (schema_name, table_name) = Binder::resolve_table_name(name)?;
     check_schema_writable(&schema_name)?;
     let (database_id, schema_id) = session
@@ -43,12 +45,13 @@ pub fn gen_create_mv_plan(
         .catalog_reader()
         .read_guard()
         .check_relation_name_duplicated(session.database(), &schema_name, &table_name)?;
-
+    // query的绑定，
     let bound = {
         let mut binder = Binder::new(
             session.env().catalog_reader().read_guard(),
             session.database().to_string(),
         );
+        
         binder.bind_query(*query)?
     };
 
@@ -80,9 +83,11 @@ pub async fn handle_create_mv(
     query: Box<Query>,
     with_options: WithProperties,
 ) -> Result<PgResponse> {
+    
     let session = context.session_ctx.clone();
-
+    // 生成graph，又叫DAG有向无环图
     let (table, graph) = {
+        // 先生成PlanNode计划节点
         let (plan, table) = gen_create_mv_plan(
             &session,
             context.into(),
@@ -90,6 +95,7 @@ pub async fn handle_create_mv(
             name,
             handle_with_properties("create_mv", with_options.0)?,
         )?;
+        // 计划节点转换为流节点
         let stream_plan = plan.to_stream_prost();
         let graph = StreamFragmenter::build_graph(stream_plan);
 

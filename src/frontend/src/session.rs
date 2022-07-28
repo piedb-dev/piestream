@@ -60,6 +60,7 @@ use crate::FrontendOpts;
 pub struct OptimizerContext {
     pub session_ctx: Arc<SessionImpl>,
     // We use `AtomicI32` here because  `Arc<T>` implements `Send` only when `T: Send + Sync`.
+    // 原子类型,Rust中的原子类型在线程之间提供原始的共享内存通信，并且是其他并发类型的构建基础
     pub next_id: AtomicI32,
     /// For debugging purposes, store the SQL string in Context
     pub sql: Arc<str>,
