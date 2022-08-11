@@ -25,7 +25,7 @@ async fn main() {
     use clap::StructOpt;
     let opts = piestream_frontend::FrontendOpts::parse();
     // piestream_rt::oneshot_common();
-    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
+    // piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
     piestream_frontend::mysql_start(opts).await
 }
 

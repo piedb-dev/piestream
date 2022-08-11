@@ -12,28 +12,35 @@
 // // // See the License for the specific language governing permissions and
 // // // limitations under the License.
 
-use std::io;
 use std::sync::Arc;
+use downcast_rs::Downcast;
 use pgwire::pg_response::PgResponse;
 use pgwire::pg_field_descriptor::PgFieldDescriptor;
 use pgwire::pg_server::Session;
 use pgwire::pg_server::UserAuthenticator;
 use tokio::net::TcpListener;
-use std::io::Result;
+use std::io::{ Result,Error};
 // use std::result::Result;
 use msql_srv::*;
 use msql_srv::OkResponse;
 
-use std::io::Error;
 use pgwire::pg_server::SessionManager;
 use pgwire::pg_server::BoxedError;
 use piestream_sqlparser::ast::Statement;
 use piestream_sqlparser::parser::Parser;
 use crate::session::{SessionImpl, AuthContext, FrontendEnv,SessionManagerImpl};
-use crate::handler::handle;
 use async_trait::async_trait;
 use crate::FrontendOpts;
 use clap::Parser as ClapParser;
+
+
+
+const CURRENT_DB: &str = "select database()";
+const SHOW_DB: &str = "show databases";
+const SHOW_SCHEMAS: &str = "show schemas";
+const SHOW_TABLES: &str = "show tables";
+const SHOW_VERSION: &str = "select version()";
+
 
 
 pub async fn mysql_server(addr: &str) -> () {
@@ -47,6 +54,7 @@ pub async fn mysql_server(addr: &str) -> () {
         let (socket, _) = listener.accept().await.unwrap();
         // let clone_api = api.clone();
         let api = MySQLApi::new().await.unwrap();
+        println!("启动数据库服务");
 
         tokio::spawn(async move {
             let result = AsyncMysqlIntermediary::run_on(api,socket).await;
@@ -119,8 +127,6 @@ impl MySQLApi
         })
     }
 
-
-
     pub fn session_ref(&self) -> Arc<SessionImpl> {
         let env = FrontendEnv::mock();
         Arc::new(SessionImpl::new(
@@ -146,6 +152,32 @@ impl MySQLApi
         println!();
     }
 
+    pub fn show_dbs<'a, W: std::io::Write + Send>(
+        &'a self,
+        results: QueryResultWriter<'a, W>,
+        pg_results: PgResponse
+    ) -> Result<()> {
+        let values = pg_results.values();
+        let str_col = [Column {
+            table: "".to_string(),
+            column: "Databases".to_string(),
+            coltype: ColumnType::MYSQL_TYPE_STRING,
+            colflags: ColumnFlags::empty(),
+        }];
+        let mut rw = results.start(&str_col)?;
+        rw.write_col("information_schema")?;
+        rw.end_row()?;
+        rw.write_col("mysql")?;
+        rw.end_row()?;
+        rw.write_col("performance_schema")?;
+        rw.end_row()?;
+        for db in values {
+            let db_name = db[0].as_ref().unwrap();
+            rw.write_col(db_name)?;
+            rw.end_row()?;
+        }
+        rw.finish()
+    }
 
 
 }
@@ -238,35 +270,42 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         }).unwrap();
         let stmt = stmts.swap_remove(0);
         let env = FrontendEnv::mock();
-        // let rsp = self.session_mgr.connect("dev", "root").run_statement(sql).await.unwrap();
-        // let rsp = self.session_ref().run_statement(sql).await.unwrap();
         let rsp = self.session_mgr.connect("dev", "root").unwrap().run_statement(sql).await.unwrap();
-        // results.completed(OkResponse::default());
+        println!("rsp = {:?}",rsp);
+        match lower_case_sql.as_str() {
+            SHOW_DB => self.show_dbs(results,rsp),
+            _ => {
+                results.completed(OkResponse::default())
+            }
+        }
+        
+
+        
         // self.write_output(results);
-        println!("rsp ======== {:?}",&rsp);
         // self.write_output(results);
-        let cols = [
-            Column {
-                table: "table".to_string(),
-                column: "v1".to_string(),
-                coltype: ColumnType::MYSQL_TYPE_LONGLONG,
-                colflags: ColumnFlags::empty(),
-            },
-            Column {
-                table: "table".to_string(),
-                column: "v2".to_string(),
-                coltype: ColumnType::MYSQL_TYPE_STRING,
-                colflags: ColumnFlags::empty(),
-            },
-        ];
-        let mut rw = results.start(&cols)?;
-        rw.write_col(42)?;
-        rw.write_col("b's value")?;
+        // let cols = [
+        //     Column {
+        //         table: "table".to_string(),
+        //         column: "v1".to_string(),
+        //         coltype: ColumnType::MYSQL_TYPE_LONGLONG,
+        //         colflags: ColumnFlags::empty(),
+        //     },
+        //     Column {
+        //         table: "table".to_string(),
+        //         column: "v2".to_string(),
+        //         coltype: ColumnType::MYSQL_TYPE_STRING,
+        //         colflags: ColumnFlags::empty(),
+        //     },
+        // ];
+        // let mut rw = results.start(&cols)?;
+        // rw.write_col(42)?;
+        // rw.write_col("b's value")?;
+        // OK(results.completed(OkResponse::default()));
         // rw.end_row()?;
         // rw.write_col(22)?;
         // rw.write_col("c's value")?;
         // rw.finish();
-        Ok(())
+        // Ok(())
     }
     async fn on_init<'a>(
         &'a mut self,
@@ -276,5 +315,13 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         tracing::info!("enter db");
         writer.ok()
     }
+}
+
+
+
+
+#[test]
+fn test_mysql() {
+
 }
 
