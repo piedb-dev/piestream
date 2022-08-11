@@ -17,8 +17,6 @@ piestream_ctl = { path = "../ctl" }
 piestream_frontend = { path = "../frontend" }
 piestream_meta = { path = "../meta" }
 piestream_rt = { path = "../utils/runtime" }
-piestream_mysql_srv = { path = "../utils/mysql_srv" }
-
 tikv-jemallocator = "0.5"
 tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "rt",
