@@ -25,6 +25,7 @@ use msql_srv::*;
 use msql_srv::OkResponse;
 
 use pgwire::pg_server::SessionManager;
+use pgwire::pg_response::StatementType;
 use pgwire::pg_server::BoxedError;
 use piestream_sqlparser::ast::Statement;
 use piestream_sqlparser::parser::Parser;
@@ -117,7 +118,6 @@ impl MySQLApi
         let opts = FrontendOpts::parse();
         let (env, join_handle, heartbeat_join_handle, heartbeat_shutdown_sender) = 
         FrontendEnv::init(&opts).await.unwrap();
-        println!("MySQLApi======================MySQLApi env new");
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
         Ok(
         Self {
@@ -142,10 +142,46 @@ impl MySQLApi
 
     pub fn write_output<'a, W: std::io::Write + Send>(
         &self,
-        // sql_result: &sql_engine::SQLResult,
         results: QueryResultWriter<'a, W>,
+        pg_results: PgResponse
     ) -> Result<()> {
-        return results.completed(OkResponse::default());
+        let stmt_type = pg_results.get_stmt_type();
+        match stmt_type {
+            StatementType::CREATE_TABLE => {
+                return results.completed(OkResponse::default());
+            },
+            StatementType::INSERT => {
+                return results.completed(OkResponse::default());
+            },
+            StatementType::SELECT => {
+                let values = pg_results.values();
+                let row_desc = pg_results.get_row_desc();
+                let mut cols = vec![];
+                for pg_field in row_desc {
+                    let pg_field_name = pg_field.get_name();
+                    let type_oid = pg_field.get_type_oid();
+                    let col = Column {
+                        table: "table".to_string(),
+                        column: pg_field_name.to_string(),
+                        coltype: ColumnType::MYSQL_TYPE_LONGLONG,
+                        colflags: ColumnFlags::empty(),
+                    };
+                    cols.push(col);
+                }
+                let mut rw = results.start(&cols)?;
+                for value in values {
+                    let v1 = value[0].as_ref().unwrap();
+                    let v2 = value[1].as_ref().unwrap();
+                    rw.write_col(v1)?;
+                    rw.write_col(v2)?;
+                    rw.end_row()?;
+                };
+                rw.finish()
+            },
+            _ => {
+                return results.completed(OkResponse::default());
+            }
+        }
     }
 
     pub fn pgresponse_to_sqlresponse() {
@@ -275,37 +311,10 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         match lower_case_sql.as_str() {
             SHOW_DB => self.show_dbs(results,rsp),
             _ => {
-                results.completed(OkResponse::default())
+                self.write_output(results,rsp)
             }
         }
-        
 
-        
-        // self.write_output(results);
-        // self.write_output(results);
-        // let cols = [
-        //     Column {
-        //         table: "table".to_string(),
-        //         column: "v1".to_string(),
-        //         coltype: ColumnType::MYSQL_TYPE_LONGLONG,
-        //         colflags: ColumnFlags::empty(),
-        //     },
-        //     Column {
-        //         table: "table".to_string(),
-        //         column: "v2".to_string(),
-        //         coltype: ColumnType::MYSQL_TYPE_STRING,
-        //         colflags: ColumnFlags::empty(),
-        //     },
-        // ];
-        // let mut rw = results.start(&cols)?;
-        // rw.write_col(42)?;
-        // rw.write_col("b's value")?;
-        // OK(results.completed(OkResponse::default()));
-        // rw.end_row()?;
-        // rw.write_col(22)?;
-        // rw.write_col("c's value")?;
-        // rw.finish();
-        // Ok(())
     }
     async fn on_init<'a>(
         &'a mut self,
