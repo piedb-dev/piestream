@@ -21,14 +21,11 @@ use std::io::{ Result,Error};
 use msql_srv::*;
 use msql_srv::OkResponse;
 // use msql_srv::ErrorKind;
-use std::result;
 use pgwire::pg_server::SessionManager;
 use pgwire::pg_response::StatementType;
 use pgwire::pg_server::BoxedError;
 use crate::session::{SessionImpl, AuthContext, FrontendEnv,SessionManagerImpl};
 use async_trait::async_trait;
-use crate::FrontendOpts;
-use clap::Parser as ClapParser;
 
 
 
@@ -41,15 +38,14 @@ const VERSION_COMMENT:&str = "select @@version_comment limit 1";
 
 
 
-pub async fn mysql_server(addr: &str) -> () {
+pub async fn mysql_server(addr: &str,session_mgr: Arc<SessionManagerImpl>) -> () {
     let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("Server Listening at {}", &addr);
     loop {
+        let session_mgr = session_mgr.clone();
         let (socket, _) = listener.accept().await.unwrap();
-        // let clone_api = api.clone();
-        let api = MySQLApi::new().await.unwrap();
+        let api = MySQLApi::new(session_mgr).await.unwrap();
         println!("启动数据库服务");
-
         tokio::spawn(async move {
             let result = AsyncMysqlIntermediary::run_on(api,socket).await;
             match result {
@@ -83,7 +79,7 @@ pub struct MySQLApi
 //         }
 //         Self {
 //             // engine: self.engine.clone(),
-//             // session_mgr: self.session_mgr,
+//             session: self.session,
 //             salt: scramble,
 //             id: self.id + 1,
 //         }
@@ -92,7 +88,6 @@ pub struct MySQLApi
 
 impl SessionManager for MySQLApi {
     type Session = SessionImpl;
-
 
     fn connect(
         &self,
@@ -106,13 +101,8 @@ impl SessionManager for MySQLApi {
 
 impl MySQLApi
 {
-    pub async fn new() -> Result<Self> {
-        // let env = FrontendEnv::mock();
-        let opts = FrontendOpts::parse();
-        FrontendEnv::init(&opts).await.unwrap();
-        //let rsp = self.session_mgr.connect("dev", "root").unwrap().run_statement(sql).await.unwrap();
-        let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        let session = session_mgr.connect("dev", "root").unwrap();
+    pub async fn new(session_mgr: Arc<SessionManagerImpl>) -> Result<Self> {
+        let session = session_mgr.clone().connect("dev", "root").unwrap();
         Ok(
         Self {
             session: session,
@@ -214,12 +204,10 @@ impl MySQLApi
     pub fn show_tables<'a, W: std::io::Write + Send>(
         &'a self,
         results: QueryResultWriter<'a, W>,
-        pg_results: PgResponse
+        _pg_results: PgResponse
     ) -> Result<()> {
         results.completed(OkResponse::default())
     }
-
-
 }
 
 #[async_trait]
