@@ -45,7 +45,6 @@ pub async fn mysql_server(addr: &str,session_mgr: Arc<SessionManagerImpl>) -> ()
         let session_mgr = session_mgr.clone();
         let (socket, _) = listener.accept().await.unwrap();
         let api = MySQLApi::new(session_mgr).await.unwrap();
-        println!("启动数据库服务");
         tokio::spawn(async move {
             let result = AsyncMysqlIntermediary::run_on(api,socket).await;
             match result {
@@ -65,26 +64,6 @@ pub struct MySQLApi
     salt: [u8; 20],
     id: u32,
 }
-
-
-// impl Clone for MySQLApi {
-//     fn clone(&self) -> Self {
-//         let mut bs = vec![0u8; 20];
-//         let mut scramble: [u8; 20] = [0; 20];
-//         for i in 0..20 {
-//             scramble[i] = bs[i];
-//             if scramble[i] == b'\0' || scramble[i] == b'$' {
-//                 scramble[i] += 1;
-//             }
-//         }
-//         Self {
-//             // engine: self.engine.clone(),
-//             session: self.session,
-//             salt: scramble,
-//             id: self.id + 1,
-//         }
-//     }
-// }
 
 impl SessionManager for MySQLApi {
     type Session = SessionImpl;
@@ -171,7 +150,7 @@ impl MySQLApi
     }
 
     pub fn pgresponse_to_sqlresponse() {
-        println!();
+        println!("pgresponse_to_sql");
     }
 
     pub fn show_dbs<'a, W: std::io::Write + Send>(
@@ -287,7 +266,6 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         sql: &'a str,
         results: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        println!("sql = {:?}",&sql);
         let lower_case_sql = sql.trim().to_lowercase();
         tracing::info!("input sql: {}", lower_case_sql);
         let session = self.session.clone();
