@@ -33,6 +33,7 @@ use clap::Parser as ClapParser;
 
 // const CURRENT_DB: &str = "select database()";
 const SHOW_DB: &str = "show databases";
+const VERSION_COMMENT:&str = "select @@version_comment limit 1";
 // const SHOW_SCHEMAS: &str = "show schemas";
 // const SHOW_TABLES: &str = "show tables";
 // const SHOW_VERSION: &str = "select version()";
@@ -291,7 +292,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         let lower_case_sql = sql.trim().to_lowercase();
         tracing::info!("input sql: {}", lower_case_sql);
         let session = self.session.clone();
-        if lower_case_sql == "select @@version_comment limit 1" {
+        if lower_case_sql == VERSION_COMMENT {
             return results.completed(OkResponse::default());
         } else {
             let rsp = session.run_statement(sql).await.unwrap();
@@ -316,10 +317,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
 }
 
 
-
-
 #[test]
 fn test_mysql() {
 
 }
-
