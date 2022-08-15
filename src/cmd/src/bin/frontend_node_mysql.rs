@@ -14,8 +14,6 @@
 
 #![cfg_attr(coverage, feature(no_coverage))]
 use tikv_jemallocator::Jemalloc;
-use tokio::{net::TcpListener, io::unix::AsyncFdReadyMutGuard};
-use msql_srv::*;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
@@ -28,6 +26,3 @@ async fn main() {
     // piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
     piestream_frontend::mysql_start(opts).await
 }
-
-
-

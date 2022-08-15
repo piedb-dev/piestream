@@ -13,22 +13,17 @@
 // // // limitations under the License.
 
 use std::sync::Arc;
-use downcast_rs::Downcast;
 use pgwire::pg_response::PgResponse;
-use pgwire::pg_field_descriptor::PgFieldDescriptor;
 use pgwire::pg_server::Session;
 use pgwire::pg_server::UserAuthenticator;
 use tokio::net::TcpListener;
 use std::io::{ Result,Error};
-// use std::result::Result;
 use msql_srv::*;
 use msql_srv::OkResponse;
 
 use pgwire::pg_server::SessionManager;
 use pgwire::pg_response::StatementType;
 use pgwire::pg_server::BoxedError;
-use piestream_sqlparser::ast::Statement;
-use piestream_sqlparser::parser::Parser;
 use crate::session::{SessionImpl, AuthContext, FrontendEnv,SessionManagerImpl};
 use async_trait::async_trait;
 use crate::FrontendOpts;
@@ -36,21 +31,17 @@ use clap::Parser as ClapParser;
 
 
 
-const CURRENT_DB: &str = "select database()";
+// const CURRENT_DB: &str = "select database()";
 const SHOW_DB: &str = "show databases";
-const SHOW_SCHEMAS: &str = "show schemas";
-const SHOW_TABLES: &str = "show tables";
-const SHOW_VERSION: &str = "select version()";
+// const SHOW_SCHEMAS: &str = "show schemas";
+// const SHOW_TABLES: &str = "show tables";
+// const SHOW_VERSION: &str = "select version()";
 
 
 
 pub async fn mysql_server(addr: &str) -> () {
-    let addr = "127.0.0.1:4566".to_string();
     let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("Server Listening at {}", &addr);
-    // let session_mgr = session_mgr.clone();
-
-    // let api = MySQLApi::new().await.unwrap();
     loop {
         let (socket, _) = listener.accept().await.unwrap();
         // let clone_api = api.clone();
@@ -72,7 +63,7 @@ pub async fn mysql_server(addr: &str) -> () {
 
 pub struct MySQLApi
 {
-    session_mgr: Arc<SessionManagerImpl>,
+    session: Arc<SessionImpl>,
     salt: [u8; 20],
     id: u32,
 }
@@ -116,12 +107,13 @@ impl MySQLApi
     pub async fn new() -> Result<Self> {
         // let env = FrontendEnv::mock();
         let opts = FrontendOpts::parse();
-        let (env, join_handle, heartbeat_join_handle, heartbeat_shutdown_sender) = 
         FrontendEnv::init(&opts).await.unwrap();
+        //let rsp = self.session_mgr.connect("dev", "root").unwrap().run_statement(sql).await.unwrap();
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+        let session = session_mgr.connect("dev", "root").unwrap();
         Ok(
         Self {
-            session_mgr: session_mgr,
+            session: session,
             salt: [0; 20],
             id: 8,
         })
@@ -159,7 +151,7 @@ impl MySQLApi
                 let mut cols = vec![];
                 for pg_field in row_desc {
                     let pg_field_name = pg_field.get_name();
-                    let type_oid = pg_field.get_type_oid();
+                    // let type_oid = pg_field.get_type_oid();
                     let col = Column {
                         table: "table".to_string(),
                         column: pg_field_name.to_string(),
@@ -273,7 +265,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
 
     async fn on_execute<'a>(
         &'a mut self,
-        id: u32,
+        _id: u32,
         _param: ParamParser<'a>,
         results: QueryResultWriter<'a, W>,
     ) -> Result<()> {
@@ -298,27 +290,24 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         println!("sql = {:?}",&sql);
         let lower_case_sql = sql.trim().to_lowercase();
         tracing::info!("input sql: {}", lower_case_sql);
-        let db_name = "dev";
-        let user_name = "root";
-        let mut stmts = Parser::parse_sql(sql).map_err(|e| {
-            tracing::error!("failed to parse sql:\n{}:\n{}", sql, e);
-            e
-        }).unwrap();
-        let stmt = stmts.swap_remove(0);
-        let env = FrontendEnv::mock();
-        let rsp = self.session_mgr.connect("dev", "root").unwrap().run_statement(sql).await.unwrap();
-        println!("rsp = {:?}",rsp);
-        match lower_case_sql.as_str() {
-            SHOW_DB => self.show_dbs(results,rsp),
-            _ => {
-                self.write_output(results,rsp)
+        let session = self.session.clone();
+        if lower_case_sql == "select @@version_comment limit 1" {
+            return results.completed(OkResponse::default());
+        } else {
+            let rsp = session.run_statement(sql).await.unwrap();
+            println!("rsp = {:?}",rsp);
+            match lower_case_sql.as_str() {
+                SHOW_DB => self.show_dbs(results,rsp),
+                _ => {
+                    self.write_output(results,rsp)
+                }
             }
         }
 
     }
     async fn on_init<'a>(
         &'a mut self,
-        database_name: &'a str,
+        _database_name: &'a str,
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
         tracing::info!("enter db");

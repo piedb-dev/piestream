@@ -110,10 +110,11 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     })
 }
 
-pub fn mysql_start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
-        let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        mysql_server(&opts.host).await;
+        let addr = "127.0.0.1:4566".to_string();
+        // let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+        mysql_server(&addr).await;
     })
 }
 
