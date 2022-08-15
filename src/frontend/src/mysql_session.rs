@@ -20,7 +20,8 @@ use tokio::net::TcpListener;
 use std::io::{ Result,Error};
 use msql_srv::*;
 use msql_srv::OkResponse;
-
+// use msql_srv::ErrorKind;
+use std::result;
 use pgwire::pg_server::SessionManager;
 use pgwire::pg_response::StatementType;
 use pgwire::pg_server::BoxedError;
@@ -295,14 +296,21 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         if lower_case_sql == VERSION_COMMENT {
             return results.completed(OkResponse::default());
         } else {
-            let rsp = session.run_statement(sql).await.unwrap();
-            println!("rsp = {:?}",rsp);
-            match lower_case_sql.as_str() {
-                SHOW_DB => self.show_dbs(results,rsp),
-                _ => {
-                    self.write_output(results,rsp)
+            let rsp = session.run_statement(sql).await;
+            match rsp {
+                Ok(res) => {
+                    match lower_case_sql.as_str() {
+                        SHOW_DB => self.show_dbs(results,res),
+                        _ => {
+                            self.write_output(results,res)
+                        }
+                    }
+                },
+                Err(e) => {
+                    return results.error(ErrorKind::ER_ABORTING_CONNECTION, b"SQL syntax error")
+
                 }
-            }
+            }            
         }
 
     }
