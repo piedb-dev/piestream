@@ -34,9 +34,9 @@ use clap::Parser as ClapParser;
 
 // const CURRENT_DB: &str = "select database()";
 const SHOW_DB: &str = "show databases";
+const SHOW_TABLES: &str = "show tables";
 const VERSION_COMMENT:&str = "select @@version_comment limit 1";
 // const SHOW_SCHEMAS: &str = "show schemas";
-// const SHOW_TABLES: &str = "show tables";
 // const SHOW_VERSION: &str = "select version()";
 
 
@@ -140,6 +140,7 @@ impl MySQLApi
         pg_results: PgResponse
     ) -> Result<()> {
         let stmt_type = pg_results.get_stmt_type();
+        // todo alter more StatementType 
         match stmt_type {
             StatementType::CREATE_TABLE => {
                 return results.completed(OkResponse::default());
@@ -147,6 +148,7 @@ impl MySQLApi
             StatementType::INSERT => {
                 return results.completed(OkResponse::default());
             },
+            // todo support more query output
             StatementType::SELECT => {
                 let values = pg_results.values();
                 let row_desc = pg_results.get_row_desc();
@@ -207,6 +209,14 @@ impl MySQLApi
             rw.end_row()?;
         }
         rw.finish()
+    }
+
+    pub fn show_tables<'a, W: std::io::Write + Send>(
+        &'a self,
+        results: QueryResultWriter<'a, W>,
+        pg_results: PgResponse
+    ) -> Result<()> {
+        results.completed(OkResponse::default())
     }
 
 
@@ -300,18 +310,20 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
             match rsp {
                 Ok(res) => {
                     match lower_case_sql.as_str() {
+                        // todo add more ddl command function
                         SHOW_DB => self.show_dbs(results,res),
+                        SHOW_TABLES => self.show_tables(results,res),
                         _ => {
                             self.write_output(results,res)
                         }
                     }
                 },
                 Err(e) => {
+                    // todo support more ErrorKind
                     return results.error(ErrorKind::ER_ABORTING_CONNECTION, e.to_string().as_bytes())
                 }
             }            
         }
-
     }
     async fn on_init<'a>(
         &'a mut self,
