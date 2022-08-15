@@ -307,8 +307,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
                     }
                 },
                 Err(e) => {
-                    return results.error(ErrorKind::ER_ABORTING_CONNECTION, b"SQL syntax error")
-
+                    return results.error(ErrorKind::ER_ABORTING_CONNECTION, e.to_string().as_bytes())
                 }
             }            
         }
