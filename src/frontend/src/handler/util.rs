@@ -71,10 +71,16 @@ pub fn col_descs_to_rows(columns: Vec<ColumnDesc>) -> Vec<Row> {
             col.flatten()
                 .into_iter()
                 .map(|c| {
-                    let type_name = if let DataType::Struct { fields: _f } = c.data_type {
-                        c.type_name.clone()
-                    } else {
-                        format!("{:?}", &c.data_type)
+                    let type_name = match c.data_type {
+                        DataType::Struct { .. } => c.type_name.clone(),
+                        DataType::Int32 | DataType::Int64 => {
+                            if c.type_name.is_empty() {
+                                format!("{:?}", &c.data_type)
+                            } else {
+                                c.type_name
+                            }
+                        }
+                        _ => format!("{:?}", &c.data_type),
                     };
                     Row::new(vec![Some(c.name), Some(type_name)])
                 })

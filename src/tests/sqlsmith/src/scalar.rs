@@ -29,11 +29,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         match typ {
             T::Int64 => Expr::Value(Value::Number(self.rng.gen_range(0..100).to_string(), false)),
             T::Int32 => Expr::TypedString {
-                data_type: DataType::Int(None),
+                data_type: DataType::Int(None, false),
                 value: self.gen_int(),
             },
             T::Int16 => Expr::TypedString {
-                data_type: DataType::SmallInt(None),
+                data_type: DataType::SmallInt(None, false),
                 value: self.gen_int(),
             },
             T::Varchar => Expr::Value(Value::SingleQuotedString(

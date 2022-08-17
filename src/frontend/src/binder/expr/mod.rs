@@ -376,13 +376,15 @@ pub fn bind_struct_field(column_def: &StructField) -> Result<ColumnDesc> {
 pub fn bind_data_type(data_type: &AstDataType) -> Result<DataType> {
     let data_type = match data_type {
         AstDataType::Boolean => DataType::Boolean,
-        AstDataType::SmallInt(None) => DataType::Int16,
-        AstDataType::Int(None) => DataType::Int32,
-        AstDataType::BigInt(None) => DataType::Int64,
+        AstDataType::SmallInt(None, false) => DataType::Int16,
+        AstDataType::SmallInt(None, true) => DataType::Int32,
+        AstDataType::Int(None, false) => DataType::Int32,
+        AstDataType::Int(None, true) => DataType::Int64,
+        AstDataType::BigInt(None, false) => DataType::Int64,
         AstDataType::Real | AstDataType::Float(Some(1..=24)) => DataType::Float32,
         AstDataType::Double | AstDataType::Float(Some(25..=53) | None) => DataType::Float64,
         AstDataType::Decimal(None, None) => DataType::Decimal,
-        AstDataType::Varchar(_) | AstDataType::String => DataType::Varchar,
+        AstDataType::Char(_) | AstDataType::Varchar(_) | AstDataType::String | AstDataType::Text => DataType::Varchar,
         AstDataType::Date => DataType::Date,
         AstDataType::Time(false) => DataType::Time,
         AstDataType::Timestamp(false) => DataType::Timestamp,
@@ -391,13 +393,13 @@ pub fn bind_data_type(data_type: &AstDataType) -> Result<DataType> {
         AstDataType::Array(datatype) => DataType::List {
             datatype: Box::new(bind_data_type(datatype)?),
         },
-        AstDataType::Char(..) => {
-            return Err(ErrorCode::NotImplemented(
-                "CHAR is not supported, please use VARCHAR instead\n".to_string(),
-                None.into(),
-            )
-            .into())
-        }
+        // AstDataType::Char(..) => {
+        //     return Err(ErrorCode::NotImplemented(
+        //         "CHAR is not supported, please use VARCHAR instead\n".to_string(),
+        //         None.into(),
+        //     )
+        //     .into())
+        // }
         AstDataType::Struct(types) => DataType::Struct {
             fields: types
                 .iter()

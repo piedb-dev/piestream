@@ -42,13 +42,14 @@ pub enum DataType {
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
-    TinyInt(Option<u64>),
+    /// Supporting unsigned with bool
+    TinyInt(Option<u64>, bool),
     /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
-    SmallInt(Option<u64>),
+    SmallInt(Option<u64>, bool),
     /// Integer with optional display width e.g. INT or INT(11)
-    Int(Option<u64>),
+    Int(Option<u64>, bool),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
-    BigInt(Option<u64>),
+    BigInt(Option<u64>, bool),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION
@@ -99,12 +100,38 @@ impl fmt::Display for DataType {
                 }
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size),
-            DataType::TinyInt(zerofill) => format_type_with_optional_length(f, "TINYINT", zerofill),
-            DataType::SmallInt(zerofill) => {
-                format_type_with_optional_length(f, "SMALLINT", zerofill)
-            }
-            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill),
-            DataType::BigInt(zerofill) => format_type_with_optional_length(f, "BIGINT", zerofill),
+            DataType::TinyInt(zerofill, unsigned) => format_type_with_optional_length(
+                f,
+                if *unsigned {
+                    "TINYINT UNSIGNED"
+                } else {
+                    "TINYINT"
+                },
+                zerofill,
+            ),
+            DataType::SmallInt(zerofill, unsigned) => format_type_with_optional_length(
+                f,
+                if *unsigned {
+                    "SMALLINT UNSIGNED"
+                } else {
+                    "SMALLINT"
+                },
+                zerofill,
+            ),
+            DataType::Int(zerofill, unsigned) => format_type_with_optional_length(
+                f,
+                if *unsigned { "INT UNSIGNED" } else { "INT" },
+                zerofill,
+            ),
+            DataType::BigInt(zerofill, unsigned) => format_type_with_optional_length(
+                f,
+                if *unsigned {
+                    "BIGINT UNSIGNED"
+                } else {
+                    "BIGINT"
+                },
+                zerofill,
+            ),
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
             DataType::Boolean => write!(f, "BOOLEAN"),

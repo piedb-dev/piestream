@@ -54,12 +54,17 @@ pub fn bind_sql_columns(columns: Vec<ColumnDef>) -> Result<Vec<ColumnCatalog>> {
             } else {
                 vec![]
             };
+            let type_name = match column.data_type{
+                AstDataType::SmallInt(_, true) => "Uint16",
+                AstDataType::Int(_, true) => "Uint32",
+                _ => ""
+            } ;
             column_descs.push(ColumnDesc {
                 data_type: bind_data_type(&column.data_type)?,
                 column_id: ColumnId::new((i + 1) as i32),
                 name: column.name.value,
                 field_descs,
-                type_name: "".to_string(),
+                type_name: type_name.to_string(),
             });
         }
         column_descs

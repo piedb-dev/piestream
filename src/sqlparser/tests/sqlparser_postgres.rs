@@ -49,7 +49,7 @@ fn parse_create_table_with_defaults() {
                 vec![
                     ColumnDef::new(
                         "customer_id".into(),
-                        DataType::Int(None),
+                        DataType::Int(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
@@ -60,7 +60,7 @@ fn parse_create_table_with_defaults() {
                     ),
                     ColumnDef::new(
                         "store_id".into(),
-                        DataType::SmallInt(None),
+                        DataType::SmallInt(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
@@ -88,7 +88,7 @@ fn parse_create_table_with_defaults() {
                     ColumnDef::new("email".into(), DataType::Varchar(Some(50)), None, vec![],),
                     ColumnDef::new(
                         "address_id".into(),
-                        DataType::SmallInt(None),
+                        DataType::SmallInt(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
@@ -142,7 +142,7 @@ fn parse_create_table_with_defaults() {
                     ),
                     ColumnDef::new(
                         "active".into(),
-                        DataType::Int(None),
+                        DataType::Int(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
@@ -594,7 +594,7 @@ fn parse_prepare() {
             ..
         } => {
             assert_eq!(name, "a".into());
-            assert_eq!(data_types, vec![DataType::Int(None), DataType::Text]);
+            assert_eq!(data_types, vec![DataType::Int(None, false), DataType::Text]);
 
             statement
         }

@@ -1123,7 +1123,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::BigInt(None)
+            data_type: DataType::BigInt(None, false)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1133,7 +1133,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::TinyInt(None)
+            data_type: DataType::TinyInt(None, false)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1163,7 +1163,7 @@ fn parse_try_cast() {
     assert_eq!(
         &Expr::TryCast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::BigInt(None)
+            data_type: DataType::BigInt(None, false)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1274,7 +1274,7 @@ fn parse_create_table() {
                     ColumnDef::new("lng".into(), DataType::Double, None, vec![],),
                     ColumnDef::new(
                         "constrained".into(),
-                        DataType::Int(None),
+                        DataType::Int(None, false),
                         None,
                         vec![
                             ColumnOptionDef {
@@ -1301,7 +1301,7 @@ fn parse_create_table() {
                     ),
                     ColumnDef::new(
                         "ref".into(),
-                        DataType::Int(None),
+                        DataType::Int(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
@@ -1315,7 +1315,7 @@ fn parse_create_table() {
                     ),
                     ColumnDef::new(
                         "ref2".into(),
-                        DataType::Int(None),
+                        DataType::Int(None, false),
                         None,
                         vec![ColumnOptionDef {
                             name: None,
