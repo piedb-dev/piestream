@@ -32,6 +32,7 @@ tokio-polyfill = { version = "1", package = "tokio", default-features = false, f
 tracing = { version = "0.1", features = ["release_max_level_info"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 workspace-static-link = { path = "../utils/static-link", optional = true, features = ["enabled"] }
+msql-srv = { git = "https://github.com/wangdexinhp/msql-srv", rev = "ee14d86" }
 
 [[bin]]
 name = "frontend"

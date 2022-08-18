@@ -49,6 +49,7 @@ pub mod planner;
 #[expect(dead_code)]
 pub mod scheduler;
 pub mod session;
+pub mod mysql_session;
 pub mod stream_fragmenter;
 pub mod utils;
 extern crate log;
@@ -65,6 +66,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use pgwire::pg_server::pg_serve;
+use mysql_session::mysql_server;
 use session::SessionManagerImpl;
 
 #[derive(Parser, Clone, Debug)]
@@ -105,5 +107,15 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
         pg_serve(&opts.host, session_mgr).await.unwrap();
+    })
+}
+
+
+
+pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move {
+        let addr = "127.0.0.1:4567".to_string();
+        let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
+        mysql_server(&addr,session_mgr).await;
     })
 }

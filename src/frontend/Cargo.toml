@@ -40,6 +40,8 @@ piestream_rpc_client = { path = "../rpc_client" }
 piestream_source = { path = "../source" }
 piestream_sqlparser = { path = "../sqlparser" }
 piestream_storage = { path = "../storage" }
+msql-srv = { git = "https://github.com/wangdexinhp/msql-srv", rev = "ee14d86" }
+
 serde_json = "1"
 sha2 = "0.10.2"
 smallvec = { version = "1.6.1", features = ["serde"] }

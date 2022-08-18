@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #![cfg_attr(coverage, feature(no_coverage))]
-
 use tikv_jemallocator::Jemalloc;
-
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
@@ -24,10 +22,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 async fn main() {
     use clap::StructOpt;
     let opts = piestream_frontend::FrontendOpts::parse();
-    println!("opts ========== {:?}",&opts);
     piestream_rt::oneshot_common();
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
-    piestream_frontend::start(opts).await
+    piestream_frontend::mysql_start(opts).await
 }
-
-
