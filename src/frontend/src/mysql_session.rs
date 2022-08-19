@@ -13,6 +13,7 @@
 // // // limitations under the License.
 
 use std::sync::Arc;
+use pgwire::pg_field_descriptor::TypeOid;
 use pgwire::pg_response::PgResponse;
 use pgwire::pg_server::Session;
 use pgwire::pg_server::UserAuthenticator;
@@ -111,10 +112,7 @@ impl MySQLApi
         let stmt_type = pg_results.get_stmt_type();
         // todo alter more StatementType 
         match stmt_type {
-            StatementType::CREATE_TABLE => {
-                return results.completed(OkResponse::default());
-            },
-            StatementType::INSERT => {
+            StatementType::CREATE_TABLE | StatementType::INSERT | StatementType::CREATE_SOURCE | StatementType::CREATE_MATERIALIZED_VIEW => {
                 return results.completed(OkResponse::default());
             },
             // todo support more query output
@@ -128,17 +126,29 @@ impl MySQLApi
                     let col = Column {
                         table: "table".to_string(),
                         column: pg_field_name.to_string(),
-                        coltype: ColumnType::MYSQL_TYPE_LONGLONG,
+                        coltype: match pg_field.get_type_oid(){
+                            TypeOid::Boolean => ColumnType::MYSQL_TYPE_TINY,
+                            TypeOid::SmallInt => ColumnType::MYSQL_TYPE_SHORT,
+                            TypeOid::Int => ColumnType::MYSQL_TYPE_LONG,
+                            TypeOid::BigInt => ColumnType::MYSQL_TYPE_LONGLONG,
+                            TypeOid::Float4 => ColumnType::MYSQL_TYPE_FLOAT,
+                            TypeOid::Float8 => ColumnType::MYSQL_TYPE_DOUBLE,
+                            TypeOid::Decimal => ColumnType::MYSQL_TYPE_DECIMAL,
+                            TypeOid::Varchar => ColumnType::MYSQL_TYPE_VARCHAR,
+                            TypeOid::Date => ColumnType::MYSQL_TYPE_DATE,
+                            TypeOid::Time => ColumnType::MYSQL_TYPE_TIME,
+                            TypeOid::Timestamp | TypeOid::Timestampz => ColumnType::MYSQL_TYPE_DATETIME,
+                            unsupported_type => unimplemented!("Unsupported: {:?}", unsupported_type)
+                        },
                         colflags: ColumnFlags::empty(),
                     };
                     cols.push(col);
                 }
                 let mut rw = results.start(&cols)?;
                 for value in values {
-                    let v1 = value[0].as_ref().unwrap();
-                    let v2 = value[1].as_ref().unwrap();
-                    rw.write_col(v1)?;
-                    rw.write_col(v2)?;
+                    for i in 0..cols.len(){
+                        rw.write_col(value[i].as_ref().unwrap())?;
+                    }
                     rw.end_row()?;
                 };
                 rw.finish()
@@ -248,7 +258,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         _param: ParamParser<'a>,
         results: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        // tracing::info!("on exec id {}", id);
+        tracing::info!("on exec id {}", _id);
         results.completed(OkResponse::default())
 
         // Ok(())

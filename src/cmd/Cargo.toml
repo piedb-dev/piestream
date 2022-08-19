@@ -39,6 +39,10 @@ name = "frontend"
 path = "src/bin/frontend_node.rs"
 
 [[bin]]
+name = "frontend_mysql"
+path = "src/bin/frontend_node_mysql.rs"
+
+[[bin]]
 name = "meta-node"
 path = "src/bin/meta_node.rs"
 
