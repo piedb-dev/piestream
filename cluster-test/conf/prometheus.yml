@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 1s
+  evaluation_interval: 5s
+scrape_configs:
+  - job_name: compute-job
+    static_configs:
+      - targets: ["122.70.153.18:1222","122.70.153.19:1222","122.70.153.20:1222","122.70.153.22:1222"]
+
+  - job_name: meta-job
+    static_configs:
+      - targets: ["122.70.153.21:1250"]
+
+  - job_name: minio-job
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["122.70.153.21:9000"]
+
+  - job_name: compactor-job
+    static_configs:
+      - targets: ["122.70.153.18:1222","122.70.153.19:1222","122.70.153.20:1222","122.70.153.22:1222"]
+
+  - job_name: etcd
+    static_configs:
+      - targets: ["122.70.153.20:2388","122.70.153.22:2388"]

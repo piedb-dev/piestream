@@ -1,0 +1,116 @@
+version: "3"
+services:
+  minio:
+    image: "minio/minio:latest"
+    network_mode: host
+    entrypoint: |
+      /bin/sh -c "
+        mkdir -p /data/hummock001
+        /usr/bin/docker-entrypoint.sh \"$$0\" \"$$@\"
+      "
+    command:
+      - server
+      - "--address"
+      - "0.0.0.0:9301"
+      - "--console-address"
+      - "0.0.0.0:9400"
+      - http://${NODE1}/data
+      - http://${NODE2}/data
+      - http://${NODE3}/data
+      - http://${NODE4}/data
+    environment:
+      MINIO_ROOT_PASSWORD: hummockadmin
+      MINIO_ROOT_USER: hummockadmin
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: curl -f http://localhost:9301/minio/health/cluster
+      interval: 10s
+
+  etcd:
+    image: "quay.io/coreos/etcd:v3.5.4"
+    network_mode: host
+    environment:
+      ETCD_DATA_DIR: /data
+      ETCD_LISTEN_CLIENT_URLS: http://${NODE3}:2388
+      ETCD_ADVERTISE_CLIENT_URLS: http://${NODE3}:2388
+      ETCD_LISTEN_PEER_URLS: http://${NODE3}:2389
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${NODE3}:2389
+      ETCD_NAME: etcd-3
+      ETCD_MAX_TXN_OPS: 999999
+      ETCD_MAX_REQUEST_BYTES: 33554432 #32*1024*1024
+      ETCD_QUOTA_BACKEND_BYTES: 8589934592 #8*1024*1024*1024
+      ETCD_AUTO_COMPACTION_MODE: periodic
+      ETCD_AUTO_COMPACTION_RETENTION: 1m
+      ETCD_INITIAL_CLUSTER: etcd-3=http://${NODE3}:2389,etcd-4=http://${NODE4}:2389
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_UNSAFE_NO_FSYNC: true
+    volumes:
+      - etcd_data:/data
+    healthcheck:
+      test: printf "" /dev/tcp/${NODE1}/2388
+      interval: 10s
+
+  etcd-cluster-status:
+    image: "quay.io/coreos/etcd:v3.5.4"
+    network_mode: host
+    profiles: ['_']
+    entrypoint: etcdctl --write-out=table --endpoints=http://${NODE3}:2389,http://${NODE4}:2389 endpoint status
+
+  meta-ok:
+    image: alpine:3.16
+    tty: true
+    healthcheck:
+      test: nc -z ${META} 5690
+      start_period: 30s
+      interval: 30s
+
+  compute:
+    image: piestream:latest
+    network_mode: host
+    command:
+      - compute-node
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--client-address"
+      - "${NODE3}:5688"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${META}:9000/hummock001"
+      - "--meta-address"
+      - "http://${META}:5690"
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      meta-ok:
+        condition: service_healthy
+
+  compact:
+    image: piestream:latest
+    network_mode: host
+    command:
+      - compactor-node
+      - "--host"
+      - "0.0.0.0:6660"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1260"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${META}:9000/hummock001"
+      - "--meta-address"
+      - "http://${META}:5690"
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      meta-ok:
+        condition: service_healthy
+
+volumes:
+  etcd_data:
+  minio_data:

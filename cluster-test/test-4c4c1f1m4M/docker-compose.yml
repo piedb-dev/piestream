@@ -1,0 +1,228 @@
+version: "3"
+name: pie
+services:
+  compactor-0:
+    image: "harbor01.vviewdata.com/piestream/piestream:latest"
+    command:
+      - compactor-node
+      - "--host"
+      - "0.0.0.0:6660"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1260"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@minio-0:9301/hummock001"
+      - "--meta-address"
+      - "http://meta-node-0:5690"
+    depends_on:
+      - meta-node-0
+      - minio-0
+
+  compute-node-0:
+    image: "harbor01.vviewdata.com/piestream/piestream:latest"
+    command:
+      - compute-node
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--client-address"
+      - "compute-node-0:5688"
+      - "--metrics-level"
+      - "1"
+      - "--meta-address"
+      - "http://meta-node-0:5690"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@minio-0:9301/hummock001"
+    depends_on:
+      - meta-node-0
+      - minio-0
+
+  compute-node-1:
+    image: "harbor01.vviewdata.com/piestream/piestream:latest"
+    command:
+      - compute-node
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--client-address"
+      - "compute-node-1:5688"
+      - "--metrics-level"
+      - "1"
+      - "--meta-address"
+      - "http://meta-node-0:5690"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@minio-0:9301/hummock001"
+    depends_on:
+      - meta-node-0
+      - minio-0
+
+  frontend-node-0:
+    image: "harbor01.vviewdata.com/piestream/piestream:latest"
+    command:
+      - frontend-node
+      - "--host"
+      - "0.0.0.0:4566"
+      - "--meta-addr"
+      - "http://meta-node-0:5690"
+    ports:
+      - 4566:4566
+    depends_on:
+      - meta-node-0
+
+  minio-0:
+    image: "minio/minio:latest"
+    entrypoint: |
+      /bin/sh -c "
+        mkdir -p /data/hummock001
+        /usr/bin/docker-entrypoint.sh \"$$0\" \"$$@\"
+      "
+    command:
+      - server
+      - "--address"
+      - "0.0.0.0:9301"
+      - "--console-address"
+      - "0.0.0.0:9400"
+      - /data
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_PASSWORD: hummockadmin
+      MINIO_ROOT_USER: hummockadmin
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+
+  meta-node-0:
+    image: "harbor01.vviewdata.com/piestream/piestream:latest"
+    command:
+      - meta-node
+      - "--listen-addr"
+      - "0.0.0.0:5690"
+      - "--host"
+      - "meta-node-0"
+      - "--dashboard-host"
+      - "0.0.0.0:5691"
+      - "--prometheus-host"
+      - "0.0.0.0:1250"
+      - "--backend"
+      - etcd
+      - "--etcd-endpoints"
+      - etcd:2379
+    depends_on:
+      etcd: { condition: service_healthy }
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.4
+    hostname: etcd
+    environment:
+      ETCD_NAME: node1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd:2380
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_AUTO_COMPACTION_MODE: periodic
+      ETCD_AUTO_COMPACTION_RETENTION: 1m
+      ETCD_MAX_TXN_OPS: 999999
+      ETCD_MAX_REQUEST_BYTES: 33554432 #32*1024*1024
+      ETCD_QUOTA_BACKEND_BYTES: 8589934592 #8*1024*1024*1024
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: printf "" /dev/tcp/127.0.0.1/2379
+      interval: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=ruok"
+    healthcheck:
+      {
+        test: echo ruok | nc localhost 2181 || exit -1,
+        interval: 1s,
+        timeout: 5s,
+        retries: 3,
+        start_period: 120s
+      }
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    hostname: kafka
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_COMPRESSION_TYPE: lz4
+      KAFKA_LOG_RETENTION_MS: 31104000000
+    ports:
+      - 9092:9092
+    depends_on:
+      zookeeper: { condition: service_healthy }
+    healthcheck:
+      {
+        test: nc -z localhost 9092,
+        interval: 5s,
+        start_period: 120s
+      }
+
+  loadgen:
+    build: ./py_gen
+    profiles: ['demo']
+    network_mode: host
+    entrypoint: python -u ctr_gen.py
+    volumes:
+      - ./py_gen:/workdir
+    environment:
+      KAFKA_ADDR: localhost
+      SEND_RATE: 100
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  load-view:
+    image: postgres:14-alpine
+    profiles: ['demo']
+    entrypoint: psql -h frontend-node-0 -p 4566 -d dev -U root -f /ctr.sql
+    volumes:
+      - ./ctr.sql:/ctr.sql
+    depends_on:
+      - loadgen
+
+  psql:
+    image: postgres:14-alpine
+    profiles: ['_']
+    entrypoint: psql -h frontend-node-0 -p 4566 -d dev -U root
+
+  prometheus:
+    image: prom/prometheus:v2.36.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.listen-address=0.0.0.0:9500"
+      - "--storage.tsdb.retention.time=30d"
+    ports:
+     - 9500:9500
+    volumes:
+      - ${PWD}/conf/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:8.5.4
+    volumes:
+      - ${PWD}/conf/grafana-datasource.yml:/etc/grafana/provisioning/datasources/pie.yml
+      - ${PWD}/conf/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/pie.yml
+      - ${PWD}/conf/pie-dashboard.json:/opt/pie-dashboard.json
+      - ${PWD}/conf/grafana.ini:/etc/grafana/grafana.ini
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+
+volumes:
+  minio-data:
+  etcd-data:

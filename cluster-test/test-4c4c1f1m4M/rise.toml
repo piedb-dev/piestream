@@ -1,0 +1,8 @@
+[server]
+heartbeat_interval_ms = 10000
+
+[batch]
+
+[streaming]
+
+[storage]
