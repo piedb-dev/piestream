@@ -51,6 +51,7 @@ impl ComputeClient {
     }
 
     pub async fn get_data(&self, output_id: TaskOutputId) -> Result<Streaming<GetDataResponse>> {
+        println!("***********into get_data");
         Ok(self
             .exchange_client
             .to_owned()

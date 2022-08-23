@@ -183,6 +183,7 @@ impl SourceManager for MemSourceManager {
         Ok(())
     }
 
+    //构建内部表（理解为source）封装成SourceDesc, 存储TableId>SourceDesc
     fn create_table_source(&self, table_id: &TableId, columns: Vec<ColumnDesc>) -> Result<()> {
         let mut sources = self.get_sources()?;
 
@@ -193,6 +194,7 @@ impl SourceManager for MemSourceManager {
         );
 
         let source_columns = columns.iter().map(SourceColumnDesc::from).collect();
+        //TableV2特殊内部表
         let source = SourceImpl::TableV2(TableSourceV2::new(columns));
 
         // Table sources do not need columns and format

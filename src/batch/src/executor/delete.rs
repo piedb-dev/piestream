@@ -78,6 +78,8 @@ impl DeleteExecutor {
         #[for_await]
         for data_chunk in self.child.execute() {
             let data_chunk = data_chunk?;
+            println!("data_chunk={:?}", data_chunk);
+            //记录条数
             let len = data_chunk.cardinality();
             assert!(data_chunk.visibility().is_none());
 
@@ -88,6 +90,7 @@ impl DeleteExecutor {
         }
 
         // Wait for all chunks to be taken / written.
+        //接收StreamSourceReader::next发送过来的消息,返回需要删除的记录数
         let rows_deleted = try_join_all(notifiers)
             .await
             .map_err(|_| {
@@ -98,6 +101,7 @@ impl DeleteExecutor {
             .into_iter()
             .sum::<usize>();
 
+        println!("rows_deleted={:?}", rows_deleted);
         // create ret value
         {
             let mut array_builder = PrimitiveArrayBuilder::<i64>::new(1);
@@ -155,6 +159,7 @@ mod tests {
         let source_manager = Arc::new(MemSourceManager::default());
 
         // Schema for mock executor.
+        //创建2个int字段类型
         let schema = schema_test_utils::ii();
         let mut mock_executor = MockExecutor::new(schema.clone());
 
@@ -173,7 +178,7 @@ mod tests {
                 type_name: "".to_string(),
             })
             .collect();
-
+        println!("table_columns={}, table_columns={:?}", table_columns.len(), table_columns);
         mock_executor.add(DataChunk::from_pretty(
             "i  i
              1  2
@@ -185,11 +190,14 @@ mod tests {
 
         // Create the table.
         let table_id = TableId::new(0);
+        //构建TableV2对象，封装SourceDesc 建立table_id->SourcDesc映射
         source_manager.create_table_source(&table_id, table_columns.to_vec())?;
 
         // Create reader
         let source_desc = source_manager.get_source(&table_id)?;
+        //as_table_v2函数存在是由于SourceImpl的EnumAsInner特征
         let source = source_desc.source.as_table_v2().unwrap();
+
         let mut reader = source.stream_reader(vec![0.into(), 1.into()]).await?;
 
         // Delete
@@ -201,11 +209,13 @@ mod tests {
 
         let handle = tokio::spawn(async move {
             let fields = &delete_executor.schema().fields;
+            //DeleteExecutor默认字段DataType::Int64
             assert_eq!(fields[0].data_type, DataType::Int64);
 
             let mut stream = delete_executor.execute();
             let result = stream.next().await.unwrap().unwrap();
 
+            println!("&&&&&&&&&&&&&&&&&&&&&&");
             assert_eq!(
                 result
                     .column_at(0)

@@ -27,8 +27,8 @@ pub const K_PROCESSING_WINDOW_SIZE: usize = 1024;
 pub enum OrderType {
     Ascending,
     Descending,
-}
 
+}
 impl OrderType {
     pub fn from_prost(order_type: &ProstOrderType) -> OrderType {
         match order_type {
@@ -167,6 +167,7 @@ pub fn compare_two_row(
     rhs_idx: usize,
 ) -> Result<Ordering> {
     for order_pair in order_pairs.iter() {
+        //println!("………………………………………………………………………………order_pair.column_idx)={:?}", order_pair.column_idx);
         let lhs_array = lhs_data_chunk.column_at(order_pair.column_idx).array();
         let rhs_array = rhs_data_chunk.column_at(order_pair.column_idx).array();
         macro_rules! gen_match {

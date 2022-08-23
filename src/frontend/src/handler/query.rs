@@ -46,17 +46,20 @@ pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<
 
     debug!("query_mode:{:?}", query_mode);
 
+    //data_stream:返回的数据流，pg_descs:字段描述
     let (data_stream, pg_descs) = match query_mode {
         QueryMode::Local => local_execute(context, bound)?,
         QueryMode::Distributed => distribute_execute(context, bound).await?,
     };
 
+    //循环获取数据
     let mut rows = vec![];
     #[for_await]
     for chunk in data_stream {
         rows.extend(to_pg_rows(chunk?));
     }
 
+    //select查询需要返回记录数
     let rows_count = match stmt_type {
         StatementType::SELECT => rows.len() as i32,
         _ => unreachable!(),

@@ -32,6 +32,7 @@ use crate::util::value_encoding::{deserialize_datum, serialize_datum};
 impl DataChunk {
     /// Get an iterator for visible rows.
     pub fn rows(&self) -> impl Iterator<Item = RowRef> {
+        //DataChunkRefIter实现了Iterator接口
         DataChunkRefIter {
             chunk: self,
             idx: Some(0),
@@ -60,10 +61,12 @@ impl<'a> Iterator for DataChunkRefIter<'a> {
         match self.idx {
             None => None,
             Some(idx) => {
+                //获取可见行
                 self.idx = self.chunk.next_visible_row_idx(idx);
                 match self.idx {
                     None => None,
                     Some(idx) => {
+                        //idx有效行
                         self.idx = Some(idx + 1);
                         Some(RowRef {
                             chunk: self.chunk,

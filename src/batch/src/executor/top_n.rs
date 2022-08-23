@@ -32,14 +32,17 @@ use crate::task::BatchTaskContext;
 
 struct TopNHeap {
     order_pairs: Arc<Vec<OrderPair>>,
+    //HeapElem实现了排序和比较特征，在插入BinaryHeap自动比较
     min_heap: BinaryHeap<Reverse<HeapElem>>,
     size: usize,
 }
 
 impl TopNHeap {
     fn insert(&mut self, elem: HeapElem) {
+        //保持size大小堆栈
         if self.min_heap.len() < self.size {
             self.min_heap.push(Reverse(elem));
+            //HeapElem实现了比较大小逻辑,用order_pairs数组第一个有效字段排序比较
         } else if elem > self.min_heap.peek().unwrap().0 {
             self.min_heap.push(Reverse(elem));
             self.min_heap.pop();
@@ -47,6 +50,7 @@ impl TopNHeap {
     }
 
     pub fn fit(&mut self, chunk: DataChunk) {
+        //重新设置每个DataChunk大小为1，插入堆栈
         DataChunk::rechunk(&[chunk], 1)
             .unwrap()
             .into_iter()
@@ -58,21 +62,25 @@ impl TopNHeap {
                     elem_idx: 0usize,
                     encoded_chunk: None,
                 };
+                //存储记录
                 self.insert(elem);
             });
     }
 
+    //1是排序，2获取返回结果
     pub fn dump(&mut self, offset: usize) -> Option<DataChunk> {
         if self.min_heap.is_empty() {
             return None;
         }
+        println!("min_heap.drain_sorted={:?}", self.min_heap);
         let mut chunks = self
             .min_heap
             .drain_sorted()
-            .map(|e| e.0.chunk)
+            .map(|e| {println!("e.0.chunk={:?}", e.0.chunk); e.0.chunk})
             .collect::<Vec<_>>();
+        //println!("dump chunks={:?}", chunks);
         chunks.reverse();
-
+        //println!("reverse chunks={:?}", chunks);
         // Skip the first `offset` elements
         if let Ok(mut res) = DataChunk::rechunk(&chunks[offset..], self.size - offset) {
             assert_eq!(res.len(), 1);
@@ -159,11 +167,13 @@ impl Executor for TopNExecutor {
 }
 
 impl TopNExecutor {
+    //从子节点获取数据
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(mut self: Box<Self>) {
         #[for_await]
         for data_chunk in self.child.execute() {
             let data_chunk = data_chunk?;
+            println!("data_chunk:{:?}", data_chunk);
             self.top_n_heap.fit(data_chunk);
         }
 
@@ -198,6 +208,16 @@ mod tests {
             ],
         };
         let mut mock_executor = MockExecutor::new(schema);
+        /*mock_executor.add(DataChunk::from_pretty(
+            "i i
+             1 15
+             2 24
+             3 2
+             4 42
+             5 1
+             6 70",
+        ));*/
+        
         mock_executor.add(DataChunk::from_pretty(
             "i i
              1 5
@@ -206,6 +226,8 @@ mod tests {
              4 2
              5 1",
         ));
+
+        //从数组第一个元素往后扫描，只要有一个排序成功就返回（数组后面其他元素不会使用），缺少排序字段topn逻辑存在bug
         let order_pairs = vec![
             OrderPair {
                 column_idx: 1,
@@ -216,6 +238,7 @@ mod tests {
                 order_type: OrderType::Ascending,
             },
         ];
+        //从offset=1开始获取最多3条结果
         let top_n_executor = Box::new(TopNExecutor::new(
             Box::new(mock_executor),
             order_pairs,
@@ -228,12 +251,16 @@ mod tests {
         assert_eq!(fields[0].data_type, DataType::Int32);
         assert_eq!(fields[1].data_type, DataType::Int32);
 
+        //生成stream
         let mut stream = top_n_executor.execute();
+        //获取数据
         let res = stream.next().await;
 
         assert!(matches!(res, Some(_)));
         if let Some(res) = res {
             let res = res.unwrap();
+            println!("res={:?}", res);
+            //大小等于limit
             assert_eq!(res.cardinality(), 3);
             assert_eq!(
                 res.column_at(0).array().as_int32().iter().collect_vec(),
