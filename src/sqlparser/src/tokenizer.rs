@@ -208,7 +208,9 @@ impl Token {
             value: word.to_string(),
             quote_style,
             keyword: if quote_style == None {
+                //在所有关键字里查找，返回keyword是下标，类似:Ok(325),Err(424)
                 let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
+                //println!("keyword={:?}", keyword);
                 keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
             } else {
                 Keyword::NoKeyword

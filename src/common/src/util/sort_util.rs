@@ -82,6 +82,7 @@ pub struct HeapElem {
     pub encoded_chunk: Option<Arc<Vec<Vec<u8>>>>,
 }
 
+//https://blog.csdn.net/setlilei/article/details/120717780
 impl Ord for HeapElem {
     fn cmp(&self, other: &Self) -> Ordering {
         let ord = if let (Some(lhs_encoded_chunk), Some(rhs_encoded_chunk)) =
@@ -167,7 +168,7 @@ pub fn compare_two_row(
     rhs_idx: usize,
 ) -> Result<Ordering> {
     for order_pair in order_pairs.iter() {
-        //println!("………………………………………………………………………………order_pair.column_idx)={:?}", order_pair.column_idx);
+        println!("………………………………………………………………………………order_pair.column_idx)={:?}", order_pair.column_idx);
         let lhs_array = lhs_data_chunk.column_at(order_pair.column_idx).array();
         let rhs_array = rhs_data_chunk.column_at(order_pair.column_idx).array();
         macro_rules! gen_match {

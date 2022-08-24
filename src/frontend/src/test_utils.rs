@@ -511,6 +511,7 @@ pub fn create_proto_file(proto_data: &str) -> NamedTempFile {
         .tempfile()
         .unwrap();
 
+    println!("temp_file={:?}", temp_file);
     let mut file = temp_file.as_file();
     file.write_all(proto_data.as_ref())
         .expect("writing binary to test file");

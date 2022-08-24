@@ -139,11 +139,11 @@ impl SourceManager for MemSourceManager {
                     name: c.name.clone(),
                     data_type: DataType::from(&c.column_type.unwrap()),
                     column_id: ColumnId::from(c.column_id),
+                    //不解析系统自带的id字段
                     skip_parse: idx as i32 == info.row_id_index,
                 }
             })
             .collect::<Vec<SourceColumnDesc>>();
-
         assert!(
             info.row_id_index >= 0,
             "expected row_id_index >= 0, got {}",
@@ -151,9 +151,12 @@ impl SourceManager for MemSourceManager {
         );
         let row_id_index = info.row_id_index as usize;
 
+        println!("info.properties:{:?}", info.properties.clone());
         let config = ConnectorProperties::extract(info.properties)
             .map_err(|e| RwError::from(ConnectorError(e.to_string())))?;
 
+        
+        println!("****config:{:?}", config);
         let source = SourceImpl::Connector(ConnectorSource {
             config,
             columns: columns.clone(),

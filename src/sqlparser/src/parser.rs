@@ -154,6 +154,7 @@ impl Parser {
         debug!("Parsing sql '{}'...", sql);
         loop {
             // ignore empty statements (between successive statement delimiters)
+            //第一个token为SemiColon（分号）直接忽略，有语句存在多个分号？？？
             while parser.consume_token(&Token::SemiColon) {
                 expecting_statement_delimiter = false;
             }
@@ -169,6 +170,7 @@ impl Parser {
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
+        println!("******************stmts={:?}", stmts.len());
         Ok(stmts)
     }
 
@@ -3357,6 +3359,7 @@ mod tests {
 
     #[test]
     fn test_prev_index() {
+        //peek_token是显示当前token,next_token显示当前token，接着游标下移一位，prev_token:游标上移一位
         let sql = "SELECT version";
         run_parser_method(sql, |parser| {
             assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));

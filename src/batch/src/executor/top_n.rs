@@ -210,12 +210,12 @@ mod tests {
         let mut mock_executor = MockExecutor::new(schema);
         /*mock_executor.add(DataChunk::from_pretty(
             "i i
-             1 15
-             2 24
-             3 2
-             4 42
+             1 1
+             2 1
+             3 1
+             4 1
              5 1
-             6 70",
+             6 1",
         ));*/
         
         mock_executor.add(DataChunk::from_pretty(
@@ -227,7 +227,7 @@ mod tests {
              5 1",
         ));
 
-        //从数组第一个元素往后扫描，只要有一个排序成功就返回（数组后面其他元素不会使用），缺少排序字段topn逻辑存在bug
+        //从order_pairs数组选择第一个元素比较，当两条记录字段值不相等时，直接返回 值相等选择数组中下一个元素进行比较，依次类推，缺少排序字段topn逻辑存在bug
         let order_pairs = vec![
             OrderPair {
                 column_idx: 1,
