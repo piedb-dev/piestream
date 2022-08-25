@@ -148,10 +148,12 @@ impl Parser {
         // Whitespace(Space), Word(Word { value: "int", quote_style: None, keyword: INT }), 
         // RParen, SemiColon]
         let tokens = tokenizer.tokenize()?;
+        //println!("tokens={:?}", tokens.clone());
         let mut parser = Parser::new(tokens);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
+        
         loop {
             // ignore empty statements (between successive statement delimiters)
             //第一个token为SemiColon（分号）直接忽略，有语句存在多个分号？？？
@@ -170,7 +172,7 @@ impl Parser {
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
-        println!("******************stmts={:?}", stmts.len());
+        println!("******************stmts={:?}", stmts);
         Ok(stmts)
     }
 
@@ -184,6 +186,7 @@ impl Parser {
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
+                    //println!("peek_token={:?}", self.peek_token());
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
@@ -1380,6 +1383,7 @@ impl Parser {
     pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
+        //all和distinct不能同时出现， all貌似没用
         if all && distinct {
             parser_err!("Cannot specify both ALL and DISTINCT".to_string())
         } else {
@@ -2462,6 +2466,7 @@ impl Parser {
         };
 
         loop {
+            //println!("***********peek_token={:?}", self.peek_token());
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token());
             let next_precedence = match op {
@@ -2496,12 +2501,14 @@ impl Parser {
         }
     }
 
+    //ctes https://blog.csdn.net/qq30211478/article/details/76982679
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
         let distinct = self.parse_all_or_distinct()?;
 
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+        //println!("***********peek_token={:?}", self.peek_token());
 
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,

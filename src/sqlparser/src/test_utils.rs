@@ -59,6 +59,8 @@ pub fn one_statement_parses_to(sql: &str, canonical: &str) -> Statement {
 
     let only_statement = statements.pop().unwrap();
     if !canonical.is_empty() {
+        //println!("canonical={:?}", canonical);
+        //println!("only_statement={:?}", only_statement.to_string());
         assert_eq!(canonical, only_statement.to_string())
     }
     only_statement

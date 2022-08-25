@@ -70,6 +70,17 @@ impl Binder {
         // internal implicit cast.
         // In other cases, the `source` query is handled on its own and assignment cast is done
         // afterwards.
+        /*
+            当`source`查询的列类型与`expected_types`不匹配时，需要强制转换。
+            在PG中，当`source`是`VALUES`没有order/limit/offset时，特殊处理
+            是给定的，它不等同于对内部潜在隐式强制转换的赋值强制转换。
+         */
+        /*
+            insert into t4 select * from t3 order by v1;
+            Query { with: None, body: Select(Select { distinct: false, projection: [Wildcard], from: [TableWithJoins { relation: Table { name: ObjectName([Ident { value: "t3", quote_style: None }]),
+            alias: None, args: [] }, joins: [] }], lateral_views: [], selection: None, group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier(Ident { value: "v1", quote_style: None }), 
+            asc: None, nulls_first: None }], limit: None, offset: None, fetch: None }
+         */
         let (source, cast_exprs) = match source {
             Query {
                 with: None,
@@ -79,6 +90,7 @@ impl Binder {
                 offset: None,
                 fetch: None,
             } if order.is_empty() => {
+                //order为空，比较values和catalog库里数据类型是否一致expected_types
                 let values = self.bind_values(values, Some(expected_types))?;
                 let body = BoundSetExpr::Values(values.into());
                 (

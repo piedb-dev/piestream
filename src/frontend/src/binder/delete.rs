@@ -43,6 +43,10 @@ impl Binder {
             )
             .into());
         }
+        /*
+             [Delete { table_name: ObjectName([Ident { value: "foo", quote_style: None }]), selection: Some(BinaryOp { 
+            left: Identifier(Ident { value: "name", quote_style: None }), op: Eq, right: Value(Number("5", false)) }) }]
+         */
         let table = self.bind_table(&schema_name, &table_name, None)?;
         let delete = BoundDelete {
             table_source,
