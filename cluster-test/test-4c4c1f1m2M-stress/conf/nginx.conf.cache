@@ -1,0 +1,211 @@
+
+#worker_processes auto;
+
+error_log /var/log/nginx/error.log notice;
+
+#
+# log more detailed info for minio
+#
+
+log_format main_ext '$remote_addr - $remote_user [$time_local] "$request" '
+'$status $body_bytes_sent "$http_referer" "$http_user_agent" "$http_x_forwarded_for" '
+'$host sn="$server_name" rt $request_time ua $upstream_addr us $upstream_status '
+'ut $upstream_response_time ul $upstream_response_length cs $upstream_cache_status';
+access_log /var/log/nginx/access.log main_ext;
+
+#log_format main_simple '$remote_addr - $remote_user [$time_local] "$request" '
+#'$status $body_bytes_sent "$http_referer" '
+#'"$http_user_agent" "$http_x_forwarded_for"';
+#access_log /var/log/nginx/access.log main_simple;
+
+#
+# enable proxy cache
+#
+proxy_cache_path /var/cache/nginx_minio_cache levels=1:2 keys_zone=minio_cache:10m max_size=4g inactive=60m use_temp_path=off;
+
+# sendfile on;
+# tcp_nopush on;
+# gzip on;
+
+# 负载均衡
+upstream minio-api {
+  #
+  # let all workers share the upstream server information and counters
+  #
+  zone minio-api 64K;
+  #
+  # The load balancing directive must appear above the keepalive directive
+  #
+  # Options: hash, ip_hash, least_conn, least_time, or random
+  #
+  #ip_hash; #同一IPSession优先
+  least_conn;
+  
+  # The keepalive parameter sets the maximum number of idle keepalive connections
+  # to upstream servers that are preserved in the cache of each worker process. When
+  # this number is exceeded, the least recently used connections are closed.
+  keepalive 8;
+  # Limits the maximum time during which requests can be processed through 
+  # one keepalive connection. After this time is reached, the connection is closed 
+  # following the subsequent request processing.
+  keepalive_time 1h;
+  # Sets a timeout during which an idle keepalive connection to an upstream server will stay open.
+  keepalive_timeout 10m;
+  server ${NODE3}:9301 max_fails=2 fail_timeout=30s;
+  server ${NODE4}:9301 max_fails=2 fail_timeout=30s;
+}
+# 负载均衡
+upstream minio-console {
+  least_conn; #最少链接优先
+  server ${NODE3}:9400  max_fails=2 fail_timeout=30s;
+  server ${NODE4}:9400  max_fails=2 fail_timeout=30s;
+}
+
+server {
+  # 监听端⼝
+  listen 9000;
+  # 服务器域名（主机头）
+  server_name u1;
+  # 代理 Web 服务的 Url 前缀，⼀般是 Web 服务的虚拟⽬录（可以是正则表达式）。
+  
+
+  # Set to a value such as 1000m; to restrict file size to a specific value
+  # To disable checking of client request body size, set client_max_body_size to 0.
+  # client_max_body_size 0;
+
+  # Nginx buffers responses by default. To disable Nginx from buffering MinIO response 
+  # to temp file, set proxy_buffering off;. 
+  # This will improve time-to-first-byte for client requests.
+  #proxy_buffering off;
+
+  location / {
+
+    #
+    # do not cache HEAD request/responses
+    #
+    # refer to 
+    #   0. https://gist.github.com/Friz-zy/3dd2a670d8f14eac717e100d0dc7696f (main ref)
+    #   1. https://dmsimard.com/2015/02/06/how-to-disable-head-request-caching-with-nginx-and-tengine/
+    #   2. https://guides.wp-bullet.com/setting-dynamic-nginx-cache-times-based-on-uri/
+    #   3. https://gist.github.com/jrom/1760790
+    #
+    set $GET_GETOBJECT "";
+
+    set $skip_cache 1;
+
+	  if ( $request_method = GET ) {
+      set $GET_GETOBJECT G;
+    }
+    
+    if ( $request_uri ~* "GetObject" ) {
+      set $GET_GETOBJECT "${GET_GETOBJECT}G";
+    }
+
+    if ($GET_GETOBJECT = GG) {
+      set $skip_cache 0;
+      add_header X-Microcachable "0";
+    }
+
+    #proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_set_header X-Forwarded-Host $host:$server_port;
+
+    proxy_set_header Range $slice_range;
+    proxy_set_header Host $http_host;
+
+    ##############################################################################
+    #
+    # below is proxy cache configuration (need special design to work with minio)
+    # refer to: https://github.com/minio/minio/issues/4120
+    #
+    ##############################################################################
+
+    proxy_cache_bypass $skip_cache;
+    proxy_no_cache $skip_cache;
+
+    # Configure out caches
+    proxy_cache minio_cache;
+    
+    # need to set proxy_buffering on in order to cache
+    proxy_buffering on ;
+    proxy_buffers 2048 16k;
+    proxy_buffer_size 16k;
+    proxy_busy_buffers_size 32k;
+
+    #
+    # Important: nginx converts HEAD into GET, and may fail minio
+    #
+    # Do not convert HEAD into GET
+    proxy_cache_convert_head off;       
+
+    # Pass along Authorization credentials to upstream S3
+    proxy_set_header Authorization $http_authorization;
+    #proxy_set_header "Authorization" "";
+
+    # proxy_cache_purge $purge_method;
+
+    # Since head conversion is disabled, the request_method is included in the proxy_cache_key
+    proxy_cache_key  "$scheme$proxy_host$request_method$request_uri$is_args$args";
+
+    # GET and HEAD are cached by default
+    #proxy_cache_methods GET HEAD;
+    #proxy_cache_methods GET;
+
+    # Cache all 200 OK's for 1 hour
+    proxy_cache_valid  200 1h;
+
+    # Use stale cache file in all errors from upstream if we can
+    proxy_cache_use_stale  error timeout updating http_500 http_502 http_503 http_504;
+
+    # Lock the cache so that only one request can populate it at a time
+    proxy_cache_lock    on;
+    proxy_cache_revalidate on;
+
+    add_header             Cache-Control max-age=31536000;
+    # add_header             Request "$request_method $uri $is_args $args";
+
+    # Set back a nice HTTP Header to indicate what the cache status was
+    add_header             X-Cache-Status $upstream_cache_status;
+
+    client_body_buffer_size 10M;
+    client_max_body_size 10G;
+
+    proxy_read_timeout 300;
+    proxy_next_upstream error timeout http_404;
+
+    ##############################################################################
+    #
+    # enable persistent TCP connection from nginx to minio (special config needed)
+    # refer to: 
+    #
+    ##############################################################################
+
+    #
+    # To enable keepalive, the following two directives should be enabled
+    #
+    # Default is HTTP/1, keepalive is only enabled in HTTP/1.1
+    # if we use keepalive, then we should specify HTTP/1.1
+    proxy_http_version 1.1;
+    # By default NGINX uses HTTP/1.0 for connections to upstream servers and accordingly 
+    # adds the Connection: close header to the requests that it forwards to the servers. 
+    # The result is that each connection gets closed when the request completes, despite 
+    # the presence of the keepalive directive in the upstream{} block.   
+    # Thus, if we enable keepalive, we should set the header "Connection" to empty.  
+    proxy_set_header "Connection" "";
+    chunked_transfer_encoding off;
+    
+    proxy_pass http://minio-api;
+  }
+}
+server {
+  # 监听端⼝
+  listen 9001;
+  # 服务器域名（主机头）
+  server_name u1;
+  # 代理 Web 服务的 Url 前缀，⼀般是 Web 服务的虚拟⽬录（可以是正则表达式）。
+  location / {
+    proxy_pass http://minio-console;
+  }
+}
