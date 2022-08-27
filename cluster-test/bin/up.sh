@@ -8,7 +8,7 @@ for i in {1..4}; do
 	pids="$pids $!"
 done
 
-ssh meta 'cd rise; docker-compose -f meta.docker-compose.yml up -d ' &> /dev/null &
-pids="$pids $!"
+#ssh meta 'cd rise; docker-compose -f meta.docker-compose.yml up -d '
+docker-compose -f meta.docker-compose.yml up -d
 
 wait $pids
