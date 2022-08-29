@@ -29,11 +29,12 @@ use crate::scheduler::{
     BatchPlanFragmenter, ExecutionContext, ExecutionContextRef, LocalQueryExecution,
 };
 use crate::session::OptimizerContext;
-
+/* dml select类型查询语句的处理流程，
+ */
 pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<PgResponse> {
     let stmt_type = to_statement_type(&stmt);
     let session = context.session_ctx.clone();
-
+    // sql 绑定
     let bound = {
         let mut binder = Binder::new(
             session.env().catalog_reader().read_guard(),

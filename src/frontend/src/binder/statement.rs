@@ -26,7 +26,7 @@ pub enum BoundStatement {
     Update(Box<BoundUpdate>),
     Query(Box<BoundQuery>),
 }
-
+// 根据sql statement类型选择一个绑定函数，
 impl Binder {
     pub(super) fn bind_statement(&mut self, stmt: Statement) -> Result<BoundStatement> {
         match stmt {

@@ -43,6 +43,7 @@ pub const DEFAULT_SUPPER_USER_FOR_PG: &str = "postgres";
 pub const RESERVED_PG_CATALOG_TABLE_ID: i32 = 1000;
 
 /// The local system catalog reader in the frontend node.
+/// 前端节点中的本地系统编录读取器
 #[async_trait]
 pub trait SysCatalogReader: Sync + Send + 'static {
     async fn read_table(&self, table_name: &str) -> Result<Vec<Row>>;

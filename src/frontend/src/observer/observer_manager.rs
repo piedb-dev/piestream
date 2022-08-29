@@ -35,6 +35,7 @@ use crate::user::UserInfoVersion;
 /// `ObserverManager` is used to update data based on notification from meta.
 /// Call `start` to spawn a new asynchronous task
 /// which receives meta's notification and update frontend data.
+/// 'ObserverManager'用于基于元数据的通知更新数据。调用'start'来生成一个新的异步任务，它接收元的通知并更新前端数据。
 pub(crate) struct ObserverManager {
     rx: Box<dyn NotificationStream>,
     meta_client: MetaClient,
@@ -77,7 +78,7 @@ impl ObserverManager {
             hummock_snapshot_manager,
         }
     }
-
+    // 处理快照通知
     pub fn handle_snapshot_notification(&mut self, resp: SubscribeResponse) -> Result<()> {
         let mut catalog_guard = self.catalog.write();
         let mut user_guard = self.user_info_manager.write();
@@ -218,6 +219,7 @@ impl ObserverManager {
 
     /// `start` is used to spawn a new asynchronous task which receives meta's notification and
     /// update frontend data.
+    /// 'start'用于生成一个新的异步任务，它接收元的通知并更新前端数据。
     pub async fn start(mut self) -> Result<JoinHandle<()>> {
         let first_resp = self.rx.next().await?.ok_or_else(|| {
             ErrorCode::InternalError(
@@ -225,15 +227,19 @@ impl ObserverManager {
                     .to_string(),
             )
         })?;
+        // println!("observer================={:?}",&first_resp);
+
         self.handle_snapshot_notification(first_resp)?;
         let handle = tokio::spawn(async move {
             loop {
                 if let Ok(resp) = self.rx.next().await {
                     if resp.is_none() {
                         tracing::error!("Stream of notification terminated.");
+                        //终止通知流
                         self.re_subscribe().await;
                         continue;
                     }
+
                     self.handle_notification(resp.unwrap()).await;
                 }
             }
@@ -242,6 +248,7 @@ impl ObserverManager {
     }
 
     /// `re_subscribe` is used to re-subscribe to the meta's notification.
+    /// 用于重新订阅元数据的通知
     async fn re_subscribe(&mut self) {
         loop {
             match self

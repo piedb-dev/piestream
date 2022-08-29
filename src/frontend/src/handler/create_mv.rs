@@ -58,6 +58,8 @@ pub fn gen_create_mv_plan(
     if let BoundSetExpr::Select(select) = &bound.body {
         // `InputRef`'s alias will be implicitly assigned in `bind_project`.
         // For other expressions, we require the user to explicitly assign an alias.
+        // 'InputRef'的别名将在'bind_project'中隐式赋值。对于其他表达式，我们要求用户显式地分配一个别名。
+        // aliases 别名
         if select.aliases.iter().any(Option::is_none) {
             return Err(ErrorCode::BindError(
                 "An alias must be specified for an expression".to_string(),

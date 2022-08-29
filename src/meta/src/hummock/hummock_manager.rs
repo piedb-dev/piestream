@@ -1060,7 +1060,6 @@ where
         trigger_commit_stat(&self.metrics, versioning.current_version_ref());
 
         tracing::trace!("new committed epoch {}", epoch);
-
         self.env
             .notification_manager()
             .notify_frontend_asynchronously(
