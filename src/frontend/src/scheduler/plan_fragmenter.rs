@@ -339,6 +339,7 @@ impl StageGraphBuilder {
 
 impl BatchPlanFragmenter {
     /// Split the plan node into each stages, based on exchange node.
+    /// 根据交换节点将计划节点拆分为每个阶段
     pub fn split(mut self, batch_node: PlanRef) -> SchedulerResult<Query> {
         let root_stage = self.new_stage(batch_node.clone(), Distribution::Single.to_prost(1));
         let stage_graph = self.stage_graph_builder.build(root_stage.id);

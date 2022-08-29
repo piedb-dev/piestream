@@ -29,12 +29,11 @@ use crate::scheduler::{
     BatchPlanFragmenter, ExecutionContext, ExecutionContextRef, LocalQueryExecution,
 };
 use crate::session::OptimizerContext;
-/* dml select类型查询语句的处理流程，
- */
+/* dml select类型查询语句的处理流程，*/
 pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<PgResponse> {
     let stmt_type = to_statement_type(&stmt);
     let session = context.session_ctx.clone();
-    // sql 绑定
+    // Statement 绑定
     let bound = {
         let mut binder = Binder::new(
             session.env().catalog_reader().read_guard(),
@@ -42,11 +41,11 @@ pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<
         );
         binder.bind(stmt)?
     };
-
+    // query_mode = Distributed 分布式，一般指查询模式,一共有二个值Local和Distributed
     let query_mode = session.config().get_query_mode();
-
     debug!("query_mode:{:?}", query_mode);
 
+    // 执行查询语句
     let (data_stream, pg_descs) = match query_mode {
         QueryMode::Local => local_execute(context, bound)?,
         QueryMode::Distributed => distribute_execute(context, bound).await?,
@@ -75,6 +74,7 @@ fn to_statement_type(stmt: &Statement) -> StatementType {
     }
 }
 
+// 分布式执行
 async fn distribute_execute(
     context: OptimizerContext,
     stmt: BoundStatement,
@@ -83,7 +83,6 @@ async fn distribute_execute(
     // Subblock to make sure PlanRef (an Rc) is dropped before `await` below.
     let (query, pg_descs) = {
         let root = Planner::new(context.into()).plan(stmt)?;
-
         let pg_descs = root
             .schema()
             .fields()
@@ -103,7 +102,7 @@ async fn distribute_execute(
         info!("Generated query after plan fragmenter: {:?}", &query);
         (query, pg_descs)
     };
-
+    // 
     let execution_context: ExecutionContextRef = ExecutionContext::new(session.clone()).into();
     let query_manager = execution_context.session().env().query_manager().clone();
     Ok((
