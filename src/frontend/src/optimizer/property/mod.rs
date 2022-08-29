@@ -23,6 +23,13 @@
 //! (such as an optimizer based on the Volcano/Cascades model).
 //!
 //! [PlanNode]: super::plan_node::PlanNode
+//! 定义规划树节点的所有属性，这些属性实际上代表了节点结果的属性
+//! 我们有批处理或流操作符上的物理属性['Order']和['Distribution']，
+//! 还有所有['PlanNode'][PlanNode]都有的逻辑属性
+//! 对于这种性质，我们还没有给出任何共同的抽象特征。它们不是那么多，
+//! 我们现在不需要有共同的行为。我们现在可以将它们视为['PlanNode'][PlanNode]的不同特性，
+//! 并在优化器需要更多时重构它们(例如基于Volcano/Cascades模型的优化器)
+//! 
 pub(crate) mod order;
 pub use order::*;
 mod distribution;
