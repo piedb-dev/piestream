@@ -19,6 +19,13 @@ use crate::optimizer::plan_node::{LogicalValues, PlanRef};
 use crate::planner::Planner;
 
 impl Planner {
+    /*
+        格式：
+        BoundValues { 
+            rows: [[7:Int32, 77:Int32, '123':Varchar]], 
+            schema: Schema { fields: [:Int32, :Int32, :Varchar] } 
+        } 
+     */
     pub(super) fn plan_values(&mut self, values: BoundValues) -> Result<PlanRef> {
         Ok(LogicalValues::create(
             values.rows,

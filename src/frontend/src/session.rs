@@ -71,6 +71,10 @@ pub struct OptimizerContextRef {
     inner: Arc<OptimizerContext>,
 }
 
+/*
+    声明不满足 Sync，所以不能直接声明 Arc<OptimizerContextRef> 用在多线程环境中，这一点上面的实验已经证明。
+    但是，可以在 Foo 外面再包一层 Mutex，变成 Arc<Mutex<OptimizerContextRef>> 这样就能在多线程中使用了
+ */
 impl !Sync for OptimizerContextRef {}
 
 impl From<OptimizerContext> for OptimizerContextRef {

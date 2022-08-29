@@ -64,6 +64,7 @@ pub trait PlanNode:
     fn convention(&self) -> Convention;
 }
 
+//impl_downcast宏https://docs.rs/downcast-rs/latest/downcast_rs/
 impl_downcast!(PlanNode);
 pub type PlanRef = Rc<dyn PlanNode>;
 

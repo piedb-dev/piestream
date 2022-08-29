@@ -29,6 +29,7 @@ pub struct BoundBaseTable {
     pub name: String, // explain-only
     pub table_id: TableId,
     pub table_catalog: TableCatalog,
+    //视图索引，等于基于视图创建了视图
     pub table_indexes: Vec<Arc<TableCatalog>>,
 }
 

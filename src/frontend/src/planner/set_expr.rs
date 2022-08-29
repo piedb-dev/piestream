@@ -25,6 +25,10 @@ impl Planner {
         set_expr: BoundSetExpr,
         extra_order_exprs: Vec<ExprImpl>,
     ) -> Result<PlanRef> {
+        /*
+            insert语法后面可能接values和select语法
+            insert into t5 select id,age,name from t6 order by id;
+         */
         match set_expr {
             BoundSetExpr::Select(s) => self.plan_select(*s, extra_order_exprs),
             BoundSetExpr::Values(v) => self.plan_values(*v),

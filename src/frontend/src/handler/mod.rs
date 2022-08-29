@@ -54,7 +54,7 @@ pub(super) async fn handle(
 ) -> Result<PgResponse> {
     // 记录sql、session信息、和原子类型id，
     let context = OptimizerContext::new(session.clone(), Arc::from(sql));
-    println!("*********stmt={:?}", stmt);
+    //println!("*********stmt={:?}", stmt);
     // 根据stmt枚举类型选择执行函数
     match stmt {
         Statement::Explain {

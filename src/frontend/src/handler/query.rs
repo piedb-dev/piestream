@@ -34,6 +34,7 @@ pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<
     let stmt_type = to_statement_type(&stmt);
     let session = context.session_ctx.clone();
 
+    //生成BoundStatement对象，对ast的statment对象做了进一步封装
     let bound = {
         let mut binder = Binder::new(
             session.env().catalog_reader().read_guard(),

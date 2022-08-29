@@ -27,6 +27,7 @@ impl Planner {
         let source_id = delete.table_source.source_id;
         let scan = self.plan_base_table(delete.table)?;
         let input = if let Some(expr) = delete.selection {
+            //有条件转换为过滤节点
             LogicalFilter::create_with_expr(scan, expr)
         } else {
             scan

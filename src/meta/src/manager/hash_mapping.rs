@@ -250,6 +250,7 @@ mod tests {
         let vnode_mapping = hash_mapping_manager
             .get_fragment_hash_mapping(&fragment_id)
             .unwrap();
+        println!("len={} vnode_mapping={:?}", vnode_mapping.len(), vnode_mapping);
         assert_eq!(
             vnode_mapping
                 .iter()
@@ -305,6 +306,7 @@ mod tests {
 
     #[test]
     fn test_restore_hash_mapping() {
+        println!("VIRTUAL_NODE_COUNT={:?}", VIRTUAL_NODE_COUNT);
         let fragment_id = 3u32;
         let mut old_vnode_mapping = Vec::new();
         let parallel_unit_count = 5usize;
