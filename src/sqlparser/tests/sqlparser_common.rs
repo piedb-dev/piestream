@@ -38,18 +38,41 @@ fn parse_insert_values() {
     let rows2 = vec![row.clone(), row];
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "customer", quote_style: None }]), columns: [], source: Query { with: None, body: Values(Values([[Value(Number("1", false)),
+         Value(Number("2", false)), Value(Number("3", false))]])), order_by: [], limit: None, offset: None, fetch: None } }]
+    */
     check_one(sql, "customer", &[], &rows1);
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3), (1, 2, 3)";
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "customer", quote_style: None }]), columns: [], source: Query { with: None, body: Values(Values([[Value(Number("1", false)), 
+        Value(Number("2", false)), Value(Number("3", false))], [Value(Number("1", false)), Value(Number("2", false)), Value(Number("3", false))]])),
+         order_by: [], limit: None, offset: None, fetch: None } }]
+    */
     check_one(sql, "customer", &[], &rows2);
 
     let sql = "INSERT INTO public.customer VALUES (1, 2, 3)";
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "public", quote_style: None }, Ident { value: "customer", quote_style: None }]), columns: [], source: Query { with: None, 
+        body: Values(Values([[Value(Number("1", false)), Value(Number("2", false)), Value(Number("3", false))]])), order_by: [], limit: None, offset: None, fetch: None } }]
+    */
     check_one(sql, "public.customer", &[], &rows1);
 
     let sql = "INSERT INTO db.public.customer VALUES (1, 2, 3)";
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "db", quote_style: None }, Ident { value: "public", quote_style: None }, Ident { value: "customer", quote_style: None }]), 
+        columns: [], source: Query { with: None, body: Values(Values([[Value(Number("1", false)), Value(Number("2", false)), Value(Number("3", false))]])), order_by: [], limit: None,
+        offset: None, fetch: None } }]
+    */
     check_one(sql, "db.public.customer", &[], &rows1);
 
     let sql = "INSERT INTO public.customer (id, name, active) VALUES (1, 2, 3)";
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "public", quote_style: None }, Ident { value: "customer", quote_style: None }]), columns: [Ident { value: "id", quote_style: None }, 
+        Ident { value: "name", quote_style: None }, Ident { value: "active", quote_style: None }], source: Query { with: None, body: Values(Values([[Value(Number("1", false)), Value(Number("2", false)), 
+        Value(Number("3", false))]])), order_by: [], limit: None, offset: None, fetch: None } }]
+     */
     check_one(
         sql,
         "public.customer",
@@ -73,6 +96,7 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
+                    println!("insert index={:?} column={:?}", index, column);
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
                 match &source.body {
@@ -84,12 +108,26 @@ fn parse_insert_values() {
         }
     }
 
+    /*
+        [Insert { table_name: ObjectName([Ident { value: "customer", quote_style: None }]), columns: [], source: Query { with: Some(With { recursive: false, cte_tables: [Cte { alias: TableAlias { name: Ident { value: "foo", quote_style: None }, columns: [] }, 
+        query: Query { with: None, body: Select(Select { distinct: false, projection: [UnnamedExpr(Value(Number("1", false)))], from: [], lateral_views: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None }, from: None }] }), 
+        body: SetOperation { op: Union, all: false, left: Select(Select { distinct: false, projection: [Wildcard], from: [TableWithJoins { relation: Table { name: ObjectName([Ident { value: "foo", quote_style: None }]), alias: None, args: [] }, joins: [] }], lateral_views: [], 
+        selection: None, group_by: [], having: None }), right: Values(Values([[Value(Number("1", false))]])) }, order_by: [], limit: None, offset: None, fetch: None } }]
+        
+        =》UNION学习资料：https://blog.csdn.net/weixin_35607472/article/details/113292030    
+        =>WITH foo AS (SELECT 1) 是cte语法
+    */
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
 }
 
 #[test]
 fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
+    /*
+        [Update { table: TableWithJoins { relation: Table { name: ObjectName([Ident { value: "t", quote_style: None }]), alias: None, args: [] }, joins: [] }, 
+        assignments: [Assignment { id: [Ident { value: "a", quote_style: None }], value: Value(Number("1", false)) }, Assignment { id: [Ident { value: "b", quote_style: None }], 
+        value: Value(Number("2", false)) }, Assignment { id: [Ident { value: "c", quote_style: None }], value: Value(Number("3", false)) }], selection: Some(Identifier(Ident { value: "d", quote_style: None })) }]
+     */
     match verified_stmt(sql) {
         Statement::Update {
             table,
@@ -120,7 +158,12 @@ fn parse_update() {
         _ => unreachable!(),
     }
 
-    verified_stmt("UPDATE t SET a = 1, a = 2, a = 3");
+    /*
+        [Update { table: TableWithJoins { relation: Table { name: ObjectName([Ident { value: "t", quote_style: None }]), alias: None, args: [] }, joins: [] }, 
+        assignments: [Assignment { id: [Ident { value: "a", quote_style: None }], value: Value(Number("1", false)) }, Assignment { id: [Ident { value: "a", quote_style: None }], 
+        value: Value(Number("2", false)) }, Assignment { id: [Ident { value: "a", quote_style: None }], value: Value(Number("3", false)) }], selection: None }]
+     */
+    //verified_stmt("UPDATE t SET a = 1, a = 2, a = 3");
 
     let sql = "UPDATE t WHERE 1";
     let res = parse_sql_statements(sql);
@@ -139,6 +182,13 @@ fn parse_update() {
 
 #[test]
 fn parse_update_with_table_alias() {
+    /*
+        [Update { table: TableWithJoins { relation: Table { name: ObjectName([Ident { value: "users", quote_style: None }]), 
+        alias: Some(TableAlias { name: Ident { value: "u", quote_style: None }, columns: [] }), args: [] }, joins: [] }, 
+        assignments: [Assignment { id: [Ident { value: "u", quote_style: None }, Ident { value: "username", quote_style: None }], 
+        value: Value(SingleQuotedString("new_user")) }], selection: Some(BinaryOp { left: CompoundIdentifier([Ident { value: "u", quote_style: None }, 
+        Ident { value: "username", quote_style: None }]), op: Eq, right: Value(SingleQuotedString("old_user")) }) }]
+     */
     let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
     match verified_stmt(sql) {
         Statement::Update {
@@ -199,6 +249,9 @@ fn parse_no_table_name() {
 
 #[test]
 fn parse_delete_statement() {
+    /*
+        [Delete { table_name: ObjectName([Ident { value: "table", quote_style: Some('"') }]), selection: None }]
+     */
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
         Statement::Delete { table_name, .. } => {
@@ -215,6 +268,10 @@ fn parse_delete_statement() {
 fn parse_where_delete_statement() {
     use self::BinaryOperator::*;
 
+    /*
+        [Delete { table_name: ObjectName([Ident { value: "foo", quote_style: None }]), selection: Some(BinaryOp { 
+            left: Identifier(Ident { value: "name", quote_style: None }), op: Eq, right: Value(Number("5", false)) }) }]
+     */
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
         Statement::Delete {
@@ -222,6 +279,10 @@ fn parse_where_delete_statement() {
             selection,
             ..
         } => {
+            //println!("selection={:?}", selection);
+            /*
+            selection=Some(BinaryOp { left: Identifier(Ident { value: "name", quote_style: None }), op: Eq, right: Value(Number("5", false)) })
+             */
             assert_eq!(ObjectName(vec![Ident::new("foo")]), table_name);
 
             assert_eq!(
@@ -239,19 +300,55 @@ fn parse_where_delete_statement() {
 
 #[test]
 fn parse_top_level() {
-    verified_stmt("SELECT 1");
-    verified_stmt("(SELECT 1)");
-    verified_stmt("((SELECT 1))");
-    verified_stmt("VALUES (1)");
+    let stat=verified_stmt("SELECT 1");
+    println!("stat={:?}", stat);
+    /*
+         增加一对括号，多嵌入一层Query
+         stat=Query(Query { with: None, body: Select(Select { distinct: false, projection: [UnnamedExpr(Value(Number("1", false)))], from: [], lateral_views: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None })
+    */
+    let stat=verified_stmt("(SELECT 1)");
+    println!("stat={:?}", stat);
+    /*
+        两队括号嵌入两层Query
+        stat=Query(Query { with: None, body: Query(Query { with: None, body: Select(Select { distinct: false, projection: [UnnamedExpr(Value(Number("1", false)))], from: [], lateral_views: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None }), 
+        order_by: [], limit: None, offset: None, fetch: None })
+     */
+    let stat=verified_stmt("((SELECT 1))");
+    println!("stat={:?}", stat);
+    /*
+        stat=Query(Query { with: None, body: Query(Query { with: None, body: Query(Query { with: None, body: Select(Select { distinct: false, projection: [UnnamedExpr(Value(Number("1", false)))], from: [], lateral_views: [], selection: None, group_by: [], having: None }), 
+        order_by: [], limit: None, offset: None, fetch: None }), order_by: [], limit: None, offset: None, fetch: None }), order_by: [], limit: None, offset: None, fetch: None })
+     */
+    let stat=verified_stmt("VALUES (1)");
+    println!("stat={:?}", stat);
+    /*
+        stat=Query(Query { with: None, body: Values(Values([[Value(Number("1", false))]])), order_by: [], limit: None, offset: None, fetch: None })
+     */
 }
 
 #[test]
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
+    //let sql_alias = "SELECT id, fname AS name, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
     assert!(!select.distinct);
+    //projection是查询返回结果字段内容（id, fname, lname）
     assert_eq!(3, select.projection.len());
+    /*
+        UnnamedExpr 没别名的字段 ExprWithAlias带别名字段 都在SelectItem结构体中定义
+        sql语句=select=Select { distinct: false, projection: [UnnamedExpr(Identifier(Ident { value: "id", quote_style: None })), 
+            UnnamedExpr(Identifier(Ident { value: "fname", quote_style: None })), UnnamedExpr(Identifier(Ident { value: "lname", quote_style: None }))], 
+            from: [TableWithJoins { relation: Table { name: ObjectName([Ident { value: "customer", quote_style: None }]), alias: None, args: [] }, joins: [] }], 
+            lateral_views: [], selection: Some(BinaryOp { left: Identifier(Ident { value: "id", quote_style: None }), op: Eq, right: Value(Number("1", false)) }), 
+            group_by: [], having: None }
+        sql_alias语句=Select { distinct: false, projection: [UnnamedExpr(Identifier(Ident { value: "id", quote_style: None })), 
+            ExprWithAlias { expr: Identifier(Ident { value: "fname", quote_style: None }), alias: Ident { value: "name", quote_style: None } }, 
+            UnnamedExpr(Identifier(Ident { value: "lname", quote_style: None }))], from: [TableWithJoins { relation: Table { name: ObjectName([Ident { value: "customer", quote_style: None }]), 
+            alias: None, args: [] }, joins: [] }], lateral_views: [], selection: Some(BinaryOp { left: Identifier(Ident { value: "id", quote_style: None }), op: Eq, right: Value(Number("1", false)) }), 
+            group_by: [], having: None }
+     */
     let select = verified_query(sql);
+    println!("select={:?}", select);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
 }
 
@@ -278,7 +375,9 @@ fn parse_select_distinct() {
 
 #[test]
 fn parse_select_all() {
-    one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
+    let stat=one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
+    println!("stat={:?}", stat);
+    //one_statement_parses_to("SELECT name FROM customer", "SELECT name FROM customer");
 }
 
 #[test]
@@ -496,6 +595,11 @@ fn parse_compound_expr_1() {
     let sql = "a + b * c";
     let ast = run_parser_method(sql, |parser| parser.parse_expr()).unwrap();
     assert_eq!("a + (b * c)", &ast.to_string());
+    println!("ast:{:?}", ast);
+    /*
+        BinaryOp { left: Identifier(Ident { value: "a", quote_style: None }), op: Plus, right: BinaryOp { 
+        left: Identifier(Ident { value: "b", quote_style: None }), op: Multiply, right: Identifier(Ident { value: "c", quote_style: None }) } }
+     */
     assert_eq!(
         BinaryOp {
             left: Box::new(Identifier(Ident::new("a"))),

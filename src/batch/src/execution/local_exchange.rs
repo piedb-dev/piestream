@@ -109,6 +109,7 @@ mod tests {
             &self,
             _: Request<GetDataRequest>,
         ) -> Result<Response<Self::GetDataStream>, Status> {
+            println!("***********FakeExchangeService->get_data");
             let (tx, rx) = tokio::sync::mpsc::channel(10);
             self.rpc_called.store(true, Ordering::SeqCst);
             for _ in 0..3 {
@@ -142,6 +143,7 @@ mod tests {
             rpc_called: rpc_called.clone(),
         });
         let cp_server_run = server_run.clone();
+        //GrpcExchangeSource::create里ComputeClient调用此服务
         let join_handle = tokio::spawn(async move {
             cp_server_run.store(true, Ordering::SeqCst);
             tonic::transport::Server::builder()

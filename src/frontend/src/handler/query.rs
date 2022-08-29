@@ -33,7 +33,7 @@ use crate::session::OptimizerContext;
 pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<PgResponse> {
     let stmt_type = to_statement_type(&stmt);
     let session = context.session_ctx.clone();
-    // Statement 绑定
+    //生成BoundStatement对象，对ast的statment对象做了进一步封装
     let bound = {
         let mut binder = Binder::new(
             session.env().catalog_reader().read_guard(),
@@ -45,18 +45,20 @@ pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<
     let query_mode = session.config().get_query_mode();
     debug!("query_mode:{:?}", query_mode);
 
-    // 执行查询语句
+    //data_stream:返回的数据流，pg_descs:字段描述
     let (data_stream, pg_descs) = match query_mode {
         QueryMode::Local => local_execute(context, bound)?,
         QueryMode::Distributed => distribute_execute(context, bound).await?,
     };
 
+    //循环获取数据
     let mut rows = vec![];
     #[for_await]
     for chunk in data_stream {
         rows.extend(to_pg_rows(chunk?));
     }
 
+    //select查询需要返回记录数
     let rows_count = match stmt_type {
         StatementType::SELECT => rows.len() as i32,
         _ => unreachable!(),

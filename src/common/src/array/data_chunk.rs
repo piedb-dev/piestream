@@ -490,12 +490,15 @@ pub trait DataChunkTestExt {
 }
 
 impl DataChunkTestExt for DataChunk {
+    //创建构建列字段对象(array_builders)->列字段对象(columns)->数据块对象(chunk)
     fn from_pretty(s: &str) -> Self {
         use crate::types::ScalarImpl;
 
         let mut lines = s.split('\n').filter(|l| !l.trim().is_empty());
         // initialize array builders from the first line
         let header = lines.next().unwrap().trim();
+        println!("header={:?}", header);
+        //array_builders理解为构建列对象
         let mut array_builders = header
             .split_ascii_whitespace()
             .take_while(|c| *c != "//")
@@ -510,13 +513,18 @@ impl DataChunkTestExt for DataChunk {
             })
             .map(|ty| ty.create_array_builder(1))
             .collect::<Vec<_>>();
+        println!("array_builders.len()={}", array_builders.len());
         let mut visibility = vec![];
         for mut line in lines {
             line = line.trim();
+            //按 ASCII 空格分割字符串切片 http://www.manongjc.com/detail/31-tvhdozufgohlzmv.html
             let mut token = line.split_ascii_whitespace();
+            //println!("line={:?} token={:?} token0={:?}", line, token, token.clone().next());
             // allow `zip` since `token` may longer than `array_builders`
+            //clippy::disallowed_methods 允许系统禁用函数，在下面作用域使用
             #[allow(clippy::disallowed_methods)]
             for (builder, val_str) in array_builders.iter_mut().zip(&mut token) {
+                //println!("builder={:?} token={:?}", builder, val_str);
                 let datum = match val_str {
                     "." => None,
                     s if matches!(builder, ArrayBuilderImpl::Int32(_)) => Some(ScalarImpl::Int32(
@@ -555,17 +563,21 @@ impl DataChunkTestExt for DataChunk {
                     }
                     _ => panic!("invalid data type"),
                 };
+                //存储值
                 builder
                     .append_datum(&datum)
                     .expect("failed to append datum");
             }
+            //理解D是删除状态对用户不可见，后续来验证是否准确
             let visible = match token.next() {
                 None | Some("//") => true,
                 Some("D") => false,
                 Some(t) => panic!("invalid token: {t:?}"),
             };
+            //存储是否可见状态
             visibility.push(visible);
         }
+        //构建字段
         let columns = array_builders
             .into_iter()
             .map(|builder| Column::new(Arc::new(builder.finish().unwrap())))
@@ -627,13 +639,16 @@ mod tests {
 
     #[test]
     fn test_rechunk() {
+        //num_chunks:DataChunk数量 chunk_size:原来每块的大小，new_chunk_size:调整后每块大小
         let test_case = |num_chunks: usize, chunk_size: usize, new_chunk_size: usize| {
             let mut chunks = vec![];
             for chunk_idx in 0..num_chunks {
                 let mut builder = PrimitiveArrayBuilder::<i32>::new(0);
+                //赋值
                 for i in chunk_size * chunk_idx..chunk_size * (chunk_idx + 1) {
                     builder.append(Some(i as i32)).unwrap();
                 }
+                //构建数据块
                 let chunk = DataChunk::new(
                     vec![Column::new(Arc::new(builder.finish().unwrap().into()))],
                     chunk_size,
@@ -641,21 +656,27 @@ mod tests {
                 chunks.push(chunk);
             }
 
+            //总的大小
             let total_size = num_chunks * chunk_size;
+            //chunk大小调整为new_chunk_size后，能够完整填充的的chunk数
             let num_full_new_chunk = total_size / new_chunk_size;
             let mut chunk_sizes = vec![new_chunk_size; num_full_new_chunk];
+            //chunk大小调整为new_chunk_size后，不能整除的记录数
             let remainder = total_size % new_chunk_size;
             if remainder != 0 {
                 chunk_sizes.push(remainder);
             }
 
             let new_chunks = DataChunk::rechunk(&chunks, new_chunk_size).unwrap();
+            println!("new_chunks.len()={:?}, chunk_sizes.len()={:?}", new_chunks.len(), chunk_sizes.len());
             assert_eq!(new_chunks.len(), chunk_sizes.len());
             // check cardinality
             for (idx, chunk_size) in chunk_sizes.iter().enumerate() {
                 assert_eq!(*chunk_size, new_chunks[idx].capacity());
             }
 
+            println!("new_chunks={:?}", new_chunks);
+            //chunk_idx是列
             let mut chunk_idx = 0;
             let mut cur_idx = 0;
             for val in 0..total_size {
@@ -702,6 +723,7 @@ mod tests {
         let chunk: DataChunk = DataChunk::new(columns, length);
         for row in chunk.rows() {
             for i in 0..num_of_columns {
+                //获取row对应的第i列值
                 let val = row.value_at(i).unwrap();
                 assert_eq!(val.into_int32(), i as i32);
             }
@@ -733,7 +755,7 @@ mod tests {
     fn test_no_column_chunk() {
         let chunk = DataChunk::new_dummy(10);
         assert_eq!(chunk.rows().count(), 10);
-
+        println!("chunk={:?}", chunk);
         let chunk_after_serde = DataChunk::from_protobuf(&chunk.to_protobuf()).unwrap();
         assert_eq!(chunk_after_serde.rows().count(), 10);
         assert_eq!(chunk_after_serde.cardinality(), 10);

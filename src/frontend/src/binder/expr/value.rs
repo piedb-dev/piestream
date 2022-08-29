@@ -22,6 +22,7 @@ use crate::binder::Binder;
 use crate::expr::{align_types, Expr as _, ExprImpl, ExprType, FunctionCall, Literal};
 
 impl Binder {
+    //获取sql输入值具体类型
     pub fn bind_value(&mut self, value: Value) -> Result<Literal> {
         match value {
             Value::Number(s, b) => self.bind_number(s, b),
@@ -286,9 +287,11 @@ mod tests {
             DataType::Decimal,
         ];
 
+        //Value::Number是开源库sqlparse字段类型
         for i in 0..values.len() {
             let value = Value::Number(String::from(values[i]), false);
             let res = binder.bind_value(value).unwrap();
+            println!("res={:?}", res);
             let ans = Literal::new(data[i].clone(), data_type[i].clone());
             assert_eq!(res, ans);
         }
@@ -296,6 +299,35 @@ mod tests {
 
     #[test]
     fn test_array_expr() {
+        /*
+        select * from t1 where v1 < 3;
+        where_clause: Some(
+                    FunctionCall(
+                        FunctionCall {
+                            func_type: LessThan,
+                            return_type: Boolean,
+                            inputs: [
+                                InputRef(
+                                    InputRef {
+                                        index: 1,
+                                        data_type: Int32,
+                                    },
+                                ),
+                                Literal(
+                                    Literal {
+                                        data: Some(
+                                            Int32(
+                                                3,
+                                            ),
+                                        ),
+                                        data_type: Int32,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                ),
+         */
         let expr: ExprImpl = FunctionCall::new_unchecked(
             ExprType::Array,
             vec![ExprImpl::literal_int(11)],
@@ -304,8 +336,10 @@ mod tests {
             },
         )
         .into();
+        //to_expr_proto函数src/frontend/src/expr/input_ref.rs
         let expr_pb = expr.to_expr_proto();
         let expr = build_from_prost(&expr_pb).unwrap();
+        println!("expr:{:?}", expr);
         match expr.return_type() {
             DataType::List { datatype } => {
                 assert_eq!(datatype, Box::new(DataType::Int32));

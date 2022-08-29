@@ -87,6 +87,7 @@ impl Default for StreamChunk {
 
 impl StreamChunk {
     pub fn new(ops: Vec<Op>, columns: Vec<Column>, visibility: Option<Bitmap>) -> Self {
+        //每一列数据记录数等于操作类型数
         for col in &columns {
             assert_eq!(col.array_ref().len(), ops.len());
         }
@@ -345,6 +346,7 @@ impl StreamChunkTestExt for StreamChunk {
     fn from_pretty(s: &str) -> Self {
         use crate::types::ScalarImpl;
 
+        //'\n'分割字段
         let mut lines = s.split('\n').filter(|l| !l.trim().is_empty());
         let mut ops = vec![];
         // initialize array builders from the first line
@@ -449,6 +451,7 @@ mod tests {
             ],
             None,
         );
+        println!("chunk.to_pretty_string()={}", chunk.to_pretty_string());
         assert_eq!(
             chunk.to_pretty_string(),
             "\

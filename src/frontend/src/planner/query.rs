@@ -39,15 +39,44 @@ pub const LIMIT_ALL_COUNT: usize = usize::MAX / 2;
 
 impl Planner {
     /// Plan a [`BoundQuery`]. Need to bind before planning.
+    /*
+        insert..values模式
+        insert into t5 values(7,77,'123')
+        BoundQuery { 
+            body: Values(BoundValues { 
+                rows: [[7:Int32, 77:Int32, '哪':Varchar]], 
+                //name:data_type 上面insert模式name为空
+                schema: Schema { fields: [:Int32, :Int32, :Varchar] } 
+            }), 
+            order: [], 
+            limit: None, 
+            offset: None, 
+            extra_order_exprs: [] //额外的排序表达式，是带表达式的排序写法， 例如order by id = 1,age;意思是只对id = 1的数据排序。
+        }, 
+     */
     pub fn plan_query(&mut self, query: BoundQuery) -> Result<PlanRoot> {
+        //表达式长度
         let extra_order_exprs_len = query.extra_order_exprs.len();
         let out_names = query.schema().names();
         let mut plan = self.plan_set_expr(query.body, query.extra_order_exprs)?;
-        //order\limlit特征关键字
+        //order\limlit特征关键字        
+        /*
+            当extra_order_exprs不为空时plan.schema除了select_item信息 还会包含extra_order_exprs信息
+            plan.schema:Schema {
+                fields: [
+                    id:Int32,
+                    age:Int32,
+                    name:Varchar,
+                    expr#3:Int32,
+                ],
+            }
+        */
         let order = Order {
+            //insert .. select order 模式
             field_order: query.order,
         };
         if query.limit.is_some() || query.offset.is_some() {
+             //insert .. select  [offset] [limit] [order]模式
             let limit = query.limit.unwrap_or(LIMIT_ALL_COUNT);
             let offset = query.offset.unwrap_or_default();
             plan = if order.field_order.is_empty() {
@@ -55,12 +84,15 @@ impl Planner {
                 // 创建一个逻辑限制，如果有limit/offset，但没有order-by
                 LogicalLimit::create(plan, limit, offset)
             } else {
+                //topn非排序模式，不准确
                 // Create a logical top-n if with limit/offset and order-by
                 // 创建一个带有limit/offset和order-by的逻辑top-n if
                 LogicalTopN::create(plan, limit, offset, order.clone())
             }
         }
+        //设置分布式为单节点模式
         let dist = RequiredDist::single();
+        //FixedBitSet长度等于字段长度
         let mut out_fields = FixedBitSet::with_capacity(plan.schema().len());
         out_fields.insert_range(..plan.schema().len() - extra_order_exprs_len);
         // 生成执行计划planroot

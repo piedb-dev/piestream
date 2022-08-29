@@ -125,11 +125,15 @@ macro_rules! impl_connector_properties {
     ([], $({ $variant_name:ident, $connector_name:ident } ),*) => {
         impl ConnectorProperties {
             pub fn extract(mut props: HashMap<String, String>) -> Result<Self> {
+                println!("into ConnectorProperties::extract ",  );
                 const UPSTREAM_SOURCE_KEY: &str = "connector";
                 let connector = props.remove(UPSTREAM_SOURCE_KEY).ok_or_else(|| anyhow!("Must specify 'connector' in WITH clause"))?;
+                println!("***************connector={:?}", connector);
                 let json_value = serde_json::to_value(props).map_err(|e| anyhow!(e))?;
+                println!("json_value:={:?}", json_value);
                 match connector.to_lowercase().as_str() {
-                    $( $connector_name => { serde_json::from_value(json_value).map_err(|e| anyhow!(e.to_string())).map(Self::$variant_name) } ,)*
+                    //$( $connector_name => { println!("connector_name={:?}", $connector_name);let a=serde_json::from_value(json_value).map_err(|e| anyhow!(e.to_string())).map(Self::$variant_name);println!("*****a={:?}", serde_json::from_value(json_value).map_err(|e| anyhow!(e.to_string())).map(Self::$variant_name));a } ,)*
+                    $( $connector_name => { serde_json::from_value(json_value).map_err(|e| anyhow!(e.to_string())).map(Self::$variant_name)},)*
                     _ => {
                         Err(anyhow!("connector '{}' is not supported", connector,))
                     }

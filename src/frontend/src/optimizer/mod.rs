@@ -70,6 +70,9 @@ impl PlanRoot {
         assert_eq!(input_schema.fields().len(), out_fields.len());
         assert_eq!(out_fields.count_ones(..), out_names.len());
 
+        //println!("fields().len={:?}  out_fields.len={:?}",input_schema.fields().len(), out_fields.len());
+        //println!("out_fields.count_ones={:?}  out_names.len={:?}",out_fields.count_ones(..), out_names.len());
+        
         let schema = Schema {
             fields: out_fields
                 .ones()
@@ -100,6 +103,7 @@ impl PlanRoot {
     /// example as insert source or subquery. This ignores Order but retains post-Order pruning
     /// (`out_fields`).
     pub fn as_subplan(self) -> PlanRef {
+        //schema没有表达式
         if self.out_fields.count_ones(..) == self.out_fields.len() {
             return self.plan;
         }

@@ -949,6 +949,7 @@ mod tests {
         assert!(floats.is_sorted());
 
         let mut floats_clone = floats.clone();
+        //随机洗牌，将数组顺序大乱
         floats_clone.shuffle(&mut thread_rng());
         floats_clone.sort();
         assert_eq!(floats, floats_clone);
@@ -963,6 +964,7 @@ mod tests {
 
     #[test]
     fn test_size() {
+        //占用的内存的大小, rust struct里每项占用字节特征还没搞明白？
         assert_eq!(std::mem::size_of::<StructValue>(), 16);
         assert_eq!(std::mem::size_of::<ListValue>(), 16);
         // TODO: try to reduce the memory usage of `Decimal`, `ScalarImpl` and `Datum`.

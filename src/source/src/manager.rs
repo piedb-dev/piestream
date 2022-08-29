@@ -139,11 +139,11 @@ impl SourceManager for MemSourceManager {
                     name: c.name.clone(),
                     data_type: DataType::from(&c.column_type.unwrap()),
                     column_id: ColumnId::from(c.column_id),
+                    //不解析系统自带的id字段
                     skip_parse: idx as i32 == info.row_id_index,
                 }
             })
             .collect::<Vec<SourceColumnDesc>>();
-
         assert!(
             info.row_id_index >= 0,
             "expected row_id_index >= 0, got {}",
@@ -151,9 +151,12 @@ impl SourceManager for MemSourceManager {
         );
         let row_id_index = info.row_id_index as usize;
 
+        println!("info.properties:{:?}", info.properties.clone());
         let config = ConnectorProperties::extract(info.properties)
             .map_err(|e| RwError::from(ConnectorError(e.to_string())))?;
 
+        
+        println!("****config:{:?}", config);
         let source = SourceImpl::Connector(ConnectorSource {
             config,
             columns: columns.clone(),
@@ -183,6 +186,7 @@ impl SourceManager for MemSourceManager {
         Ok(())
     }
 
+    //构建内部表（理解为source）封装成SourceDesc, 存储TableId>SourceDesc
     fn create_table_source(&self, table_id: &TableId, columns: Vec<ColumnDesc>) -> Result<()> {
         let mut sources = self.get_sources()?;
 
@@ -193,6 +197,7 @@ impl SourceManager for MemSourceManager {
         );
 
         let source_columns = columns.iter().map(SourceColumnDesc::from).collect();
+        //TableV2特殊内部表
         let source = SourceImpl::TableV2(TableSourceV2::new(columns));
 
         // Table sources do not need columns and format

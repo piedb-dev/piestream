@@ -49,6 +49,7 @@ impl Planner {
             )
             .into());
         }
+        //extra_order_exprs 加入select_items，用于临时计算但不展现
         select_items.extend(extra_order_exprs);
 
         // Plan the FROM clause.

@@ -36,6 +36,9 @@ pub use window_table_function::{BoundWindowTableFunction, WindowTableFunctionKin
 
 /// A validated item that refers to a table-like entity, including base table, subquery, join, etc.
 /// It is usually part of the `from` clause.
+/*
+一个有效的条目，指的是一个类似表的实体，包括基表、子查询、连接等。它通常是 `from` 子句的一部分
+ */
 #[derive(Debug, Clone)]
 pub enum Relation {
     Source(Box<BoundSource>),
@@ -125,14 +128,20 @@ impl Binder {
             Some(TableAlias { name, columns }) => (name.value, columns),
         };
 
+        //self.context.columns存储所有table字段信息
         let begin = self.context.columns.len();
         // Column aliases can be less than columns, but not more.
         // It also needs to skip hidden columns.
+        /*
+            fuse函数:创建一个在第一个 None 之后结束的迭代器。
+            在迭代器返回 None 之后，未来的调用可能会或可能不会再次产生 [Some(T)]。 fuse() 适配一个迭代器，确保在给出 None 之后，它总是永远返回 None
+         */
         let mut alias_iter = column_aliases.into_iter().fuse();
         columns
             .into_iter()
             .enumerate()
             .for_each(|(index, (is_hidden, mut field))| {
+                //is_hidden=true获取字段名字,否则别名，没有别名获取字段名，代码写复杂了
                 let name = match is_hidden {
                     true => field.name.to_string(),
                     false => alias_iter
@@ -147,6 +156,7 @@ impl Binder {
                     is_hidden,
                     field,
                 ));
+                //通过name找到vec<index>,在columns定位在通过table_name匹配
                 self.context
                     .indexs_of
                     .entry(name)

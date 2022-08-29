@@ -71,6 +71,7 @@ impl RowIdGenerator {
             );
         }
 
+        //一个批量（一个微秒）最多SEQUENCE_UPPER_BOUND条数据
         if current_duration_ms > self.last_duration_ms {
             self.last_duration_ms = current_duration_ms;
             self.sequence = 0;
@@ -78,6 +79,7 @@ impl RowIdGenerator {
             // If the sequence reaches the upper bound, spin loop here and wait for next
             // millisecond. Here we do not consider time goes backwards, it can also be covered
             // here.
+            //sleep等待，subsec_millis返回最小毫秒，subsec_nanos纳秒
             tracing::warn!("Sequence for row-id reached upper bound, spin loop.");
             std::thread::sleep(
                 Duration::from_millis(current_duration.subsec_millis() as u64 + 1)

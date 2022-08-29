@@ -44,7 +44,7 @@ pub struct TableCatalog {
     /// Primary key columns indices.
     pub pks: Vec<usize>,
 
-    /// Distribution key column indices.
+    /// Distribution key column indices. 
     pub distribution_keys: Vec<usize>,
 
     /// If set to Some(TableId), then this table is an index on another table.

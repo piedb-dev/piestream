@@ -63,6 +63,7 @@ impl LogicalFilter {
     }
 
     /// the function will check if the predicate is bool expression
+    /// 该函数将检查谓词是否为布尔表达式     
     pub fn create_with_expr(input: PlanRef, predicate: ExprImpl) -> PlanRef {
         let predicate = Condition::with_expr(predicate);
         Self::new(input, predicate).into()

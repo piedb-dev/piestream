@@ -82,6 +82,7 @@ impl Binder {
 
     fn push_context(&mut self) {
         let new_context = std::mem::take(&mut self.context);
+        //upper_contexts保存context历史数据，拷贝后self.context为空
         self.upper_contexts.push(new_context);
     }
 

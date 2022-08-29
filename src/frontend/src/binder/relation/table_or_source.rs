@@ -29,6 +29,7 @@ pub struct BoundBaseTable {
     pub name: String, // explain-only
     pub table_id: TableId,
     pub table_catalog: TableCatalog,
+    //视图索引，等于基于视图创建了视图
     pub table_indexes: Vec<Arc<TableCatalog>>,
 }
 
@@ -133,6 +134,7 @@ impl Binder {
         Ok(ret)
     }
 
+    //is_index_on:是否索引表，存储表id is_index_on所在表是基于此表做索引存在
     fn resolve_table_indexes(
         &mut self,
         schema_name: &str,
@@ -181,6 +183,7 @@ impl Binder {
 
     pub(crate) fn bind_table_source(&mut self, name: ObjectName) -> Result<BoundTableSource> {
         let (schema_name, source_name) = Self::resolve_table_name(name)?;
+        //获取source配置信息
         let source = self
             .catalog
             .get_source_by_name(&self.db_name, &schema_name, &source_name)?;
@@ -188,6 +191,7 @@ impl Binder {
         let source_id = TableId::new(source.id);
 
         let append_only = source.append_only;
+        //过滤默认字段
         let columns = source
             .columns
             .iter()

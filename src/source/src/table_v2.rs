@@ -64,6 +64,9 @@ impl TableSourceV2 {
     /// Returns an oneshot channel which will be notified when the chunk is taken by some reader,
     /// and the `usize` represents the cardinality of this chunk.
     pub fn write_chunk(&self, chunk: StreamChunk) -> Result<oneshot::Receiver<usize>> {
+        println!("******************write_chunk***********");
+        //rand::thread_rng()是随机函数，core.changes_txs是在stream_reader()函数里push发送器
+        //不理解的是为啥可以rand选择
         let tx = {
             let core = self.core.read().unwrap();
             core.changes_txs
@@ -73,9 +76,10 @@ impl TableSourceV2 {
         };
 
         let (notifier_tx, notifier_rx) = oneshot::channel();
+        //chunk:流数据 notifier_tx:发送器
         tx.send((chunk, notifier_tx))
             .expect("write chunk to table reader failed");
-
+        //接收器
         Ok(notifier_rx)
     }
 
@@ -119,19 +123,24 @@ impl StreamSourceReader for TableV2StreamReader {
 
         // Caveats: this function is an arm of `tokio::select`. We should ensure there's no `await`
         // after here.
-
+        //从消息管道接收到新数据
         let (ops, columns, bitmap) = chunk.into_inner();
 
+        //选择需要的字段
         let selected_columns = self
             .column_indices
             .iter()
             .map(|i| columns[*i].clone())
             .collect();
+        //构建新的StreamChunk    
         let chunk = StreamChunk::new(ops, selected_columns, bitmap);
 
+
         // Notify about that we've taken the chunk.
+        //发送记录数
         notifier.send(chunk.cardinality()).ok();
 
+        //返回新的StreamChunk 
         Ok(StreamChunkWithState {
             chunk,
             split_offset_mapping: None,
@@ -142,6 +151,7 @@ impl StreamSourceReader for TableV2StreamReader {
 impl TableSourceV2 {
     /// Create a new stream reader.
     pub async fn stream_reader(&self, column_ids: Vec<ColumnId>) -> Result<TableV2StreamReader> {
+        //position返回的是位置
         let column_indices = column_ids
             .into_iter()
             .map(|id| {
@@ -153,9 +163,11 @@ impl TableSourceV2 {
             .collect();
 
         let mut core = self.core.write().unwrap();
+        //mpsc::unbounded_channel是多个发送器对应一个接收器
         let (tx, rx) = mpsc::unbounded_channel();
         core.changes_txs.push(tx);
 
+        //rx数据接收，column_indices字段位置列表
         Ok(TableV2StreamReader { rx, column_indices })
     }
 }
