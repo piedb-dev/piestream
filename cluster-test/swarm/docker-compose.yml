@@ -1,0 +1,59 @@
+version: '3'
+services:
+  psql:
+    image: postgres:14-alpine
+    profiles: ['_']
+    network_mode: host
+    entrypoint: psql -h localhost -p 4566 -d dev -U root
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    network_mode: host
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=ruok"
+    healthcheck:
+      test: echo ruok | nc localhost 2181 || exit -1
+      interval: 10s
+      start_period: 60s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    network_mode: host
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${META}:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_COMPRESSION_TYPE: lz4
+      KAFKA_LOG_RETENTION_MS: 31104000000
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper: { condition: service_healthy }
+    healthcheck:
+      test: nc -z localhost 9092
+      start_period: 60s
+      interval: 5s
+
+  loadgen:
+    image: harbor01.vviewdata.com/piestream/pie_loadgen:latest
+    entrypoint: python -u ctr_gen.py
+    network_mode: host
+    environment:
+      KAFKA_ADDR: localhost
+      SEND_RATE: 100
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  load-view:
+    image: postgres:14-alpine
+    network_mode: host
+    entrypoint: psql -h localhost -p 4566 -d dev -U root -f /ctr.sql
+    volumes:
+      - ./ctr.sql:/ctr.sql
+    depends_on:
+      - loadgen
+
+volumes:
+  kafka_data:

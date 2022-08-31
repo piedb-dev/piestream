@@ -1,0 +1,32 @@
+version: '3.7'
+
+services:
+  meta:
+    image: piestream:latest
+    command:
+      - meta-node
+      - "--listen-addr"
+      - "0.0.0.0:5690"
+      - "--host"
+      - ${HOST04}
+      - "--dashboard-host"
+      - "0.0.0.0:5691"
+      - "--prometheus-host"
+      - "0.0.0.0:1250"
+      - "--backend"
+      - etcd
+      - "--etcd-endpoints"
+      - "http://${HOST03}:2389,http://${HOST04}:2389"
+    networks:
+      - host
+    healthcheck:
+      test: printf "" /dev/tcp/127.0.0.1/5690
+      interval: 10s
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host04
+
+networks:
+  host:
+    external: true

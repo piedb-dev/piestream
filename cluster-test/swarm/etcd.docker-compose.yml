@@ -1,0 +1,63 @@
+version: '3.7'
+
+x-etcd-common: &etcd-common
+  image: "quay.io/coreos/etcd@sha256:795d8660c48c439a7c3764c2330ed9222ab5db5bb524d8d0607cac76f7ba82a3"
+  networks:
+    - host
+x-etcd-common-envs: &etcd-common-envs
+  ETCD_DATA_DIR: /data
+  ETCD_MAX_TXN_OPS: 999999
+  ETCD_MAX_REQUEST_BYTES: 33554432 #32*1024*1024
+  ETCD_QUOTA_BACKEND_BYTES: 8589934592 #8*1024*1024*1024
+  ETCD_AUTO_COMPACTION_MODE: periodic
+  ETCD_AUTO_COMPACTION_RETENTION: 1m
+  ETCD_INITIAL_CLUSTER: etcd-1=http://${HOST03}:2389,etcd-2=http://${HOST04}:2389
+  ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster
+  ETCD_INITIAL_CLUSTER_STATE: new
+  ETCD_UNSAFE_NO_FSYNC: "true"
+
+services:
+  etcd1:
+    <<: *etcd-common
+    environment:
+      <<: *etcd-common-envs
+      ETCD_NAME: etcd-1
+      ETCD_LISTEN_CLIENT_URLS: http://${HOST03}:2388
+      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST03}:2388
+      ETCD_LISTEN_PEER_URLS: http://${HOST03}:2389
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${HOST03}:2389
+    volumes:
+      - etcd_data1:/data
+    healthcheck:
+      test: printf "" /dev/tcp/${HOST03}/2388
+      interval: 10s
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host03
+  etcd2:
+    <<: *etcd-common
+    environment:
+      <<: *etcd-common-envs
+      ETCD_NAME: etcd-2
+      ETCD_LISTEN_CLIENT_URLS: http://${HOST04}:2388
+      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST04}:2388
+      ETCD_LISTEN_PEER_URLS: http://${HOST04}:2389
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${HOST04}:2389
+    volumes:
+      - etcd_data2:/data
+    healthcheck:
+      test: printf "" /dev/tcp/${HOST04}/2388
+      interval: 10s
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host04
+
+volumes:
+  etcd_data1:
+  etcd_data2:
+
+networks:
+  host:
+    external: true

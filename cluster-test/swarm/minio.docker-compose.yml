@@ -1,0 +1,81 @@
+version: '3.7'
+
+x-minio-commons: &minio-commons
+  image: "minio/minio@sha256:68a4352cfa1db4b94e2e7ee72aaa93bc0aecadad97ad5ef0cbb2368ab8ea8efe"
+  entrypoint: |
+    /bin/sh -c "
+      mkdir -p /data1/hummock001 /data2/hummock001
+      /usr/bin/docker-entrypoint.sh \"$$0\" \"$$@\"
+    "
+  command:
+    - server
+    - "--address"
+    - "0.0.0.0:9301"
+    - "--console-address"
+    - "0.0.0.0:9400"
+    - http://${HOST03}/data1
+    - http://${HOST03}/data2
+    - http://${HOST04}/data1
+    - http://${HOST04}/data2
+  networks: 
+    - host
+  environment:
+    MINIO_ROOT_PASSWORD: hummockadmin
+    MINIO_ROOT_USER: hummockadmin
+    MINIO_PROMETHEUS_AUTH_TYPE: public
+  healthcheck:
+    test: curl -f http://localhost:9301/minio/health/cluster
+    interval: 20s
+
+services:
+  minio1:
+    <<: *minio-commons
+    volumes:
+      - minio1-data1:/data1
+      - minio1-data2:/data2
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host03
+  minio2:
+    <<: *minio-commons
+    volumes:
+      - minio2-data1:/data1
+      - minio2-data2:/data2
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host04
+
+  nginx:
+    image: nginx:1.23-alpine
+    environment:
+      HOST03: ${HOST03}
+      HOST04: ${HOST04}
+    entrypoint: |
+      sh -c "
+        envsubst '$$HOST03 $$HOST04' < /nginx.conf > /etc/nginx/conf.d/minio.conf
+        /docker-entrypoint.sh nginx -g 'daemon off;'
+      "
+    configs:
+      - nginx.conf
+    networks:
+      - host
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host01
+
+configs:
+  nginx.conf:
+    file: ./nginx.conf
+
+volumes:
+  minio1-data1:
+  minio1-data2:
+  minio2-data1:
+  minio2-data2:
+
+networks:
+  host:
+    external: true

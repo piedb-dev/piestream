@@ -1,0 +1,155 @@
+version: '3.7'
+
+x-compute-common: &compute-common
+  image: piestream:latest
+  networks:
+    - host
+
+x-compact-common: &compact-common
+  image: piestream:latest
+  networks:
+    - host
+  command:
+    - compactor-node
+    - "--host"
+    - "0.0.0.0:6660"
+    - "--prometheus-listener-addr"
+    - "0.0.0.0:1260"
+    - "--metrics-level"
+    - "1"
+    - "--state-store"
+    - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
+    - "--meta-address"
+    - "http://${HOST04}:5690"
+
+services:
+  frontend:
+    image: piestream:latest
+    command:
+      - frontend-node
+      - "--host"
+      - "0.0.0.0:4566"
+      - "--meta-addr"
+      - "http://${HOST04}:5690"
+    networks:
+      - host
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==meta
+          
+  compute1:
+    <<: *compute-common
+    command:
+      - compute-node
+      - "--client-address"
+      - "${HOST01}:5688"
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
+      - "--meta-address"
+      - "http://${HOST04}:5690"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host01
+  
+  compute2:
+    <<: *compute-common
+    command:
+      - compute-node
+      - "--client-address"
+      - "${HOST02}:5688"
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
+      - "--meta-address"
+      - "http://${HOST04}:5690"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host02
+  
+  compute3:
+    <<: *compute-common
+    command:
+      - compute-node
+      - "--client-address"
+      - "${HOST03}:5688"
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
+      - "--meta-address"
+      - "http://${HOST04}:5690"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host03
+  
+  compute4:
+    <<: *compute-common
+    command:
+      - compute-node
+      - "--client-address"
+      - "${HOST04}:5688"
+      - "--host"
+      - "0.0.0.0:5688"
+      - "--prometheus-listener-addr"
+      - "0.0.0.0:1222"
+      - "--metrics-level"
+      - "1"
+      - "--state-store"
+      - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
+      - "--meta-address"
+      - "http://${HOST04}:5690"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host04
+  
+  compact1:
+    <<: *compact-common
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host01
+
+  compact2:
+    <<: *compact-common
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host02
+
+  compact3:
+    <<: *compact-common
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host03
+
+  compact4:
+    <<: *compact-common
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==host04
+
+networks:
+  host:
+    external: true
