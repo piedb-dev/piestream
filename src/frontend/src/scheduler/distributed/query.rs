@@ -103,6 +103,7 @@ impl QueryExecution {
         compute_client_pool: ComputeClientPoolRef,
     ) -> Self {
         let query = Arc::new(query);
+        //sender给每个StageExcution, receiver和send同时给QueryRunner,维持对象通信
         let (sender, receiver) = channel(100);
 
         //构造stage_id->stage_exec映射
@@ -111,6 +112,7 @@ impl QueryExecution {
                 HashMap::with_capacity(query.stage_graph.stages.len());
 
             for stage_id in query.stage_graph.stage_ids_by_topo_order() {
+                //先生成子节点StageExecution对象，扫描父节点就能获取子节点列表
                 let children_stages = query
                     .stage_graph
                     .get_child_stages_unchecked(&stage_id)
@@ -118,6 +120,7 @@ impl QueryExecution {
                     .map(|s| stage_executions[s].clone())
                     .collect::<Vec<Arc<StageExecution>>>();
 
+                //保存当前stage以及children_stages
                 let stage_exec = Arc::new(StageExecution::new(
                     epoch,
                     query.stage_graph.stages[&stage_id].clone(),
@@ -130,7 +133,7 @@ impl QueryExecution {
             }
             Arc::new(stage_executions)
         };
-
+        //用户root节点通信，QueryRunner获取root_stage_sender,QueryState接收指令
         let (root_stage_sender, root_stage_receiver) =
             oneshot::channel::<SchedulerResult<QueryResultFetcher>>();
 
@@ -212,7 +215,7 @@ impl QueryExecution {
 
 impl QueryRunner {
     async fn run(mut self) -> SchedulerResult<()> {
-        // Start leaf stages.
+        // Start leaf stages. 先处理叶子stage节点
         let leaf_stages = self.query.leaf_stages();
         for stage_id in &leaf_stages {
             // TODO: We should not return error here, we should abort query.
@@ -220,6 +223,7 @@ impl QueryRunner {
                 "Starting query stage: {:?}-{:?}",
                 self.query.query_id, stage_id
             );
+            //任务下发成功
             self.stage_executions[stage_id].start().await.map_err(|e| {
                 error!("Failed to start stage: {}, reason: {:?}", stage_id, e);
                 e
@@ -229,12 +233,13 @@ impl QueryRunner {
                 self.query.query_id, stage_id
             );
         }
-        //需要扫表的stage
+        //需要扫表的stage_id列表
         let mut stages_with_table_scan = self.query.stages_with_table_scan();
 
         // Schedule other stages after leaf stages are all scheduled.
         while let Some(msg) = self.msg_receiver.recv().await {
             match msg {
+                //接收分发完的stage_id
                 Stage(Scheduled(stage_id)) => {
                     info!(
                         "Query stage {:?}-{:?} scheduled.",
@@ -242,6 +247,7 @@ impl QueryRunner {
                     );
                     self.scheduled_stages_count += 1;
                     stages_with_table_scan.remove(&stage_id);
+                    //所有扫表的stage都分配成功
                     if stages_with_table_scan.is_empty() {
                         // We can be sure here that all the Hummock iterators have been created,
                         // thus they all successfully pinned a HummockVersion.
@@ -256,7 +262,9 @@ impl QueryRunner {
                         // Now all stages have been scheduled, send root stage info.
                         self.send_root_stage_info().await;
                     } else {
+                        //子节点遍历完，所有父节点stage_executions[parent].start()也都执行完毕
                         for parent in self.query.get_parents(&stage_id) {
+                            //所有的儿子节点都执行成功，才可以执行父节点
                             if self.all_children_scheduled(parent).await {
                                 self.stage_executions[parent].start().await.map_err(|e| {
                                     error!("Failed to start stage: {}, reason: {:?}", stage_id, e);
@@ -318,6 +326,7 @@ impl QueryRunner {
             }
         };
 
+        //构建QueryResultFetcher
         let root_stage_result = QueryResultFetcher::new(
             self.epoch,
             self.hummock_snapshot_manager.clone(),

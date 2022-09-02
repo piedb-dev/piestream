@@ -176,6 +176,7 @@ pub struct QueryStage {
     pub query_id: QueryId,
     pub id: StageId,
     pub root: Arc<ExecutionPlanNode>,
+    //存储数据下发逻辑
     pub exchange_info: ExchangeInfo,
     pub parallelism: u32,
     /// Indicates whether this stage contains a table scan node and the table's information if so.
@@ -291,6 +292,7 @@ impl StageGraph {
             }
         }
 
+        //反转队列，叶子节点在前，父节点在后
         ret.into_iter().rev()
     }
 }
@@ -362,6 +364,7 @@ impl BatchPlanFragmenter {
             _ => self.worker_node_manager.worker_node_count(),
         };
 
+        println!("parallelism={:?}", parallelism);
         let mut builder = QueryStageBuilder::new(
             next_stage_id,
             self.query_id.clone(),
@@ -448,10 +451,10 @@ impl BatchPlanFragmenter {
         let child_exchange_info = node.distribution().to_prost(builder.parallelism);
         //产生一个新的stage
         let child_stage = self.new_stage(node.inputs()[0].clone(), child_exchange_info);
-        println!("child_stage={:?}", child_stage);
+       // println!("child_stage={:?}", child_stage);
         //当前stage的数据来源于下游stage
         execution_plan_node.source_stage_id = Some(child_stage.id);
-        //println!("execution_plan_node={:?}", execution_plan_node);
+        println!("execution_plan_node={:?}\n", execution_plan_node);
 
         if let Some(parent) = parent_exec_node {
             //当前stage内部节点之前的父子关系，存储子节点信息

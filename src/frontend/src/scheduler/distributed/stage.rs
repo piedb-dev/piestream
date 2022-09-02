@@ -158,6 +158,7 @@ impl StageExecution {
     }
 
     /// Starts execution of this stage, returns error if already started.
+    /// 具体的stage
     pub async fn start(&self) -> SchedulerResult<()> {
         let mut s = self.state.write().await;
         match &*s {
@@ -218,7 +219,12 @@ impl StageExecution {
     ///
     /// When this method is called, all tasks should have been scheduled, and their `worker_node`
     /// should have been set.
+    /*
+        返回 `output_id` 的所有交换源。每个 `ExchangeSource` 都由生产者的 `TaskId` 和 `output_id`（消费者的 `TaskId`）标识，因为每个任务可能会产生多个通道的输出。
+        当这个方法被调用时，所有的任务应该已经被调度了，它们的 `worker_node`应该已经设置好了。
+     */
     fn all_exchange_sources_for(&self, output_id: u32) -> Vec<ExchangeSource> {
+        //self.tasks数组大小为parallelism
         self.tasks
             .iter()
             .map(|(task_id, status_holder)| {
@@ -228,9 +234,9 @@ impl StageExecution {
                         stage_id: self.stage.id,
                         task_id: *task_id,
                     }),
-                    output_id,
+                    output_id, //父节点任务id
                 };
-
+                //带上compute节点路由信息,儿子stage先跑，所以已经有值
                 ExchangeSource {
                     task_output_id: Some(task_output_id),
                     host: Some(status_holder.inner.load_full().location.clone().unwrap()),
@@ -332,6 +338,7 @@ impl StageRunner {
                 futures.push(self.schedule_task(task_id, plan_fragment, Some(worker)));
             }
         } else {
+            println!("self.stage.parallelism={:?}", self.stage.parallelism);
             //Single调度
             for id in 0..self.stage.parallelism {
                 let task_id = TaskIdProst {
@@ -339,6 +346,7 @@ impl StageRunner {
                     stage_id: self.stage.id,
                     task_id: id,
                 };
+                //创建执行计划,每个工作节点创建不同的plan_fragment
                 let plan_fragment = self.create_plan_fragment(id, None);
                 //随机woker节点
                 futures.push(self.schedule_task(task_id, plan_fragment, None));
@@ -349,6 +357,7 @@ impl StageRunner {
         while let Some(result) = buffered.next().await {
             result?;
         }
+        //所有任务都发送成功
         Ok(())
     }
 
@@ -370,7 +379,7 @@ impl StageRunner {
             .await
             .map_err(|e| anyhow!(e))?;
 
-        //创建任务    
+        //创建任务并发送任务给compute    
         let t_id = task_id.task_id;
         compute_client
             .create_task2(task_id, plan_fragment, self.epoch)
@@ -405,6 +414,7 @@ impl StageRunner {
         match execution_plan_node.plan_node_type {
             PlanNodeType::BatchExchange => {
                 // Find the stage this exchange node should fetch from and get all exchange sources.
+                // exchange node都必须由下游stage节点提供数据，并且exchange应该只有一个节点
                 let child_stage = self
                     .children
                     .iter()
@@ -412,6 +422,7 @@ impl StageRunner {
                         child_stage.stage.id == execution_plan_node.source_stage_id.unwrap()
                     })
                     .unwrap();
+                //将task_id关联到下游所有stage任务，存储在exchange_sources
                 let exchange_sources = child_stage.all_exchange_sources_for(task_id);
 
                 match &execution_plan_node.node {
@@ -445,9 +456,11 @@ impl StageRunner {
             }
             PlanNodeType::BatchSeqScan => {
                 let node_body = execution_plan_node.node.clone();
+                //按行扫表
                 let NodeBody::RowSeqScan(mut scan_node) = node_body else {
                     unreachable!();
                 };
+                //设置下发信息
                 scan_node.vnode_bitmap = vnode_bitmap;
                 PlanNodeProst {
                     children: vec![],
@@ -457,6 +470,7 @@ impl StageRunner {
                 }
             }
             _ => {
+                //stage内父子节点
                 let children = execution_plan_node
                     .children
                     .iter()
