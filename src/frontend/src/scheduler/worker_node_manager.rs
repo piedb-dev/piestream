@@ -74,6 +74,7 @@ impl WorkerNodeManager {
         }
 
         let die = Uniform::from(0..current_nodes.len());
+        //节点长度范围内随机获取worknode
         Ok(current_nodes.get(die.sample(&mut rng)).unwrap().clone())
     }
 

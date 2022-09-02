@@ -124,6 +124,7 @@ impl Query {
     pub fn leaf_stages(&self) -> Vec<StageId> {
         let mut ret_leaf_stages = Vec::new();
         for stage_id in self.stage_graph.stages.keys() {
+            //子节点数量为0的就是叶子节点
             if self
                 .stage_graph
                 .get_child_stages_unchecked(stage_id)
@@ -274,12 +275,14 @@ impl StageGraph {
     }
 
     /// Returns stage ids in topology order, s.t. child stage always appears before its parent.
+    /// 按拓普顺序生成stage列表
     pub fn stage_ids_by_topo_order(&self) -> impl Iterator<Item = StageId> {
         let mut stack = Vec::with_capacity(self.stages.len());
         stack.push(self.root_stage_id);
         let mut ret = Vec::with_capacity(self.stages.len());
         let mut existing = HashSet::with_capacity(self.stages.len());
 
+        //层次遍历
         while let Some(s) = stack.pop() {
             if !existing.contains(&s) {
                 ret.push(s);
@@ -341,6 +344,7 @@ impl BatchPlanFragmenter {
     /// Split the plan node into each stages, based on exchange node.
     /// 根据交换节点将计划节点拆分为每个阶段
     pub fn split(mut self, batch_node: PlanRef) -> SchedulerResult<Query> {
+        //默认头节点是Distribution::Single
         let root_stage = self.new_stage(batch_node.clone(), Distribution::Single.to_prost(1));
         let stage_graph = self.stage_graph_builder.build(root_stage.id);
         Ok(Query {
@@ -352,6 +356,7 @@ impl BatchPlanFragmenter {
     fn new_stage(&mut self, root: PlanRef, exchange_info: ExchangeInfo) -> QueryStageRef {
         let next_stage_id = self.next_stage_id;
         self.next_stage_id += 1;
+        //下发类型为single  parallelism=1， hash则为节点数
         let parallelism = match root.distribution() {
             Distribution::Single => 1,
             _ => self.worker_node_manager.worker_node_count(),
@@ -364,6 +369,7 @@ impl BatchPlanFragmenter {
             exchange_info,
         );
 
+        //注意最后一个参数为None
         self.visit_node(root, &mut builder, None);
 
         builder.finish(&mut self.stage_graph_builder)
@@ -380,6 +386,7 @@ impl BatchPlanFragmenter {
                 self.visit_exchange(node.clone(), builder, parent_exec_node);
             }
             _ => {
+                //对节点做一层封装，增加了子节点列表信息
                 let mut execution_plan_node = ExecutionPlanNode::from(node.clone());
 
                 for child in node.inputs() {
@@ -387,8 +394,10 @@ impl BatchPlanFragmenter {
                 }
 
                 if let Some(parent) = parent_exec_node {
+                    //子节点
                     parent.children.push(Arc::new(execution_plan_node));
                 } else {
+                    //root节点
                     builder.root = Some(Arc::new(execution_plan_node));
                 }
                 // Check out the comments for `has_table_scan` in `QueryStage`.
@@ -411,6 +420,7 @@ impl BatchPlanFragmenter {
                                 .is_none(),
                         "multiple table scan inside a stage"
                     );
+                    //设置扫表策略，is_singleton=true,强行设置当前版本vnode_bitmaps为空，串行扫表保证有序
                     builder.table_scan_info = Some(TableScanInfo {
                         vnode_bitmaps: if is_singleton {
                             None
@@ -425,6 +435,7 @@ impl BatchPlanFragmenter {
         }
     }
 
+    //exchange节点只会是一个stage的叶子节点，
     fn visit_exchange(
         &mut self,
         node: PlanRef,
@@ -432,16 +443,24 @@ impl BatchPlanFragmenter {
         parent_exec_node: Option<&mut ExecutionPlanNode>,
     ) {
         let mut execution_plan_node = ExecutionPlanNode::from(node.clone());
+        println!("execution_plan_node={:?}\n", execution_plan_node);
+        //数据下发到儿子节点策略
         let child_exchange_info = node.distribution().to_prost(builder.parallelism);
+        //产生一个新的stage
         let child_stage = self.new_stage(node.inputs()[0].clone(), child_exchange_info);
+        println!("child_stage={:?}", child_stage);
+        //当前stage的数据来源于下游stage
         execution_plan_node.source_stage_id = Some(child_stage.id);
+        //println!("execution_plan_node={:?}", execution_plan_node);
 
         if let Some(parent) = parent_exec_node {
+            //当前stage内部节点之前的父子关系，存储子节点信息
             parent.children.push(Arc::new(execution_plan_node));
         } else {
+            //当前stage根节点
             builder.root = Some(Arc::new(execution_plan_node));
         }
-
+        //stage之前父子关系
         builder.children_stages.push(child_stage);
     }
 }
@@ -451,11 +470,14 @@ fn vnode_mapping_to_owner_mapping(
     vnode_mapping: Vec<ParallelUnitId>,
 ) -> HashMap<ParallelUnitId, Buffer> {
     let mut m: HashMap<ParallelUnitId, BitmapBuilder> = HashMap::new();
+    //vnode_mapping: Some([1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]) },
+    //默认插入 vnode_mapping.len 
     let num_vnodes = vnode_mapping.len();
     for (i, parallel_unit_id) in vnode_mapping.into_iter().enumerate() {
         let bitmap = m
             .entry(parallel_unit_id)
             .or_insert_with(|| BitmapBuilder::zeroed(num_vnodes));
+        //设置对应位置为true
         bitmap.set(i, true);
     }
     m.into_iter()
@@ -647,6 +669,7 @@ mod tests {
 
         // Verify topology order
         {
+            //stage_ids_by_topo_order层次遍历
             let stage_id_to_pos: HashMap<StageId, usize> = query
                 .stage_graph
                 .stage_ids_by_topo_order()
@@ -654,6 +677,7 @@ mod tests {
                 .map(|(pos, stage_id)| (stage_id, pos))
                 .collect();
 
+            //数组里父节点位置在儿子节点前
             for stage_id in query.stage_graph.stages.keys() {
                 let stage_pos = stage_id_to_pos[stage_id];
                 for child_stage_id in &query.stage_graph.child_edges[stage_id] {
@@ -668,22 +692,26 @@ mod tests {
         assert_eq!(root_exchange.root.node_type(), PlanNodeType::BatchExchange);
         assert_eq!(root_exchange.root.source_stage_id, Some(1));
         assert!(matches!(root_exchange.root.node, NodeBody::Exchange(_)));
+        //第一个stage默认single
         assert_eq!(root_exchange.parallelism, 1);
         assert!(!root_exchange.has_table_scan());
 
         let join_node = query.stage_graph.stages.get(&1).unwrap();
         assert_eq!(join_node.root.node_type(), PlanNodeType::BatchHashJoin);
+        //并行度等于wokenode数量
         assert_eq!(join_node.parallelism, 3);
 
         assert!(matches!(join_node.root.node, NodeBody::HashJoin(_)));
         assert_eq!(join_node.root.source_stage_id, None);
         assert_eq!(2, join_node.root.children.len());
 
+        //left,right都是Exchange
         assert!(matches!(
             join_node.root.children[0].node,
             NodeBody::Exchange(_)
         ));
         assert_eq!(join_node.root.children[0].source_stage_id, Some(2));
+        //stage叶子节点
         assert_eq!(0, join_node.root.children[0].children.len());
 
         assert!(matches!(

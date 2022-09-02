@@ -92,7 +92,7 @@ impl Planner {
         }
         //设置分布式为单节点模式
         let dist = RequiredDist::single();
-        //FixedBitSet长度等于字段长度
+        //FixedBitSet长度等于字段长度，plan.schema().len()=select字段长度+(order by 表达式字段)生成的长度
         let mut out_fields = FixedBitSet::with_capacity(plan.schema().len());
         out_fields.insert_range(..plan.schema().len() - extra_order_exprs_len);
         // 生成执行计划planroot

@@ -140,6 +140,7 @@ impl StageExecution {
         children: Vec<Arc<StageExecution>>,
         compute_client_pool: ComputeClientPoolRef,
     ) -> Self {
+        //构建tasks
         let tasks = (0..stage.parallelism)
             .into_iter()
             .map(|task_id| (task_id, TaskStatusHolder::new(task_id)))
@@ -174,6 +175,7 @@ impl StageExecution {
                     compute_client_pool: self.compute_client_pool.clone(),
                 };
                 let handle = spawn(async move {
+                    //runner.run update 
                     if let Err(e) = runner.run().await {
                         error!("Stage failed: {:?}", e);
                         Err(e)
@@ -181,7 +183,7 @@ impl StageExecution {
                         Ok(())
                     }
                 });
-
+                // updated StageState state    
                 *s = StageState::Started { sender, handle };
                 Ok(())
             }
@@ -241,12 +243,14 @@ impl StageExecution {
 
 impl StageRunner {
     async fn run(self) -> SchedulerResult<()> {
+        //构建查询任务并发送给对应计算节点
         if let Err(e) = self.schedule_tasks().await {
             error!(
                 "Stage {:?}-{:?} failed to schedule tasks, error: {:?}",
                 self.stage.query_id, self.stage.id, e
             );
             // TODO: We should cancel all scheduled tasks
+            //发送失败信息
             self.send_event(QueryMessage::Stage(Failed {
                 id: self.stage.id,
                 reason: e,
@@ -256,10 +260,11 @@ impl StageRunner {
         }
 
         {
-            // Changing state
+            // Changing state  to Running
             let mut s = self.state.write().await;
             match mem::replace(&mut *s, StageState::Failed) {
                 StageState::Started { sender, handle } => {
+                    //更新状态
                     *s = StageState::Running {
                         _sender: sender,
                         _handle: handle,
@@ -270,6 +275,7 @@ impl StageRunner {
         }
 
         // All tasks scheduled, send `StageScheduled` event to `QueryRunner`.
+        //send stage.id to all tasks scheduled
         self.send_event(QueryMessage::Stage(StageEvent::Scheduled(self.stage.id)))
             .await?;
 
@@ -292,17 +298,24 @@ impl StageRunner {
     async fn schedule_tasks(&self) -> SchedulerResult<()> {
         let mut futures = vec![];
 
-        if let Some(table_scan_info) = self.stage.table_scan_info.as_ref() && let Some(vnode_bitmaps) = table_scan_info.vnode_bitmaps.as_ref() {
+        if let Some(table_scan_info) = self.stage.table_scan_info.as_ref() 
+                        && let Some(vnode_bitmaps) = table_scan_info.vnode_bitmaps.as_ref() {
             // If the stage has table scan nodes, we create tasks according to the data distribution
             // and partition of the table.
             // We let each task read one partition by setting the `vnode_ranges` of the scan node in
             // the task.
             // We schedule the task to the worker node that owns the data partition.
+            /*
+                如果stage有表扫描节点，我们根据数据分布和表的分区创建任务
+                我们通过设置任务中扫描节点的`vnode_ranges`让每个任务读取一个分区。
+                我们将任务调度到拥有数据分区的工作节点。
+            */
             let parallel_unit_ids = vnode_bitmaps.keys().cloned().collect_vec();
             let workers = self
                 .worker_node_manager
                 .get_workers_by_parallel_unit_ids(&parallel_unit_ids)?;
 
+            //指定worker节点
             for (i, (parallel_unit_id, worker)) in parallel_unit_ids
                 .into_iter()
                 .zip_eq(workers.into_iter())
@@ -313,11 +326,13 @@ impl StageRunner {
                     stage_id: self.stage.id,
                     task_id: i as u32,
                 };
+                //vnode_ranges存储是当前parallel_unit_id分配的vnode信息
                 let vnode_ranges = vnode_bitmaps[&parallel_unit_id].clone();
                 let plan_fragment = self.create_plan_fragment(i as u32, Some(vnode_ranges));
                 futures.push(self.schedule_task(task_id, plan_fragment, Some(worker)));
             }
         } else {
+            //Single调度
             for id in 0..self.stage.parallelism {
                 let task_id = TaskIdProst {
                     query_id: self.stage.query_id.id.clone(),
@@ -325,9 +340,11 @@ impl StageRunner {
                     task_id: id,
                 };
                 let plan_fragment = self.create_plan_fragment(id, None);
+                //随机woker节点
                 futures.push(self.schedule_task(task_id, plan_fragment, None));
             }
         }
+        //统一开始执行,buffer_unordered是缓冲区大小，设置为0会卡住
         let mut buffered = stream::iter(futures).buffer_unordered(TASK_SCHEDULING_PARALLELISM);
         while let Some(result) = buffered.next().await {
             result?;
@@ -341,6 +358,7 @@ impl StageRunner {
         plan_fragment: PlanFragment,
         worker: Option<WorkerNode>,
     ) -> SchedulerResult<()> {
+        //worker为None则随机指定
         let worker_node_addr = worker
             .unwrap_or(self.worker_node_manager.next_random()?)
             .host
@@ -352,12 +370,14 @@ impl StageRunner {
             .await
             .map_err(|e| anyhow!(e))?;
 
+        //创建任务    
         let t_id = task_id.task_id;
         compute_client
             .create_task2(task_id, plan_fragment, self.epoch)
             .await
             .map_err(|e| anyhow!(e))?;
 
+        //更新t_id任务的路由以及id信息
         self.tasks[&t_id].inner.store(Arc::new(TaskStatus {
             _task_id: t_id,
             location: Some(worker_node_addr),

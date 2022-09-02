@@ -105,6 +105,7 @@ impl QueryExecution {
         let query = Arc::new(query);
         let (sender, receiver) = channel(100);
 
+        //构造stage_id->stage_exec映射
         let stage_executions = {
             let mut stage_executions: HashMap<StageId, Arc<StageExecution>> =
                 HashMap::with_capacity(query.stage_graph.stages.len());
@@ -145,6 +146,7 @@ impl QueryExecution {
             compute_client_pool,
         };
 
+        //默认是pengding
         let state = Pending {
             runner,
             root_stage_receiver,
@@ -160,6 +162,7 @@ impl QueryExecution {
     /// Start execution of this query.
     pub async fn start(&self) -> SchedulerResult<QueryResultFetcher> {
         let mut state = self.state.write().await;
+        //cur_state等于旧值Pending，*state等于新值Failed
         let cur_state = mem::replace(&mut *state, Failed);
 
         match cur_state {
@@ -176,6 +179,7 @@ impl QueryExecution {
                     })
                 });
 
+                //runner.run函数里发送
                 let root_stage = root_stage_receiver
                     .await
                     .map_err(|e| anyhow!("Starting query execution failed: {:?}", e))??;
@@ -225,6 +229,7 @@ impl QueryRunner {
                 self.query.query_id, stage_id
             );
         }
+        //需要扫表的stage
         let mut stages_with_table_scan = self.query.stages_with_table_scan();
 
         // Schedule other stages after leaf stages are all scheduled.

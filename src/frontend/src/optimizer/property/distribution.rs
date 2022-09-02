@@ -91,6 +91,7 @@ impl Distribution {
                 // TODO: add round robin DistributionMode
                 Distribution::SomeShard => DistributionMode::Single,
             } as i32,
+            //当前只有Distribution::HashShard类型会指派分发
             distribution: match self {
                 Distribution::Single => None,
                 Distribution::HashShard(keys) => Some(DistributionProst::HashInfo(HashInfo {

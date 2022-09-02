@@ -167,6 +167,7 @@ impl Order {
         }
         #[expect(clippy::disallowed_methods)]
         for (order, other_order) in self.field_order.iter().zip(other.field_order.iter()) {
+            println!("*****************");
             if order.index != other_order.index || !order.direct.satisfies(&other_order.direct) {
                 return false;
             }

@@ -136,17 +136,19 @@ impl LogicalProject {
             assert_eq!(input_refs[tar], None);
             input_refs[tar] = Some(src);
         }
+        println!("with_mapping mapping={:?}", mapping);
         let input_schema = input.schema();
         let exprs: Vec<ExprImpl> = input_refs
             .into_iter()
             .map(|i| i.unwrap())
             .map(|i| InputRef::new(i, input_schema.fields()[i].data_type()).into())
             .collect();
-
+        println!("with_mapping exprs={:?}", exprs);
         LogicalProject::new(input, exprs)
     }
 
     fn derive_schema(exprs: &[ExprImpl], input_schema: &Schema) -> Schema {
+        //o2i 输出转输入
         let o2i = Self::o2i_col_mapping_inner(input_schema.len(), exprs);
         let fields = exprs
             .iter()

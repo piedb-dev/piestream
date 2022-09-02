@@ -176,6 +176,7 @@ impl PlanRoot {
         // they shouldn't be a part of output columns, so we use `out_fields` to control the
         // visibility of these expressions. To avoid these expressions being pruned, we can't
         // use `self.out_fields` as `required_cols` here.
+        //plan.schema().len()包含表达式的扩展的字段信息
         let required_cols = (0..self.plan.schema().len()).collect_vec();
         plan = plan.prune_col(&required_cols);
 

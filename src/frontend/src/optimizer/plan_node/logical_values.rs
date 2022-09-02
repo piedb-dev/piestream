@@ -73,6 +73,12 @@ impl fmt::Display for LogicalValues {
 
 impl ColPrunable for LogicalValues {
     fn prune_col(&self, required_cols: &[usize]) -> PlanRef {
+        /*
+            Values(BoundValues { 
+                rows: [[7:Int32, 77:Int32, '哪':Varchar]], 
+                schema: Schema { fields: [:Int32, :Int32, :Varchar] } 
+            }), 
+         */
         let rows = self
             .rows
             .iter()
@@ -153,9 +159,11 @@ mod tests {
             schema,
             ctx,
         );
+        println!("values={:?}", values);
 
         let required_cols = vec![0, 2];
         let pruned = values.prune_col(&required_cols);
+        println!("pruned={:?}", pruned);
 
         let values = pruned.as_logical_values().unwrap();
         let rows: &[Vec<ExprImpl>] = values.rows();

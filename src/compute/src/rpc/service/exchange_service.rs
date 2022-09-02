@@ -60,6 +60,7 @@ impl ExchangeService for ExchangeServiceImpl {
             .task_output_id
             .expect("Failed to get task output id.");
         let (tx, rx) = tokio::sync::mpsc::channel(EXCHANGE_BUFFER_SIZE);
+        println!("ExchangeServiceImpl batch_mgr get_data");
         if let Err(e) = self.batch_mgr.get_data(tx, peer_addr, &pb_task_output_id) {
             error!("Failed to serve exchange RPC from {}: {}", peer_addr, e);
             return Err(e.into());

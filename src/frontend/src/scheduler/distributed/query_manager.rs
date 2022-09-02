@@ -121,11 +121,13 @@ impl QueryManager {
         query: Query,
     ) -> SchedulerResult<impl DataChunkStream> {
         let query_id = query.query_id().clone();
+        //获取epoch
         let epoch = self
             .hummock_snapshot_manager
             .get_epoch(query_id.clone())
             .await?;
 
+        //构建QueryExecution对象
         let query_execution = QueryExecution::new(
             query,
             epoch,
@@ -134,6 +136,7 @@ impl QueryManager {
             self.compute_client_pool.clone(),
         );
 
+        //
         let query_result_fetcher = match query_execution.start().await {
             Ok(query_result_fetcher) => query_result_fetcher,
             Err(e) => {

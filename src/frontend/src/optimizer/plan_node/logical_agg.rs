@@ -456,6 +456,7 @@ impl LogicalAgg {
             // group agg
             false => group_keys.clone(),
         };
+        println!("input={:?}", input);
         let base = PlanBase::new_logical(ctx, schema, pk_indices);
         Self {
             base,
@@ -467,10 +468,15 @@ impl LogicalAgg {
 
     /// get the Mapping of columnIndex from input column index to output column index,if a input
     /// column corresponds more than one out columns, mapping to any one
+    /*
+        获取 columnIndex 从输入列索引到输出列索引的映射，如果输入column 对应多个列，映射到任意一个
+    */
     pub fn o2i_col_mapping(&self) -> ColIndexMapping {
         let input_len = self.input.schema().len();
         let agg_cal_num = self.agg_calls().len();
         let group_keys = self.group_keys();
+        println!("input_len={:?} agg_cal_num={:?} group_keys={:?}", input_len, agg_cal_num, group_keys);
+        //map长度agg_cal_num + group_keys.len()
         let mut map = vec![None; agg_cal_num + group_keys.len()];
         for (i, key) in group_keys.iter().enumerate() {
             map[i] = Some(*key);
@@ -493,6 +499,7 @@ impl LogicalAgg {
         group_keys: &[usize],
         agg_call_data_types: Vec<DataType>,
     ) -> Schema {
+        //输入字段+返回类型
         let fields = group_keys
             .iter()
             .cloned()
@@ -608,29 +615,67 @@ impl fmt::Display for LogicalAgg {
 }
 
 impl ColPrunable for LogicalAgg {
+    //LogicalAgg里schema字段两部分组成1.聚合函数使用到的字段 2.每个聚合函数会生成的一个新字段
     fn prune_col(&self, required_cols: &[usize]) -> PlanRef {
+        /*
+            upstream_required_cols从代码看是(required_cols) and (group_key字段号生成的mapping) 然后在FixedBitSet设置为1 
+            代码实现比较奇怪，upstream_required_cols说到底是基于group_key来设置，难道不会被后面group_key_required_cols覆盖
+            
+        */
         let upstream_required_cols = {
+            //o2i_col_mapping没理解作用,输入是group_key 输出是required_cols，之间的映射？？？
             let mapping = self.o2i_col_mapping();
+            println!("mapping={:?}", mapping);
+            /*
+                let required_cols=&[0,1];
+                let mapping=vec![Some(1),Some(2),Some(3),Some(4),Some(5),Some(6)];             
+                let b=FixedBitSet::from_iter(
+                        required_cols
+                        .iter()
+                        .filter_map(|&output_idx|*mapping.get(output_idx)?),
+                    );
+                println!("b={:?} ones_num={:?}", b, b.ones().collect_vec());
+                b=FixedBitSet { data: [6], length: 3 } ones_num=[1, 2]
+                required_cols数组内容是mapping数组下标，mapping表示设置为1的bit数组下标，即bit数组下标1,2设置为1
+                所以ones_num=[1,2] data=0x1010=6 数组长度length=3
+            */
+            //FixedBitSet长度length=mapping长度
             FixedBitSet::from_iter(
                 required_cols
                     .iter()
                     .filter_map(|&output_idx| mapping.try_map(output_idx)),
             )
         };
+        println!("upstream_required_cols={:?} ones_num={:?}", upstream_required_cols, upstream_required_cols.ones().collect_vec());
         let group_key_required_cols = FixedBitSet::from_iter(self.group_keys.iter().copied());
+        println!("group_key_required_cols={:?} ones_num={:?}", group_key_required_cols, group_key_required_cols.ones().collect_vec());
 
         let (agg_call_required_cols, agg_calls) = {
             let input_cnt = self.input().schema().fields().len();
+            //tmp存储(required_cols) and (agg_call函数使用的字段号) 然后在FixedBitSet设置为1
             let mut tmp = FixedBitSet::with_capacity(input_cnt);
+            println!("required_cols={:?}", required_cols);
+            //new_agg_calls保存required_cols字段列表中的所有agg_calls列表对象，非必要agg_call就丢弃了
             let new_agg_calls = required_cols
                 .iter()
                 .filter(|&&index| index >= self.group_keys.len())
                 .map(|&index| {
+                    println!("index={:?}", index);
+                    /*
+                        LogicAgg.schema前面存储是group_keys,后面存储agg_call生成的字段信息，
+                        所以index - self.group_keys.len()等于agg_calls下标
+                    */
                     let index = index - self.group_keys.len();
                     let agg_call = self.agg_calls[index].clone();
+                    /*
+                        inputs: vec![InputRef::new(2, ty.clone())],
+                        x.index是输入字段在schema里序号
+                    */
                     tmp.extend(agg_call.inputs.iter().map(|x| x.index()));
                     // collect columns used in aggregate filter expressions
+                    //
                     for i in &agg_call.filter.conjunctions {
+                        println!("into agg_call.filter.conjunctions");
                         tmp.union_with(&i.collect_input_refs(input_cnt));
                     }
                     agg_call
@@ -639,17 +684,24 @@ impl ColPrunable for LogicalAgg {
             (tmp, new_agg_calls)
         };
 
+        println!("agg_call_required_cols={:?} ones_num={:?}", agg_call_required_cols, agg_call_required_cols.ones().collect_vec());
+        //计算需要保留的所有基础字段
         let input_required_cols = {
             let mut tmp: FixedBitSet = upstream_required_cols;
+            //union_with求并聚union
             tmp.union_with(&group_key_required_cols);
             tmp.union_with(&agg_call_required_cols);
             tmp.ones().collect_vec()
         };
+
+        println!("input_required_cols={:?}", input_required_cols);
         let mapping = ColIndexMapping::with_remaining_columns(
             &input_required_cols,
             self.input().schema().len(),
         );
+        println!("mapping={:?}", mapping);
         let agg = {
+            //使用mapping重新构建了agg_calls里字段号（agg_calls是上面基于required_cols生成的），使之连贯
             let agg_calls = agg_calls
                 .iter()
                 .cloned()
@@ -661,18 +713,23 @@ impl ColPrunable for LogicalAgg {
                     agg_call
                 })
                 .collect();
+            println!("*********************agg_calls={:?}", agg_calls);
+            //重新构建group_keys里字段号
             let group_keys = self
                 .group_keys
                 .iter()
                 .cloned()
                 .map(|key| mapping.map(key))
                 .collect();
+            println!("*********************group_keys={:?}", group_keys);
+            //重新生成LogicalAgg对象
             LogicalAgg::new(
                 agg_calls,
                 group_keys,
                 self.input.prune_col(&input_required_cols),
             )
         };
+        
         let new_output_cols = {
             // group keys were never pruned or even re-ordered in current impl
             let mut tmp = (0..agg.group_keys().len()).collect_vec();
@@ -683,18 +740,27 @@ impl ColPrunable for LogicalAgg {
             );
             tmp
         };
+
+        println!("new_output_cols={:?}", new_output_cols);
+        //new_output_cols,required_cols数组里顺序都不能变
         if new_output_cols == required_cols {
             // current schema perfectly fit the required columns
             agg.into()
         } else {
             // some columns are not needed, or the order need to be adjusted.
             // so we did a projection to remove/reorder the columns.
+            //重新构建映射
             let mapping =
                 &ColIndexMapping::with_remaining_columns(&new_output_cols, self.schema().len());
+            
+            println!("mapping 3={:?}",mapping);
+            //利用 mapping重新构建required_cols，输出为output_required_cols
             let output_required_cols = required_cols
                 .iter()
                 .map(|&idx| mapping.map(idx))
                 .collect_vec();
+            
+            println!("output_required_cols 3={:?}",output_required_cols);
             let src_size = agg.schema().len();
             LogicalProject::with_mapping(
                 agg.into(),
@@ -971,6 +1037,7 @@ mod tests {
             assert_eq!(group_keys, vec![0]);
         }
     }
+    ///select min(v2) from t group by v1 
     /// Generate a agg call node with given [`DataType`] and fields.
     /// For example, `generate_agg_call(Int32, [v1, v2, v3])` will result in:
     /// ```text
@@ -1010,9 +1077,27 @@ mod tests {
             Field::with_name(ty.clone(), "v3"),
         ];
         let agg = generate_agg_call(ty.clone(), fields.clone()).await;
+        /*
+            generate_agg_call函数里设置group_keys=vec![1]
+            LogicalAgg { base: PlanBase { id: PlanNodeId(1), ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } },
+            schema: Schema { fields: [v2:Int32, agg#0:Int32] }, pk_indices: [1], order: Order { field_order: [] }, 
+            dist: Single, append_only: true }, agg_calls: [min($2)], group_keys: [1], 
+            input: LogicalValues { base: PlanBase { id: PlanNodeId(0), ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } }, 
+            schema: Schema { fields: [v1:Int32, v2:Int32, v3:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] } }
+        */
+        println!("**********************agg={:?}", agg);
         // Perform the prune
         let required_cols = vec![0, 1];
         let plan = agg.prune_col(&required_cols);
+        println!("**********************");
+        /*
+            prune_col剪支函数去除了LogicalValues中没有使用的v1字段，schema数组只剩[v2,v3],所以group_keys调整为0了， agg_calls: [min($1)]
+            LogicalAgg { base: PlanBase { id: PlanNodeId(3), ctx: OptimizerContextRef { inner: QueryContext { current id = 4 } }, 
+            schema: Schema { fields: [v2:Int32, agg#0:Int32] }, pk_indices: [0], order: Order { field_order: [] }, dist: Single, append_only: true }, 
+            agg_calls: [min($1)], group_keys: [0], input: LogicalValues { base: PlanBase { id: PlanNodeId(2), ctx: OptimizerContextRef { inner: QueryContext { current id = 4 } }, 
+            schema: Schema { fields: [v2:Int32, v3:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] }
+        */
+        println!("plan:{:?}", plan);
 
         // Check the result
         let agg_new = plan.as_logical_agg().unwrap();
@@ -1049,9 +1134,25 @@ mod tests {
             Field::with_name(ty.clone(), "v3"),
         ];
         let agg = generate_agg_call(ty.clone(), fields.clone()).await;
+        /*
+            LogicalAgg { base: PlanBase { id: PlanNodeId(1), ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } }, 
+            schema: Schema { fields: [v2:Int32, agg#0:Int32] }, pk_indices: [1], order: Order { field_order: [] }, dist: Single, append_only: true }, 
+            agg_calls: [min($2)], group_keys: [1], input: LogicalValues { base: PlanBase { id: PlanNodeId(0), 
+            ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } }, schema: Schema { fields: [v1:Int32, v2:Int32, v3:Int32] }, pk_indices: [], 
+            order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] } }
+        */
+        //println!("agg={:?}", agg);
         // Perform the prune
         let required_cols = vec![1, 0];
         let plan = agg.prune_col(&required_cols);
+        /*
+            LogicalProject { base: PlanBase { id: PlanNodeId(4), ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, 
+            schema: Schema { fields: [agg#0:Int32, v2:Int32] }, pk_indices: [1], order: Order { field_order: [] }, dist: Single, append_only: true }, exprs: [$1, $0], 
+            input: LogicalAgg { base: PlanBase { id: PlanNodeId(3), ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, schema: Schema { fields: [v2:Int32, agg#0:Int32] }, 
+            pk_indices: [0], order: Order { field_order: [] }, dist: Single, append_only: true }, agg_calls: [min($1)], group_keys: [0], input: LogicalValues { base: PlanBase { id: PlanNodeId(2), 
+            ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, schema: Schema { fields: [v2:Int32, v3:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] } } }
+        */
+        //println!("plan={:?}", plan);
         // Check the result
         let proj = plan.as_logical_project().unwrap();
         assert_eq!(proj.exprs().len(), 2);
@@ -1179,10 +1280,26 @@ mod tests {
             },
         ];
         let agg = LogicalAgg::new(agg_calls, vec![1, 2], values.into());
+        /*
+            LogicalAgg { base: PlanBase { id: PlanNodeId(1), ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } }, 
+            schema: Schema { fields: [v2:Int32, v3:Int32, agg#0:Int32, agg#1:Int32] }, pk_indices: [1, 2], order: Order { field_order: [] }, dist: Single, append_only: true }, 
+            agg_calls: [min($2), max($1)], group_keys: [1, 2], input: LogicalValues { base: PlanBase { id: PlanNodeId(0), ctx: OptimizerContextRef { inner: QueryContext { current id = 2 } }, 
+            schema: Schema { fields: [v1:Int32, v2:Int32, v3:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] } }
+        */
+        println!("1111**************************agg={:?}", agg);
 
         // Perform the prune
         let required_cols = vec![0, 3];
         let plan = agg.prune_col(&required_cols);
+        /*
+            LogicalProject { base: PlanBase { id: PlanNodeId(4), ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, 
+            schema: Schema { fields: [v2:Int32, agg#0:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, 
+            exprs: [$0, $2], input: LogicalAgg { base: PlanBase { id: PlanNodeId(3), ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, 
+            schema: Schema { fields: [v2:Int32, v3:Int32, agg#0:Int32] }, pk_indices: [0, 1], order: Order { field_order: [] }, dist: Single, append_only: true }, 
+            agg_calls: [max($0)], group_keys: [0, 1], input: LogicalValues { base: PlanBase { id: PlanNodeId(2), ctx: OptimizerContextRef { inner: QueryContext { current id = 5 } }, 
+            schema: Schema { fields: [v2:Int32, v3:Int32] }, pk_indices: [], order: Order { field_order: [] }, dist: Single, append_only: true }, rows: [] } } }
+        */
+        println!("222222**************************plan={:?}", plan);
         // Check the result
         let project = plan.as_logical_project().unwrap();
         assert_eq!(project.exprs().len(), 2);

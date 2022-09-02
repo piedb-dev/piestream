@@ -94,6 +94,7 @@ impl OptimizerContextRef {
         // It's safe to use `fetch_add` and `Relaxed` ordering since we have marked
         // `QueryContextRef` not `Sync`.
         let next_id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
+        //println!("next_id={:?}", next_id);
         PlanNodeId(next_id)
     }
 }

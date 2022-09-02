@@ -76,8 +76,12 @@ impl BitmapBuilder {
     pub fn set(&mut self, n: usize, val: bool) {
         assert!(n < self.len);
 
+        //小于8在self.data设置，大于等于8在self.head设置
         let byte = self.data.get_mut(n / 8).unwrap_or(&mut self.head);
+        //println!("byte={:?}", byte);
         let mask = 1 << (n % 8);
+        //println!("mask={:?} *byte & mask > 0={:?}", mask, *byte & mask > 0);
+        //不相同才需要重新设置
         match (*byte & mask > 0, val) {
             (true, false) => {
                 *byte &= !mask;
@@ -89,12 +93,14 @@ impl BitmapBuilder {
             }
             _ => {}
         }
+        println!("self.data={:?} self.head={:?}", self.data,self.head );
     }
 
     pub fn append(&mut self, bit_set: bool) -> &mut Self {
         self.head |= (bit_set as u8) << (self.len % 8);
         self.num_high_bits += bit_set as usize;
         self.len += 1;
+        //每8个bit扩张一次
         if self.len % 8 == 0 {
             self.data.push(self.head);
             self.head = 0;
@@ -110,11 +116,13 @@ impl BitmapBuilder {
     }
 
     pub fn finish(mut self) -> Bitmap {
+        //扩张
         if self.len % 8 != 0 {
             self.data.push(self.head);
         }
         let num_high_bits = self.num_high_bits;
 
+        //println!("finish data={:?}", self.data);
         Bitmap {
             num_bits: self.len(),
             bits: self.data.into(),
@@ -233,6 +241,7 @@ impl Bitmap {
     }
 
     pub fn iter(&self) -> BitmapIter<'_> {
+        println!("iter1");
         BitmapIter {
             bits: &self.bits,
             idx: 0,
@@ -245,6 +254,7 @@ impl Bitmap {
     /// # Panics
     /// Panics if `offset > len`.
     pub fn iter_from(&self, offset: usize) -> BitmapIter<'_> {
+        println!("iter_from2");
         assert!(offset < self.len());
         BitmapIter {
             bits: &self.bits,
@@ -295,6 +305,7 @@ impl<'a> Not for &'a Bitmap {
 
 impl FromIterator<bool> for Bitmap {
     fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
+        //println!("from_iter1");
         let mut builder = BitmapBuilder::default();
         for b in iter {
             builder.append(b);
@@ -305,6 +316,7 @@ impl FromIterator<bool> for Bitmap {
 
 impl FromIterator<Option<bool>> for Bitmap {
     fn from_iter<T: IntoIterator<Item = Option<bool>>>(iter: T) -> Self {
+        println!("from_iter2");
         let mut builder = BitmapBuilder::default();
         for b in iter {
             builder.append(b.unwrap_or(false));
@@ -541,6 +553,7 @@ mod tests {
         let mut b = BitmapBuilder::zeroed(10);
         assert_eq!(b.num_high_bits, 0);
 
+        
         b.set(0, true);
         b.set(7, true);
         b.set(8, true);
@@ -551,11 +564,13 @@ mod tests {
         b.set(8, false);
         assert_eq!(b.num_high_bits, 2);
 
+        //长度扩展到11，self.len%8=2 head 第二个bit位设置为1
         b.append(true);
         assert_eq!(b.len, 11);
         assert_eq!(b.num_high_bits, 3);
 
         let b = b.finish();
+        println!("b={:?}", b);
         assert_eq!(b.bits.to_vec(), &[0b0000_0001, 0b0000_0110]);
     }
 }

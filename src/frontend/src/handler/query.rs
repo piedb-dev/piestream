@@ -44,6 +44,7 @@ pub async fn handle_query(context: OptimizerContext, stmt: Statement) -> Result<
     // query_mode = Distributed 分布式，一般指查询模式,一共有二个值Local和Distributed
     let query_mode = session.config().get_query_mode();
     debug!("query_mode:{:?}", query_mode);
+    println!("***************query_mode:{:?}", query_mode);
 
     //data_stream:返回的数据流，pg_descs:字段描述
     let (data_stream, pg_descs) = match query_mode {

@@ -131,6 +131,7 @@ impl dyn PlanNode {
 
     /// Serialize the plan node and its children to a batch plan proto without the identity field
     /// (for testing).
+    /// 序列化所有节点
     pub fn to_batch_prost_identity(&self, identity: bool) -> BatchPlanProst {
         let node_body = Some(self.to_batch_prost_body());
         let children = self
