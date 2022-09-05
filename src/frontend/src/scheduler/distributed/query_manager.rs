@@ -146,7 +146,7 @@ impl QueryManager {
                 return Err(e);
             }
         };
-
+        //开始接收流数据
         Ok(query_result_fetcher.run())
     }
 }
@@ -178,6 +178,7 @@ impl QueryResultFetcher {
             .compute_client_pool
             .get_client_for_addr((&self.task_host).into())
             .await?;
+        //从compute获取数据
         let mut stream = compute_client.get_data(self.task_output_id.clone()).await?;
         while let Some(response) = stream.next().await {
             yield DataChunk::from_protobuf(response?.get_record_batch()?)?;

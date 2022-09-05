@@ -44,6 +44,7 @@ impl<S: StateStore> Keyspace<S> {
 
     /// Creates a root [`Keyspace`] for a table.
     pub fn table_root(store: S, id: &TableId) -> Self {
+        //"t"+table_id
         let prefix = {
             let mut buf = BytesMut::with_capacity(5);
             buf.put_u8(b't');
@@ -145,6 +146,7 @@ impl<S: StateStore> Keyspace<S> {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        //获取范围
         let range = prefixed_range(range, &self.prefix);
         let mut pairs = self
             .store

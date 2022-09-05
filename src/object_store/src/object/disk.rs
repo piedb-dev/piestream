@@ -262,6 +262,7 @@ mod tests {
     fn gen_test_payload() -> Vec<u8> {
         let mut ret = Vec::new();
         for i in 0..100000 {
+            //{:05}表示用5个字节存储
             ret.extend(format!("{:05}", i).as_bytes());
         }
         ret
@@ -279,14 +280,18 @@ mod tests {
     async fn test_simple_upload() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
+        println!("test_root_path={:?}", test_root_path);
         let store = DiskObjectStore::new(test_root_path);
         let payload = gen_test_payload();
+        //一次写test.obj文件
         store
             .upload("test.obj", Bytes::from(payload.clone()))
             .await
             .unwrap();
+        //获取metadata
         let metadata = store.metadata("test.obj").await.unwrap();
         assert_eq!(payload.len(), metadata.total_size);
+
 
         let mut path = PathBuf::from(test_root_path);
         path.push("test.obj");

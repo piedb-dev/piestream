@@ -46,11 +46,13 @@ impl HummockSnapshotManager {
                 .pin_snapshot(core_guard.last_pinned)
                 .await
                 .map_err(|_e| PinSnapshot(query_id.clone(), core_guard.last_pinned))?;
+            //获取到新epoch后is_outdated=false
             core_guard.is_outdated = false;
             core_guard.last_pinned = epoch;
             core_guard.epoch_to_query_ids.insert(epoch, HashSet::new());
         }
         let last_pinned = core_guard.last_pinned;
+        //插入query_id
         core_guard
             .epoch_to_query_ids
             .get_mut(&last_pinned)
@@ -67,6 +69,7 @@ impl HummockSnapshotManager {
             let query_ids = core_guard.epoch_to_query_ids.get_mut(&epoch);
             if let Some(query_ids) = query_ids {
                 query_ids.remove(query_id);
+                //当前epoch所有任务已经完成
                 if query_ids.is_empty() && epoch == core_guard.last_pinned {
                     core_guard.is_outdated = true;
                 }
@@ -82,6 +85,7 @@ impl HummockSnapshotManager {
             }
             // Remove the epoch from the map. Need to send RPC unpin_snapshot_before with this epoch
             // later.
+            //已经没有任务，可以不在固定
             if let Some(min_epoch_inner) = min_epoch.as_ref() {
                 core_guard.epoch_to_query_ids.remove(min_epoch_inner);
             }
@@ -89,6 +93,7 @@ impl HummockSnapshotManager {
             min_epoch
         };
 
+        //rpc给meta
         let need_to_request_meta = min_epoch.await;
         if let Some(epoch_inner) = need_to_request_meta {
             let meta_client = self.meta_client.clone();
@@ -123,6 +128,7 @@ struct HummockSnapshotManagerCore {
     last_pinned: u64,
     /// Record the query ids that pin each snapshot.
     /// Send an `unpin_snapshot` RPC when a snapshot is not pinned any more.
+    /// 存储epoch->queryid 
     epoch_to_query_ids: BTreeMap<u64, HashSet<QueryId>>,
 }
 

@@ -81,6 +81,7 @@ pub async fn compute_node_serve(
         .unwrap();
     info!("Assigned worker node id {}", worker_id);
 
+    //心跳
     let mut sub_tasks: Vec<(JoinHandle<()>, Sender<()>)> = vec![MetaClient::start_heartbeat_loop(
         meta_client.clone(),
         Duration::from_millis(config.server.heartbeat_interval_ms as u64),

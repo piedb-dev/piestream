@@ -103,12 +103,14 @@ impl Default for QueryId {
 
 impl BatchPlanFragmenter {
     pub fn new(worker_node_manager: WorkerNodeManagerRef) -> Self {
-        Self {
+        let a=Self {
             query_id: Default::default(),
             stage_graph_builder: StageGraphBuilder::new(),
             next_stage_id: 0,
             worker_node_manager,
-        }
+        };
+        println!("query_id={:?}", a.query_id.clone());
+        a
     }
 }
 
@@ -654,6 +656,7 @@ mod tests {
         // Break the plan node into fragments.
         let fragmenter = BatchPlanFragmenter::new(worker_node_manager);
         let query = fragmenter.split(batch_exchange_node3.clone()).unwrap();
+        //println!("query={:?}", query);
 
         assert_eq!(query.stage_graph.root_stage_id, 0);
         assert_eq!(query.stage_graph.stages.len(), 4);

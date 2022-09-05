@@ -28,17 +28,25 @@ const EPOCH_LEN: usize = std::mem::size_of::<Epoch>();
 /// In this way, the keys can be comparable even with the epoch, and a key with a larger
 /// epoch will be smaller and thus be sorted to an upper position.
 pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
+    /*
+        to_be()目标的字节序转换为大端字节序,
+        大端字节序存储方式，高位在前地位在后，小端字节序地位在前高位在后
+        https://www.cnblogs.com/gremount/p/8830707.html
+    */
     let res = (Epoch::MAX - epoch).to_be();
+    //println!("res={:?} EPOCH_LEN={:?}", res, EPOCH_LEN);
     user_key.reserve(EPOCH_LEN);
     let buf = user_key.chunk_mut();
 
     // TODO: check whether this hack improves performance
+    //不安全拷贝
     unsafe {
         ptr::copy_nonoverlapping(
             &res as *const _ as *const u8,
             buf.as_mut_ptr() as *mut _,
             EPOCH_LEN,
         );
+        //写指针从当前位置移动EPOCH_LEN
         user_key.advance_mut(EPOCH_LEN);
     }
 
@@ -52,6 +60,13 @@ pub fn split_key_epoch(full_key: &[u8]) -> (&[u8], &[u8]) {
         .len()
         .checked_sub(EPOCH_LEN)
         .unwrap_or_else(|| panic!("bad full key format: {:?}", full_key));
+    /*
+        let a = vec![1, 2, 3, 5, 8];
+        let b=a.as_slice();
+        let c=b.len().checked_sub(2);
+        println!("c={:?} b.split_at(2)={:?}", c, b.split_at(2));
+        "c=Some(3) b.split_at(2)=([1, 2], [3, 5, 8])"
+    */
     full_key.split_at(pos)
 }
 
@@ -62,9 +77,12 @@ pub fn get_epoch(full_key: &[u8]) -> Epoch {
 
     // TODO: check whether this hack improves performance
     unsafe {
+        //从后获取EPOCH_LEN个字节
         let src = &full_key[full_key.len() - EPOCH_LEN..];
+        //拷贝
         ptr::copy_nonoverlapping(src.as_ptr(), &mut epoch as *mut _ as *mut u8, EPOCH_LEN);
     }
+    //转小端字节序
     Epoch::MAX - Epoch::from_be(epoch)
 }
 
@@ -141,11 +159,15 @@ pub fn next_key(key: &[u8]) -> Vec<u8> {
 /// assert_eq!(prev_key(b""), b"");
 /// ```
 pub fn prev_key(key: &[u8]) -> Vec<u8> {
+    //rposition查询元素返回位置 0x00十六进制0
     let pos = key.iter().rposition(|b| *b != 0x00);
+    //println!("key={:?} pos={:?}", key, pos);
     match pos {
         Some(pos) => {
             let mut res = Vec::with_capacity(key.len());
             res.extend_from_slice(&key[0..pos]);
+            //println!("res={:?}", res);
+            //减1
             res.push(key[pos] - 1);
             if pos + 1 < key.len() {
                 res.push(b"\xff".to_owned()[0]);
@@ -192,18 +214,26 @@ pub fn prefixed_range<B: AsRef<[u8]>>(
     prefix: &[u8],
 ) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let start = match range.start_bound() {
+        /*
+            连接prepix+范围begin位置数值
+            (0..=10).end_bound()=Included(10)
+            Included:包含  Excluded：不包含  Unbounded：没有边界
+        */
         Included(b) => Included([prefix, b.as_ref()].concat()),
         Excluded(_) => unimplemented!(),
+        //范围里开始是开放区间
         Unbounded => Included(prefix.to_vec()),
     };
 
     let end = match range.end_bound() {
         Included(b) => Included([prefix, b.as_ref()].concat()),
+        //(0..10).end_bound()=Excluded(10)
         Excluded(b) => {
             let b = b.as_ref();
             assert!(!b.is_empty());
             Excluded([prefix, b].concat())
         }
+         //范围里结束是开放区间
         Unbounded => end_bound_of_prefix(prefix),
     };
 
@@ -269,6 +299,7 @@ mod tests {
     #[test]
     fn test_key_epoch() {
         let full_key = key_with_epoch(b"aaa".to_vec(), 233);
+        println!("full_key={:?}", full_key);
         assert_eq!(get_epoch(&full_key), 233);
         assert_eq!(user_key(&full_key), b"aaa");
     }

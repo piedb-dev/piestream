@@ -108,17 +108,20 @@ impl StateStoreImpl {
     ) -> StorageResult<Self> {
         let store = match s {
             hummock if hummock.starts_with("hummock+") => {
+                //获取存储方式
                 let remote_object_store = parse_remote_object_store(
                     hummock.strip_prefix("hummock+").unwrap(),
                     object_store_metrics.clone(),
                 )
                 .await;
+                
                 let object_store = if config.enable_local_spill {
                     let local_object_store = parse_local_object_store(
                         config.local_object_store.as_str(),
                         object_store_metrics.clone(),
                     )
                     .await;
+                    //本地和远程混合
                     ObjectStoreImpl::hybrid(local_object_store, remote_object_store)
                 } else {
                     remote_object_store

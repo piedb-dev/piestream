@@ -48,13 +48,16 @@ impl ObjectStore for S3ObjectStore {
         fail_point!("s3_read_err", |_| Err(ObjectError::internal(
             "s3 read error"
         )));
+        //获取到对象
         let req = self.client.get_object().bucket(&self.bucket).key(path);
 
+        //格式化的range
         let range = match block_loc.as_ref() {
             None => None,
             Some(block_location) => block_location.byte_range_specifier(),
         };
 
+        //变量命名可阅读性真差
         let req = if let Some(range) = range {
             req.range(range)
         } else {
@@ -64,6 +67,7 @@ impl ObjectStore for S3ObjectStore {
         let resp = req.send().await?;
         let val = resp.body.collect().await?.into_bytes();
 
+        //检测获取信息
         if block_loc.is_some() && block_loc.as_ref().unwrap().size != val.len() {
             return Err(ObjectError::internal(format!(
                 "mismatched size: expected {}, found {} when reading {} at {:?}",
