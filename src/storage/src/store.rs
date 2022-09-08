@@ -196,7 +196,7 @@ pub struct ReadOptions {
     pub ttl: Option<u32>, // second
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WriteOptions {
     pub epoch: u64,
     pub table_id: TableId,

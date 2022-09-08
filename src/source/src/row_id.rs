@@ -45,6 +45,7 @@ impl RowIdGenerator {
         Self::with_epoch(worker_id, UNIX_EPOCH)
     }
 
+    //同worker_id和epoch相关
     pub fn with_epoch(worker_id: u32, epoch: SystemTime) -> Self {
         Self {
             epoch,

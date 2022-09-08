@@ -51,10 +51,12 @@ impl BatchManager {
         context: ComputeNodeContext,
     ) -> Result<()> {
         trace!("Received task id: {:?}, plan: {:?}", tid, plan);
+        //构建BatchTaskExecution，context是compute节点环境
         let task = BatchTaskExecution::new(tid, plan, context, epoch)?;
         let task_id = task.get_task_id().clone();
         let task = Arc::new(task);
 
+        //异步执行
         task.clone().async_execute().await?;
         if let hash_map::Entry::Vacant(e) = self.tasks.lock().entry(task_id.clone()) {
             e.insert(task);

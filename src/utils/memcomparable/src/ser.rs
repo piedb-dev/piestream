@@ -35,6 +35,7 @@ impl<B: BufMut> Serializer<B> {
 
     /// Unwrap the inner buffer from the `Serializer`.
     pub fn into_inner(self) -> B {
+        //flip并不会序列化
         self.output.output
     }
 
@@ -845,6 +846,7 @@ mod tests {
         let a = serialize_naivedate(12_3456);
         let b = serialize_naivedate(0);
         let c = serialize_naivedate(-12_3456);
+        println!("a={:?} b={:?}", a ,b);
         assert!(a > b && b > c);
     }
 
@@ -900,4 +902,5 @@ mod tests {
         assert!(serialize(v1) < serialize(v2));
         assert!(serialize(v2) < serialize(v3));
     }
+
 }

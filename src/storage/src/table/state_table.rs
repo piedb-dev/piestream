@@ -141,6 +141,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
                 RowOp::Delete(_) => Ok(None),
                 RowOp::Update((_, row)) => Ok(Some(Cow::Borrowed(row))),
             },
+            //状态表中没查询到，在查存储表
             None => Ok(self.storage_table.get_row(pk, epoch).await?.map(Cow::Owned)),
         }
     }
@@ -156,8 +157,11 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
         for pk_index in self.pk_indices() {
             datums.push(value.index(*pk_index).clone());
         }
+        //pk值封装成row
         let pk = Row::new(datums);
+        //pk_serializer()是排序方式，升序还是降序， serialize_pk pk字段值增加是否有值标志位，并序列化
         let pk_bytes = serialize_pk(&pk, self.pk_serializer());
+        println!("pk_bytes()={:?}", pk_bytes);
         self.mem_table.insert(pk_bytes, value);
         Ok(())
     }
@@ -184,6 +188,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
         Ok(())
     }
 
+    //状态表内容提交到存储表
     pub async fn commit(&mut self, new_epoch: u64) -> StorageResult<()> {
         let mem_table = std::mem::take(&mut self.mem_table).into_parts();
         self.storage_table

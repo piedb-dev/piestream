@@ -74,6 +74,7 @@ pub fn get_bit(data: &[u8], i: usize) -> bool {
 /// responsible to guarantee that `i` is within bounds.
 #[inline]
 pub unsafe fn get_bit_raw(data: *const u8, i: usize) -> bool {
+    //add函数是指针offset 相当于ptr+i
     (*data.add(i >> 3) & BIT_MASK[i & 7]) != 0
 }
 

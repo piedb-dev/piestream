@@ -255,6 +255,7 @@ impl DataType {
     }
 
     /// Checks if memcomparable encoding of datatype is equivalent to its value encoding.
+    /// https://zhuanlan.zhihu.com/p/47504853 memcomparable编码可以直接内存做比较
     pub fn mem_cmp_eq_value_enc(&self) -> bool {
         use DataType::*;
         match self {
@@ -408,6 +409,7 @@ pub fn serialize_datum_into(
     datum: &Datum,
     serializer: &mut memcomparable::Serializer<impl BufMut>,
 ) -> memcomparable::Result<()> {
+    //some序列化1在序列化数值，没值序列化0，首字节是标识位
     if let Some(datum) = datum {
         1u8.serialize(&mut *serializer)?;
         datum.serialize(serializer)?;
@@ -790,6 +792,7 @@ impl ScalarImpl {
     }
 
     pub fn bytes_to_scalar(b: &Vec<u8>, data_type: &ProstDataType) -> ArrayResult<Self> {
+        println!("bytes_to_scalar");
         let value = match data_type.get_type_name()? {
             TypeName::Boolean => ScalarImpl::Bool(
                 i8::from_be_bytes(

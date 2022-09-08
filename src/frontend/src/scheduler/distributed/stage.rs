@@ -332,7 +332,7 @@ impl StageRunner {
                     stage_id: self.stage.id,
                     task_id: i as u32,
                 };
-                //vnode_ranges存储是当前parallel_unit_id分配的vnode信息
+                //vnode_ranges存储是当前parallel_unit_id对应的vnode信息
                 let vnode_ranges = vnode_bitmaps[&parallel_unit_id].clone();
                 let plan_fragment = self.create_plan_fragment(i as u32, Some(vnode_ranges));
                 futures.push(self.schedule_task(task_id, plan_fragment, Some(worker)));
@@ -422,7 +422,7 @@ impl StageRunner {
                         child_stage.stage.id == execution_plan_node.source_stage_id.unwrap()
                     })
                     .unwrap();
-                //将task_id关联到下游所有stage任务，存储在exchange_sources
+                //将task_id关联到其所有stage子任务，存储在exchange_sources
                 let exchange_sources = child_stage.all_exchange_sources_for(task_id);
 
                 match &execution_plan_node.node {

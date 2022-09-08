@@ -108,6 +108,7 @@ async fn test_state_table() -> StorageResult<()> {
         ]))
     );
 
+    //删除带上old row，有些奇怪
     state_table
         .delete(Row(vec![
             Some(2_i32.into()),
@@ -124,11 +125,19 @@ async fn test_state_table() -> StorageResult<()> {
 
     state_table.commit(epoch).await.unwrap();
 
+    
     let row2_delete_commit = state_table
         .get_owned_row(&Row(vec![Some(2_i32.into())]), epoch)
         .await
         .unwrap();
     assert_eq!(row2_delete_commit, None);
+
+    println!("********************************************************");
+    let row2_delete_commit = state_table
+        .get_owned_row(&Row(vec![Some(3_i32.into())]), epoch)
+        .await
+        .unwrap();
+    println!("row2_delete_commit={:?}", row2_delete_commit);
 
     epoch += 1;
     state_table
@@ -139,7 +148,7 @@ async fn test_state_table() -> StorageResult<()> {
         ]))
         .unwrap();
 
-    state_table
+    /*state_table
         .insert(Row(vec![Some(4_i32.into()), None, None]))
         .unwrap();
     let row4 = state_table
@@ -170,7 +179,7 @@ async fn test_state_table() -> StorageResult<()> {
         .get_owned_row(&Row(vec![Some(4_i32.into())]), epoch)
         .await
         .unwrap();
-    assert_eq!(row4_delete, None);
+    assert_eq!(row4_delete, None);*/
 
     Ok(())
 }

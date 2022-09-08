@@ -51,6 +51,7 @@ impl<S: StateStore> Keyspace<S> {
             buf.put_u32(id.table_id);
             buf.to_vec()
         };
+        println!("key_space.prefix={:?} key_space.table_id={:?}", prefix, id);
         Self {
             store,
             prefix,
@@ -101,6 +102,7 @@ impl<S: StateStore> Keyspace<S> {
     }
 
     /// Concatenates this keyspace and the given key to produce a prefixed key.
+    // 返回:prefixed+key
     pub fn prefixed_key(&self, key: impl AsRef<[u8]>) -> Vec<u8> {
         [self.prefix.as_slice(), key.as_ref()].concat()
     }

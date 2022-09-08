@@ -94,11 +94,13 @@ fn get_scan_bound(
             Some(scalar)
         })
         .collect_vec());
+    
     if scan_range.lower_bound.is_none() && scan_range.upper_bound.is_none() {
         return (pk_prefix_value, (Bound::Unbounded, Bound::Unbounded));
     }
 
     let bound_ty = pk_types.next().unwrap();
+    //转换成了框架内数据类型
     let build_bound = |bound: &scan_range::Bound| -> Bound<Datum> {
         let scalar = ScalarImpl::bytes_to_scalar(&bound.value, &bound_ty.to_protobuf()).unwrap();
 
@@ -128,10 +130,12 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         source: &ExecutorBuilder<C>,
         inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
+        println!("RowSeqScanExecutorBuilder RowSeqScanExecutorBuilder");
         ensure!(
             inputs.is_empty(),
             "Row sequential scan should not have input executor!"
         );
+        //必须是RowSeqScan
         let seq_scan_node = try_match_expand!(
             source.plan_node().get_node_body().unwrap(),
             NodeBody::RowSeqScan
@@ -141,18 +145,20 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         let table_id = TableId {
             table_id: table_desc.table_id,
         };
+        //获取到字段信息
         let column_descs = table_desc
             .columns
             .iter()
             .map(ColumnDesc::from)
             .collect_vec();
+        //字段号
         let column_ids = seq_scan_node
             .column_ids
             .iter()
             .copied()
             .map(ColumnId::from)
             .collect();
-
+        //排序字段信息
         let pk_descs: Vec<OrderedColumnDesc> =
             table_desc.order_key.iter().map(|d| d.into()).collect();
         let order_types: Vec<OrderType> = pk_descs.iter().map(|desc| desc.order).collect();
@@ -171,12 +177,14 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             .map(|&k| k as usize)
             .collect_vec();
 
+        //分区key
         let dist_key_indices = table_desc
             .dist_key_indices
             .iter()
             .map(|&k| k as usize)
             .collect_vec();
 
+        //下发策略    
         let distribution = match &seq_scan_node.vnode_bitmap {
             Some(vnodes) => Distribution {
                 vnodes: Bitmap::try_from(vnodes).unwrap().into(),
@@ -187,6 +195,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             None => Distribution::all_vnodes(dist_key_indices),
         };
 
+        //dispatch_state_store存在的意义???
         dispatch_state_store!(source.context().try_get_state_store()?, state_store, {
             let batch_stats = source.context().stats();
             let table = StorageTable::new_partial(
@@ -198,15 +207,19 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 pk_indices,
                 distribution,
             );
+            
             let keyspace = Keyspace::table_root(state_store.clone(), &table_id);
+            //扫表类型
             let scan_type = if pk_prefix_value.size() == 0 && is_full_range(&next_col_bounds) {
                 let iter = table.batch_dedup_pk_iter(source.epoch, &pk_descs).await?;
+                //扫全表
                 ScanType::TableScan(iter)
             } else if pk_prefix_value.size() == pk_descs.len() {
                 let row = {
                     keyspace.state_store().wait_epoch(source.epoch).await?;
                     table.get_row(&pk_prefix_value, source.epoch).await?
                 };
+                //point扫描
                 ScanType::PointGet(row)
             } else {
                 assert!(pk_prefix_value.size() < pk_descs.len());
@@ -220,6 +233,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                         .batch_iter_with_pk_bounds(source.epoch, pk_prefix_value, next_col_bounds)
                         .await?
                 };
+                //范围
                 ScanType::RangeScan(iter)
             };
 

@@ -53,10 +53,18 @@ impl Encoding for CellBasedRowSerializer {
     ) -> Result<Vec<(KeyBytes, ValueBytes)>> {
         // TODO: avoid this allocation
         let key = [vnode.to_be_bytes().as_slice(), pk].concat();
+        //flatten回去掉some层
+        /*
+            [Some(([0, 1, 128, 0, 0, 1, 128, 0, 0, 0], [1, 0, 0, 0])), Some(([0, 1, 128, 0, 0, 1, 128, 0, 0, 1], [11, 0, 0, 0])), Some(([0, 1, 128, 0, 0, 1, 128, 0, 0, 2], [111, 0, 0, 0])), Some(([0, 1, 128, 0, 0, 1, 127, 255, 255, 255], []))]
+            执行into_iter()。flatten()。collect_vec()
+            [([0, 1, 128, 0, 0, 1, 128, 0, 0, 0], [1, 0, 0, 0]), ([0, 1, 128, 0, 0, 1, 128, 0, 0, 1], [11, 0, 0, 0]), ([0, 1, 128, 0, 0, 1, 128, 0, 0, 2], [111, 0, 0, 0]), ([0, 1, 128, 0, 0, 1, 127, 255, 255, 255], [])]
+result=[Some(([0, 1, 128, 0, 0, 3, 128, 0, 0, 0], [3, 0, 0, 0])), Some(([0, 1, 128, 0, 0, 3, 128, 0, 0, 1], [33, 0, 0, 0])), Some(([0, 1, 128, 0, 0, 3, 128, 0, 0, 2], [77, 1, 0, 0])), Some(([0, 1, 128, 0, 0, 3, 127, 255, 255, 255], []))]
+        */
         let res = serialize_pk_and_row(&key, &row, &self.column_ids)?
             .into_iter()
             .flatten()
             .collect_vec();
+        println!("********res={:?}", res);
         Ok(res)
     }
 
@@ -69,7 +77,8 @@ impl Encoding for CellBasedRowSerializer {
         pk: &[u8],
         row: Row,
     ) -> Result<Vec<Option<(KeyBytes, ValueBytes)>>> {
-        // TODO: avoid this allocation
+        // TODO: avoid this allocation 
+        //key带上了vnode信息
         let key = [vnode.to_be_bytes().as_slice(), pk].concat();
         let res = serialize_pk_and_row(&key, &row, &self.column_ids)?;
         Ok(res)

@@ -65,7 +65,7 @@ impl OrderedArraysSerializer {
 /// `OrderedRowSerializer` expects that the input row contains exactly the values needed to be
 /// serialized, not more and not less. This is because `Row` always needs to be constructed from
 /// chunk manually.
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct OrderedRowSerializer {
     order_types: Vec<OrderType>,
 }
@@ -95,10 +95,13 @@ impl OrderedRowSerializer {
         datums: impl Iterator<Item = &'a Datum>,
         append_to: &mut Vec<u8>,
     ) {
+        //println!("self.order_types={:?}", self.order_types.len());
+        //zip_eq需要保证左右两边数组记录条数一样  (pk字段值， order类型)
         for (datum, order_type) in datums.zip_eq(self.order_types.iter()) {
             let mut serializer = memcomparable::Serializer::new(vec![]);
             serializer.set_reverse(*order_type == OrderType::Descending);
             serialize_datum_into(datum, &mut serializer).unwrap();
+            
             append_to.extend(serializer.into_inner());
         }
     }
@@ -185,16 +188,20 @@ pub fn serialize_pk_and_row(
                 result.push(None);
             }
             datum => {
+                //key+column_id信息
                 let key = serialize_pk_and_column_id(pk_buf, column_id)?;
                 let value = serialize_cell(datum)?;
+                //(key, value)
                 result.push(Some((key, value)));
             }
         }
     }
 
+    //增加一个空行
     let key = serialize_pk_and_column_id(pk_buf, &SENTINEL_CELL_ID)?;
     result.push(Some((key, vec![])));
 
+    println!("result={:?}", result);
     Ok(result)
 }
 
@@ -230,8 +237,10 @@ pub fn serialize_pk(pk: &Row, serializer: &OrderedRowSerializer) -> Vec<u8> {
     result
 }
 
+
 pub fn serialize_column_id(column_id: &ColumnId) -> [u8; 4] {
     let id = column_id.get_id();
+    //为了省空间做了异或
     (id as u32 ^ (1 << 31)).to_be_bytes()
 }
 
@@ -240,6 +249,7 @@ pub fn deserialize_column_id(bytes: &[u8]) -> Result<ColumnId> {
     Ok((column_id as i32).into())
 }
 
+//key+col_id
 pub fn serialize_pk_and_column_id(pk_buf: &[u8], col_id: &ColumnId) -> Result<Vec<u8>> {
     Ok([pk_buf, serialize_column_id(col_id).as_slice()].concat())
 }

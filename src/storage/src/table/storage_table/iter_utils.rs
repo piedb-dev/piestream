@@ -64,6 +64,7 @@ where
     let mut heap = BinaryHeap::with_capacity(streams.len());
     for mut stream in streams {
         if let Some(peeked) = stream.next().await.transpose()? {
+            //println!("peeked={:?}", peeked);
             heap.push(Node { stream, peeked });
         }
     }

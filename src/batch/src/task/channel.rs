@@ -84,6 +84,7 @@ impl ChanReceiverImpl {
 pub fn create_output_channel(
     shuffle: &ExchangeInfo,
 ) -> Result<(ChanSenderImpl, Vec<ChanReceiverImpl>)> {
+    //下发的模式
     match shuffle.get_mode()? {
         ShuffleDistributionMode::Single => Ok(new_fifo_channel()),
         ShuffleDistributionMode::Hash => Ok(new_hash_shuffle_channel(shuffle)),

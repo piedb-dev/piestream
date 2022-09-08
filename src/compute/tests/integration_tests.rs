@@ -113,6 +113,7 @@ async fn test_table_v2_materialize() -> Result<()> {
         }
         .into(),
     ];
+    //创建table模式的source[非流式]
     source_manager.create_table_source(&source_table_id, table_columns)?;
 
     // Ensure the source exists
@@ -132,6 +133,7 @@ async fn test_table_v2_materialize() -> Result<()> {
 
     // Create a `SourceExecutor` to read the changes
     let all_column_ids = vec![ColumnId::from(0), ColumnId::from(1)];
+    //获取schema
     let all_schema = get_schema(&all_column_ids);
     let (barrier_tx, barrier_rx) = unbounded_channel();
     let keyspace = Keyspace::table_root(MemoryStateStore::new(), &TableId::from(0x2333));
@@ -383,12 +385,14 @@ async fn test_row_seq_scan() -> Result<()> {
     ]);
     let _column_ids = vec![ColumnId::from(0), ColumnId::from(1), ColumnId::from(2)];
 
+    //字段
     let column_descs = vec![
         ColumnDesc::unnamed(ColumnId::from(0), schema[0].data_type.clone()),
         ColumnDesc::unnamed(ColumnId::from(1), schema[1].data_type.clone()),
         ColumnDesc::unnamed(ColumnId::from(2), schema[2].data_type.clone()),
     ];
 
+    //状态表
     let mut state = StateTable::new(
         memory_state_store.clone(),
         TableId::from(0x42),
@@ -417,6 +421,7 @@ async fn test_row_seq_scan() -> Result<()> {
         .unwrap();
     state.commit(epoch).await.unwrap();
 
+    //设置pk
     let pk_descs: Vec<OrderedColumnDesc> = column_descs
         .iter()
         .take(1)
@@ -426,6 +431,8 @@ async fn test_row_seq_scan() -> Result<()> {
         })
         .collect();
 
+    println!("pk_descs={:?}", pk_descs);
+    //扫表
     let executor = Box::new(RowSeqScanExecutor::new(
         table.schema().clone(),
         ScanType::TableScan(
@@ -441,6 +448,7 @@ async fn test_row_seq_scan() -> Result<()> {
 
     assert_eq!(executor.schema().fields().len(), 3);
 
+    //获取流对象
     let mut stream = executor.execute();
     let res_chunk = stream.next().await.unwrap().unwrap();
 

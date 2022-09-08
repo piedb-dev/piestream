@@ -66,6 +66,7 @@ where
         Excluded(k) => Excluded((Bytes::copy_from_slice(k.as_ref()), Reverse(u64::MAX))),
         Unbounded => Unbounded,
     };
+    //println!("start={:?} end={:?}", start, end);
     (start, end)
 }
 
@@ -112,6 +113,7 @@ impl StateStore for MemoryStateStore {
     fn get<'a>(&'a self, key: &'a [u8], read_options: ReadOptions) -> Self::GetFuture<'_> {
         async move {
             let range_bounds = key.to_vec()..=key.to_vec();
+            println!("range_bounds={:?}", range_bounds);
             // We do not really care about vnodes here, so we just use the default value.
             let res = self.scan(range_bounds, Some(1), read_options).await?;
 
@@ -143,15 +145,20 @@ impl StateStore for MemoryStateStore {
 
             let mut last_key = None;
             for ((key, Reverse(key_epoch)), value) in inner.range(to_bytes_range(key_range)) {
+                //println!("key={:?} key_epoch={:?} value={:?}", key, key_epoch, value);
+                //过滤
                 if *key_epoch > epoch {
                     continue;
                 }
+                println!("key={:?} key_epoch={:?} value={:?}", key, key_epoch, value);
+                //key相同只保留第一个
                 if Some(key) != last_key.as_ref() {
                     if let Some(value) = value {
                         data.push((key.clone(), value.clone()));
                     }
                     last_key = Some(key.clone());
                 }
+                //limit
                 if let Some(limit) = limit && data.len() >= limit {
                     break;
                 }
@@ -183,9 +190,12 @@ impl StateStore for MemoryStateStore {
             let mut inner = self.inner.write();
             let mut size: usize = 0;
             for (key, value) in kv_pairs {
+                //println!("key={:?} value={:?}", key, value);
                 size += key.len() + value.size();
+                //key带上epoch ,按照epoch降序排列 
                 inner.insert((key, Reverse(epoch)), value.user_value);
             }
+            println!("ingest_batch={:?}", inner);
             Ok(size)
         }
     }
@@ -274,6 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_snapshot_isolation() {
+      
         let state_store = MemoryStateStore::new();
         state_store
             .ingest_batch(
@@ -310,10 +321,13 @@ mod tests {
             )
             .await
             .unwrap();
+           
+            
         assert_eq!(
             state_store
                 .scan(
-                    "a"..="b",
+                   "a"..="b",
+                    //"a".."c",
                     None,
                     ReadOptions {
                         epoch: 0,
@@ -328,11 +342,12 @@ mod tests {
                 (b"b".to_vec().into(), b"v1".to_vec().into())
             ]
         );
+        println!("******************************************");
         assert_eq!(
             state_store
                 .scan(
                     "a"..="b",
-                    Some(1),
+                    Some(1),//limit
                     ReadOptions {
                         epoch: 0,
                         table_id: Default::default(),

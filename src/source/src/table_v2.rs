@@ -76,7 +76,7 @@ impl TableSourceV2 {
         };
 
         let (notifier_tx, notifier_rx) = oneshot::channel();
-        //chunk:流数据 notifier_tx:发送器
+        //chunk:流数据 notifier_tx:发送器，next函数里接收
         tx.send((chunk, notifier_tx))
             .expect("write chunk to table reader failed");
         //接收器
@@ -121,6 +121,7 @@ impl StreamSourceReader for TableV2StreamReader {
             .await
             .expect("TableSourceV2 dropped before associated streaming task terminated");
 
+        println!("chunk={:?},notifier={:?}", chunk, notifier);
         // Caveats: this function is an arm of `tokio::select`. We should ensure there's no `await`
         // after here.
         //从消息管道接收到新数据
@@ -198,9 +199,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_table_source_v2() -> Result<()> {
+        //构造source（TableSourceV2）
         let source = Arc::new(new_source());
+        //构造TableV2StreamReader
         let mut reader = source.stream_reader(vec![ColumnId::from(0)]).await?;
 
+       
         macro_rules! write_chunk {
             ($i:expr) => {{
                 let source = source.clone();

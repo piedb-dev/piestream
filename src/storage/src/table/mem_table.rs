@@ -62,6 +62,7 @@ impl MemTable {
                 e.insert(RowOp::Insert(value));
             }
             Entry::Occupied(mut e) => match e.get_mut() {
+                //delete类型改成update,并保留最新值
                 x @ RowOp::Delete(_) => {
                     if let RowOp::Delete(ref mut old_value) = x {
                         let old_val = std::mem::take(old_value);
@@ -86,10 +87,12 @@ impl MemTable {
         let entry = self.buffer.entry(pk);
         match entry {
             Entry::Vacant(e) => {
+                //实际往状态表插入了一行，标记为delete
                 e.insert(RowOp::Delete(old_value));
             }
             Entry::Occupied(mut e) => match e.get_mut() {
                 RowOp::Insert(original_value) => {
+                    //insert记录真执行删除，有些不理解记录不存在执行插入，存在直接删除，而不是修改rowop
                     debug_assert_eq!(original_value, &old_value);
                     e.remove();
                 }
@@ -103,6 +106,7 @@ impl MemTable {
                 RowOp::Update(value) => {
                     let (original_old_value, original_new_value) = std::mem::take(value);
                     debug_assert_eq!(original_new_value, old_value);
+                    //设置rowop:Delete,保留了原始字段值
                     e.insert(RowOp::Delete(original_old_value));
                 }
             },
@@ -130,6 +134,7 @@ impl MemTable {
                 RowOp::Update(value) => {
                     let (original_old_value, original_new_value) = std::mem::take(value);
                     debug_assert_eq!(original_new_value, old_value);
+                    //更新保存原始字段值
                     e.insert(RowOp::Update((original_old_value, new_value)));
                 }
             },

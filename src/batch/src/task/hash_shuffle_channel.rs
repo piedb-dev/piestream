@@ -132,6 +132,7 @@ impl HashShuffleSender {
     }
 
     async fn send_done(&mut self) -> Result<()> {
+        //发送结束
         for sender in &self.senders {
             sender
                 .send(None)
@@ -166,6 +167,7 @@ pub fn new_hash_shuffle_channel(shuffle: &ExchangeInfo) -> (ChanSenderImpl, Vec<
     let output_count = hash_info.output_count as usize;
     let mut senders = Vec::with_capacity(output_count);
     let mut receivers = Vec::with_capacity(output_count);
+    //构建output_count个下发通道
     for _ in 0..output_count {
         let (s, r) = mpsc::channel(BOUNDED_BUFFER_SIZE);
         senders.push(s);

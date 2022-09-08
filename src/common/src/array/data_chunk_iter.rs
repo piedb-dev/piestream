@@ -513,6 +513,7 @@ mod tests {
             Some(ScalarImpl::Float64(5.0.into())),
             Some(ScalarImpl::Decimal("-233.3".parse().unwrap())),
         ]);
+        println!("row1.hash_row(&hash_builder)={:?}, row2.hash_row(&hash_builder))={:?}",row1.hash_row(&hash_builder), row2.hash_row(&hash_builder));
         assert_ne!(row1.hash_row(&hash_builder), row2.hash_row(&hash_builder));
 
         let row_default = Row::default();

@@ -213,12 +213,18 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
     /// hash partitioned across multiple channels.
     /// To obtain the result, one must pick one of the channels to consume via [`TaskOutputId`]. As
     /// such, parallel consumers are able to consume the result idependently.
+    /*
+        `async_execute` 在后台执行任务，它产生一个 tokio 协程并立即返回。任务产生的结果将被发送到一个或多个通道，根据
+        特定的洗牌策略。例如，在哈希洗牌中，结果将是散列跨多个通道分区。要获得结果，必须通过 [`TaskOutputId`] 选择要使用的通道之一。
+        因此，并行消费者能够独立地使用结果。
+    */
     pub async fn async_execute(self: Arc<Self>) -> Result<()> {
         trace!(
             "Prepare executing plan [{:?}]: {}",
             self.task_id,
             serde_json::to_string_pretty(self.plan.get_root()?).unwrap()
         );
+        //状态设置为running
         *self.state.lock() = TaskStatus::Running;
         let exec = ExecutorBuilder::new(
             self.plan.root.as_ref().unwrap(),
@@ -229,7 +235,14 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
         .build()
         .await?;
 
+        //创建不同下发通道
         let (sender, receivers) = create_output_channel(self.plan.get_exchange_info()?)?;
+        /*
+            mpsc：多生产者，单消费者通道。可以发送许多数值。
+            oneshot：单生产者，单消费者通道。可以发送一个单一的值。
+            broadcast: 多生产者，多消费者。可以发送许多值。每个接收者看到每个值。
+            watch：单生产者，多消费者。可以发送许多值，但不保留历史。接收者只看到最近的值   
+         */
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<u64>();
         *self.shutdown_tx.lock() = Some(shutdown_tx);
         self.receivers
@@ -237,6 +250,7 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
             .extend(receivers.into_iter().map(Some));
         let failure = self.failure.clone();
         let task_id = self.task_id.clone();
+        //为啥需要启动两个线程???
         tokio::spawn(async move {
             trace!("Executing plan [{:?}]", task_id);
             let mut sender = sender;

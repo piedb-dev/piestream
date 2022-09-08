@@ -301,6 +301,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         let vnode = if indices.is_empty() {
             DEFAULT_VNODE
         } else {
+            //通过计算的hash_value 获取到vnode
             row.hash_by_indices(indices, &CRC32FastBuilder {})
                 .to_vnode()
         };
@@ -336,6 +337,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
             return Ok(None);
         };
 
+        println!("into ******************************");
         let mut deserializer = CellBasedRowDeserializer::new(&*self.mapping);
         for column_id in self.column_ids() {
             let key = serialize_pk_and_column_id(&serialized_pk, column_id).map_err(err)?;
@@ -346,6 +348,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         }
 
         let result = deserializer.take();
+        println!("result={:?} key_len={:?}", result, result.clone().unwrap().1.len());
         Ok(result.and_then(|(vnode, _pk, row)| self.check_vnode_is_set(vnode).then_some(row)))
     }
 
@@ -388,12 +391,15 @@ impl<S: StateStore, E: Encoding> StorageTableBase<S, E, READ_WRITE> {
             epoch,
             table_id: self.keyspace.table_id(),
         });
+        //KeySpaceWriteBatch
         let mut local = batch.prefixify(&self.keyspace);
 
         for (pk, row_op) in buffer {
             match row_op {
                 RowOp::Insert(row) => {
+                    //获取vnode,根据hash
                     let vnode = self.compute_vnode_by_row(&row);
+                    //编码  返回key里会带vnode+字段id等信息
                     let bytes = self
                         .row_serializer
                         .cell_based_serialize(vnode, &pk, row)
@@ -766,6 +772,7 @@ impl<I> DedupPkCellBasedIter<I> {
             .unzip();
         let pk_decoder = OrderedRowDeserializer::new(data_types, order_types);
 
+        //保存满足memcomparable数据类型
         let pk_to_row_mapping = pk_descs
             .iter()
             .map(|d| {

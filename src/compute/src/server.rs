@@ -111,7 +111,9 @@ pub async fn compute_node_serve(
     )
     .await
     .unwrap();
+
     if let StateStoreImpl::HummockStateStore(storage) = &state_store {
+        //启动compactor
         if opts.state_store.starts_with("hummock+memory")
             || opts.state_store.starts_with("hummock+disk")
             || storage_config.disable_remote_compactor

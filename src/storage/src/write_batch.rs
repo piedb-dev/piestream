@@ -26,6 +26,7 @@ pub struct WriteBatch<S: StateStore> {
 
     batch: Vec<(Bytes, StorageValue)>,
 
+    //table_id+epoch
     write_options: WriteOptions,
 }
 
@@ -69,9 +70,12 @@ where
         }
 
         let original_length = self.batch.len();
+        //println!("original_length={:?} self.batch={:?}", original_length, self.batch);
+        //按照key排序
         self.batch.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+        //排重
         self.batch.dedup_by(|(k1, _), (k2, _)| k1 == k2);
-
+        //实际有排重发生就会报错
         if original_length == self.batch.len() {
             Ok(())
         } else {
@@ -87,6 +91,7 @@ where
     /// Ingests this batch into the associated state store.
     pub async fn ingest(mut self) -> StorageResult<()> {
         self.preprocess()?;
+        //存储
         self.store
             .ingest_batch(self.batch, self.write_options)
             .await?;
@@ -104,7 +109,11 @@ where
 
     /// Creates a [`KeySpaceWriteBatch`] with the given `prefix`, which automatically prepends the
     /// prefix when writing.
+    /*
+        使用给定的 `prefix` 创建一个 [`KeySpaceWriteBatch`]当正在写时会自动给key增加前缀。
+     */
     pub fn prefixify<'a>(&'a mut self, keyspace: &'a Keyspace<S>) -> KeySpaceWriteBatch<'a, S> {
+        println!("batch={:?} write_options={:?}",self.batch, self.write_options);
         KeySpaceWriteBatch {
             keyspace,
             global: self,
@@ -114,6 +123,7 @@ where
 
 /// [`KeySpaceWriteBatch`] attaches a [`Keyspace`] to a mutable reference of global [`WriteBatch`],
 /// which automatically prepends the keyspace prefix when writing.
+//作用是融合协调Keyspace和WriteBatch
 pub struct KeySpaceWriteBatch<'a, S: StateStore> {
     keyspace: &'a Keyspace<S>,
 
@@ -130,6 +140,7 @@ impl<'a, S: StateStore> KeySpaceWriteBatch<'a, S> {
             None => self.keyspace.key().to_vec(),
         }
         .into();
+        //key='t'+table_id+key
         self.global.batch.push((key, value));
     }
 
@@ -182,10 +193,13 @@ mod tests {
                 table_id: Default::default(),
             },
         );
+        //获取key命名空间
         let key_space = Keyspace::table_root(state_store, &TableId::from(0x118));
-
         assert!(write_batch.is_empty());
+        //构建KeySpaceWriteBatch{write_batch,key_space}
         let mut key_space_batch = write_batch.prefixify(&key_space);
+       // println!("key_space_batch={:#?}", key_space_batch);
+       
         key_space_batch.put(Bytes::from("aa"), StorageValue::new_default_put("444"));
         key_space_batch.put(Bytes::from("cc"), StorageValue::new_default_put("444"));
         key_space_batch.put(Bytes::from("bb"), StorageValue::new_default_put("444"));
@@ -195,5 +209,10 @@ mod tests {
             .ingest()
             .await
             .expect_err("Should panic here because of duplicate key.");
+    }
+
+    #[tokio::test]
+    async fn test_invalid_write_batch1() {
+        println!("ok");
     }
 }
