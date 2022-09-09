@@ -102,6 +102,12 @@ impl Condition {
         let left_bit_map = FixedBitSet::from_iter(0..left_col_num);
         let right_bit_map = FixedBitSet::from_iter(left_col_num..left_col_num + right_col_num);
 
+        //https://docs.rs/itertools/latest/itertools/trait.Itertools.html
+        //use itertools::Itertools;
+        //let mut iter = 1..5;
+        //assert_eq!(Some((1, 2)), iter.next_tuple());
+        //assert_eq!(Some((3, 4)), iter.next_tuple());
+        //next_tuple获取下一个远组
         self.group_by::<_, 3>(|expr| {
             let input_bits = expr.collect_input_refs(left_col_num + right_col_num);
             if input_bits.is_subset(&left_bit_map) {
@@ -505,7 +511,9 @@ mod tests {
         let cond = Condition::with_expr(other.clone())
             .and(Condition::with_expr(right.clone()))
             .and(Condition::with_expr(left.clone()));
+        println!("cond:{:?}", cond);
         let res = cond.split(left_col_num, right_col_num);
+        println!("res:{:?}", res);
         assert_eq!(res.0.conjunctions, vec![left]);
         assert_eq!(res.1.conjunctions, vec![right]);
         assert_eq!(res.2.conjunctions, vec![other]);

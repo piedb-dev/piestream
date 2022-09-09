@@ -195,7 +195,7 @@ impl StateStore for MemoryStateStore {
                 //key带上epoch ,按照epoch降序排列 
                 inner.insert((key, Reverse(epoch)), value.user_value);
             }
-            println!("ingest_batch={:?}", inner);
+            //println!("ingest_batch={:?}", inner);
             Ok(size)
         }
     }

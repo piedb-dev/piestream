@@ -135,6 +135,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
     ) -> StorageResult<Option<Cow<'a, Row>>> {
         let pk_bytes = serialize_pk(pk, self.pk_serializer());
         let mem_table_res = self.mem_table.get_row_op(&pk_bytes);
+        //数据在本地状态表是不需要epoch
         match mem_table_res {
             Some(row_op) => match row_op {
                 RowOp::Insert(row) => Ok(Some(Cow::Borrowed(row))),
@@ -146,6 +147,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
         }
     }
 
+    ///通过pk字段值来查询
     pub async fn get_owned_row(&self, pk: &Row, epoch: u64) -> StorageResult<Option<Row>> {
         Ok(self.get_row(pk, epoch).await?.map(|r| r.into_owned()))
     }
@@ -161,7 +163,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
         let pk = Row::new(datums);
         //pk_serializer()是排序方式，升序还是降序， serialize_pk pk字段值增加是否有值标志位，并序列化
         let pk_bytes = serialize_pk(&pk, self.pk_serializer());
-        println!("pk_bytes()={:?}", pk_bytes);
+        println!("pk_bytes()={:?} pk_bytes.len()={:?}", pk_bytes, pk_bytes.len());
         self.mem_table.insert(pk_bytes, value);
         Ok(())
     }
@@ -232,6 +234,7 @@ impl<S: StateStore> StateTable<S> {
         R: RangeBounds<B> + Send + Clone + 'static,
         B: AsRef<Row> + Send + Clone + 'static,
     {
+        
         let encoded_start_key = pk_bounds
             .start_bound()
             .map(|pk| serialize_pk(pk.as_ref(), self.pk_serializer()));
@@ -239,7 +242,7 @@ impl<S: StateStore> StateTable<S> {
             .end_bound()
             .map(|pk| serialize_pk(pk.as_ref(), self.pk_serializer()));
         let encoded_key_range = (encoded_start_key, encoded_end_key);
-
+        println!("encoded_key_range={:?}", encoded_key_range);
         self.iter_with_encoded_key_range(encoded_key_range, epoch)
             .await
     }

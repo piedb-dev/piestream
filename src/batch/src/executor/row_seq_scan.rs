@@ -85,6 +85,7 @@ fn get_scan_bound(
     scan_range: ScanRange,
     mut pk_types: impl Iterator<Item = DataType>,
 ) -> (Row, impl RangeBounds<Datum>) {
+    //key前缀
     let pk_prefix_value = Row(scan_range
         .eq_conds
         .iter()
@@ -112,6 +113,7 @@ fn get_scan_bound(
         }
     };
 
+    //prost转换为系统Bound
     let next_col_bounds: (Bound<Datum>, Bound<Datum>) = match (
         scan_range.lower_bound.as_ref(),
         scan_range.upper_bound.as_ref(),
@@ -121,6 +123,7 @@ fn get_scan_bound(
         (Some(lb), None) => (build_bound(lb), Bound::Unbounded),
         (None, None) => unreachable!(),
     };
+    //返回key ,（范围）
     (pk_prefix_value, next_col_bounds)
 }
 
@@ -161,6 +164,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         //排序字段信息
         let pk_descs: Vec<OrderedColumnDesc> =
             table_desc.order_key.iter().map(|d| d.into()).collect();
+        //排序类型
         let order_types: Vec<OrderType> = pk_descs.iter().map(|desc| desc.order).collect();
 
         let scan_range = seq_scan_node.scan_range.as_ref().unwrap();
@@ -171,6 +175,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 .map(|desc| desc.column_desc.data_type.clone()),
         );
 
+        //pk
         let pk_indices = table_desc
             .pk_indices
             .iter()
@@ -215,6 +220,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 //扫全表
                 ScanType::TableScan(iter)
             } else if pk_prefix_value.size() == pk_descs.len() {
+                //等于指定pk查某一条
                 let row = {
                     keyspace.state_store().wait_epoch(source.epoch).await?;
                     table.get_row(&pk_prefix_value, source.epoch).await?
@@ -222,6 +228,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 //point扫描
                 ScanType::PointGet(row)
             } else {
+                //查询中包含部分主键,例如:pk=(时间戳，设备号) 查询select * from where device_id=1;依旧扫全表
                 assert!(pk_prefix_value.size() < pk_descs.len());
 
                 let iter = if is_full_range(&next_col_bounds) {

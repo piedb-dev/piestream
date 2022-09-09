@@ -63,6 +63,8 @@ impl Debug for StateStoreImpl {
     }
 }
 
+//$store是输出参数相对于传入指针地址，$body:tt是token tree 理解相当于c里宏定义,具体见下面url
+//https://www.zhihu.com/question/513517839
 #[macro_export]
 macro_rules! dispatch_state_store {
     ($impl:expr, $store:ident, $body:tt) => {

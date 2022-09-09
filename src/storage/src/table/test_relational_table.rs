@@ -123,6 +123,7 @@ async fn test_state_table() -> StorageResult<()> {
         .unwrap();
     assert_eq!(row2_delete, None);
 
+    //提交到远端存储表，清空本地状态表
     state_table.commit(epoch).await.unwrap();
 
     
@@ -133,11 +134,11 @@ async fn test_state_table() -> StorageResult<()> {
     assert_eq!(row2_delete_commit, None);
 
     println!("********************************************************");
-    let row2_delete_commit = state_table
+    /*let row2_delete_commit = state_table
         .get_owned_row(&Row(vec![Some(3_i32.into())]), epoch)
         .await
         .unwrap();
-    println!("row2_delete_commit={:?}", row2_delete_commit);
+    println!("row2_delete_commit={:?}", row2_delete_commit);*/
 
     epoch += 1;
     state_table
@@ -148,7 +149,7 @@ async fn test_state_table() -> StorageResult<()> {
         ]))
         .unwrap();
 
-    /*state_table
+    state_table
         .insert(Row(vec![Some(4_i32.into()), None, None]))
         .unwrap();
     let row4 = state_table
@@ -179,7 +180,7 @@ async fn test_state_table() -> StorageResult<()> {
         .get_owned_row(&Row(vec![Some(4_i32.into())]), epoch)
         .await
         .unwrap();
-    assert_eq!(row4_delete, None);*/
+    assert_eq!(row4_delete, None);
 
     Ok(())
 }
@@ -221,6 +222,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
             None,
         ]))
         .unwrap();
+    //提交
     state_table.commit(epoch).await.unwrap();
 
     epoch += 1;
@@ -232,6 +234,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
             Some(6666_i32.into()),
         ]))
         .unwrap();
+    //6_i32 先删除在insert 在状态表状态变成update原始值，新值)
     state_table
         .insert(Row(vec![
             Some(6_i32.into()),
@@ -249,6 +252,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
             None,
         ]))
         .unwrap();
+    //7_i32 先删除在insert 在状态表状态变成update原始值，新值)
     state_table
         .insert(Row(vec![
             Some(7_i32.into()),
@@ -257,6 +261,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
             None,
         ]))
         .unwrap();
+    // //数据在本地状态表
     let row6 = state_table
         .get_owned_row(&Row(vec![Some(6_i32.into())]), epoch)
         .await
@@ -271,6 +276,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
         ]))
     );
 
+    //数据在本地状态表
     let row7 = state_table
         .get_owned_row(&Row(vec![Some(7_i32.into())]), epoch)
         .await
@@ -285,8 +291,10 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
         ]))
     );
 
+    //清空本地，提交远端
     state_table.commit(epoch).await.unwrap();
 
+    //远端获取
     let row6_commit = state_table
         .get_owned_row(&Row(vec![Some(6_i32.into())]), epoch)
         .await
@@ -325,7 +333,9 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
         ]))
         .unwrap();
     state_table.commit(epoch).await.unwrap();
+    println!("**********************************1");
     // one epoch: delete (1, 2, 3, 4), insert (5, 6, 7, None), delete(5, 6, 7, None)
+    //已经提交到后端，状态表已经清空
     state_table
         .delete(Row(vec![
             Some(1_i32.into()),
@@ -334,6 +344,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
             Some(4_i32.into()),
         ]))
         .unwrap();
+    println!("**********************************2");
     state_table
         .insert(Row(vec![
             Some(5_i32.into()),
@@ -369,6 +380,7 @@ async fn test_state_table_update_insert() -> StorageResult<()> {
 #[tokio::test]
 async fn test_state_table_iter() {
     let state_store = MemoryStateStore::new();
+    //pk_index两字段指定不同的排序方式
     let order_types = vec![OrderType::Ascending, OrderType::Descending];
     let column_ids = vec![ColumnId::from(0), ColumnId::from(1), ColumnId::from(2)];
     let column_descs = vec![
@@ -376,6 +388,7 @@ async fn test_state_table_iter() {
         ColumnDesc::unnamed(column_ids[1], DataType::Int32),
         ColumnDesc::unnamed(column_ids[2], DataType::Int32),
     ];
+    //组合主键
     let pk_index = vec![0_usize, 1_usize];
     let mut state = StateTable::new(
         state_store.clone(),
@@ -387,6 +400,21 @@ async fn test_state_table_iter() {
     );
     let epoch: u64 = 0;
 
+    /* 
+        let order_types = vec![OrderType::Ascending, OrderType::Descending];
+        let pk_index = vec![0_usize, 1_usize];
+        第一个字节记录order_types，后面是值，OrderType::Descending是值是异或理解（255-value）
+        pk_bytes()=[1, 128, 0, 0, 1, 254, 127, 255, 255, 254] pk_bytes.len()=10
+        state
+            .insert(Row(vec![
+                Some(1_i32.into()),
+                Some(1_i32.into()),
+                Some(1_i32.into()),
+            ]))
+            .unwrap();
+    */
+
+    // insert[1,2,3,6,9] delete[2]
     state
         .insert(Row(vec![
             Some(1_i32.into()),
@@ -469,7 +497,7 @@ async fn test_state_table_iter() {
         );
     }
 
-    state.commit(epoch).await.unwrap();
+    /*state.commit(epoch).await.unwrap();
 
     let epoch = u64::MAX;
 
@@ -609,7 +637,7 @@ async fn test_state_table_iter() {
 
     // there is no row in both cell_based_table and mem_table
     let res = iter.next().await;
-    assert!(res.is_none());
+    assert!(res.is_none());*/
 }
 
 #[tokio::test]

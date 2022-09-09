@@ -95,13 +95,12 @@ impl OrderedRowSerializer {
         datums: impl Iterator<Item = &'a Datum>,
         append_to: &mut Vec<u8>,
     ) {
-        //println!("self.order_types={:?}", self.order_types.len());
+        //println!("self.order_types={:?}", self.order_types);
         //zip_eq需要保证左右两边数组记录条数一样  (pk字段值， order类型)
         for (datum, order_type) in datums.zip_eq(self.order_types.iter()) {
             let mut serializer = memcomparable::Serializer::new(vec![]);
             serializer.set_reverse(*order_type == OrderType::Descending);
             serialize_datum_into(datum, &mut serializer).unwrap();
-            
             append_to.extend(serializer.into_inner());
         }
     }

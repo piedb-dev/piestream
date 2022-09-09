@@ -50,8 +50,10 @@ mod iter_utils;
 
 pub type AccessType = bool;
 /// Table with `READ_ONLY` is used for batch scan or point lookup.
+/// 简单来说就是查询使用的表
 pub const READ_ONLY: AccessType = false;
 /// Table with `READ_WRITE` is used for streaming executors through `StateTable`.
+/// 流过程使用的表
 pub const READ_WRITE: AccessType = true;
 
 /// For tables without distribution (singleton), the `DEFAULT_VNODE` is encoded.
@@ -112,6 +114,7 @@ pub struct StorageTableBase<S: StateStore, E: Encoding, const T: AccessType> {
     /// Only the rows whose vnode of the primary key is in this set will be visible to the
     /// executor. For READ_WRITE instances, the table will also check whether the writed rows
     /// confirm to this partition.
+    /// 只有主键的 vnode 在此集合中的行对执行器可见。对于 READ_WRITE 实例，表会检查写入的行与分区关系。
     vnodes: Arc<Bitmap>,
 }
 
@@ -285,6 +288,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         let is_set = self.vnodes.is_set(vnode as usize).unwrap();
         match T {
             READ_WRITE => {
+                //READ_WRITE用于流而非查询
                 assert!(
                     is_set,
                     "vnode {} should not be accessed by this table: {:#?}, dist key {:?}",
@@ -338,8 +342,10 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         };
 
         println!("into ******************************");
+        ///查询多次，效率值得怀疑
         let mut deserializer = CellBasedRowDeserializer::new(&*self.mapping);
         for column_id in self.column_ids() {
+            println!("******************column_id={:?}", column_id);
             let key = serialize_pk_and_column_id(&serialized_pk, column_id).map_err(err)?;
             if let Some(value) = self.keyspace.get(&key, epoch).await? {
                 let deserialize_res = deserializer.deserialize(&key, &value).map_err(err)?;
@@ -349,6 +355,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
 
         let result = deserializer.take();
         println!("result={:?} key_len={:?}", result, result.clone().unwrap().1.len());
+        ///then_some等于some(T),加了some
         Ok(result.and_then(|(vnode, _pk, row)| self.check_vnode_is_set(vnode).then_some(row)))
     }
 
@@ -570,6 +577,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
 
     /// `dedup_pk_iter` should be used when pk is not persisted as value in storage.
     /// It will attempt to decode pk from key instead of cell value.
+    /// 当 pk 不作为值保存在存储中时，应使用 `dedup_pk_iter`。它将尝试从key而不是单元格值解码 pk，从key里解码得到pk,并非字段值里
     /// Tracking issue: <https://github.com/singularity-data/piestream/issues/588>
     pub async fn batch_dedup_pk_iter(
         &self,
@@ -704,12 +712,15 @@ impl<S: StateStore> StorageTableIterInner<S> {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        //wait_epoch作用是啥，等待在内存状态表的数据提交完毕???
         if wait_epoch {
             keyspace.state_store().wait_epoch(epoch).await?;
         }
 
+        //构建解码器
         let cell_based_row_deserializer = CellBasedRowDeserializer::new(table_descs);
 
+        //构建迭代器
         let iter = keyspace.iter_with_range(raw_key_range, epoch).await?;
         let iter = Self {
             iter,
@@ -721,6 +732,7 @@ impl<S: StateStore> StorageTableIterInner<S> {
     /// Yield a row with its primary key.
     #[try_stream(ok = (Vec<u8>, Row), error = StorageError)]
     async fn into_stream(mut self) {
+        //获取下一个结果，反序列化，yield返回
         while let Some((key, value)) = self.iter.next().await? {
             if let Some((_vnode, pk, row)) = self
                 .cell_based_row_deserializer

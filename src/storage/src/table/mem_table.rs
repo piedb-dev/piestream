@@ -84,11 +84,12 @@ impl MemTable {
     }
 
     pub fn delete(&mut self, pk: Vec<u8>, old_value: Row) {
-        let entry = self.buffer.entry(pk);
+        let entry = self.buffer.entry(pk.clone());
         match entry {
             Entry::Vacant(e) => {
                 //实际往状态表插入了一行，标记为delete
                 e.insert(RowOp::Delete(old_value));
+                println!("delete Vacant pk={:?}", pk.clone());
             }
             Entry::Occupied(mut e) => match e.get_mut() {
                 RowOp::Insert(original_value) => {
@@ -125,6 +126,7 @@ impl MemTable {
                     e.insert(RowOp::Update((old_value, new_value)));
                 }
                 RowOp::Delete(_) => {
+                    //应该是删除状态不让修改
                     panic!(
                         "invalid flush status: double delete {:?} -> {:?}",
                         e.key(),

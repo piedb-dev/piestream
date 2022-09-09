@@ -405,6 +405,7 @@ async fn test_row_seq_scan() -> Result<()> {
 
     let epoch: u64 = 0;
 
+    //写入内存表
     state
         .insert(Row(vec![
             Some(1_i32.into()),
@@ -419,6 +420,7 @@ async fn test_row_seq_scan() -> Result<()> {
             Some(8_i64.into()),
         ]))
         .unwrap();
+    //数据写入远程存储表，清空状态内存表
     state.commit(epoch).await.unwrap();
 
     //设置pk
@@ -432,7 +434,7 @@ async fn test_row_seq_scan() -> Result<()> {
         .collect();
 
     println!("pk_descs={:?}", pk_descs);
-    //扫表
+    //构建扫表执行器
     let executor = Box::new(RowSeqScanExecutor::new(
         table.schema().clone(),
         ScanType::TableScan(
