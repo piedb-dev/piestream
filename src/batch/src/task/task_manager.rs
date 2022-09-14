@@ -58,6 +58,7 @@ impl BatchManager {
 
         //异步执行
         task.clone().async_execute().await?;
+        //插入任务列表
         if let hash_map::Entry::Vacant(e) = self.tasks.lock().entry(task_id.clone()) {
             e.insert(task);
             Ok(())
@@ -70,6 +71,7 @@ impl BatchManager {
         }
     }
 
+    //ComputeClient里调用
     pub fn get_data(
         &self,
         tx: Sender<std::result::Result<GetDataResponse, Status>>,
@@ -97,6 +99,8 @@ impl BatchManager {
     }
 
     pub fn take_output(&self, output_id: &ProstTaskOutputId) -> Result<TaskOutput> {
+        //ProstTaskOutputId种task_id是子节点id,output_id是上游父节点任务id
+        //frontend分发逻辑是子节点成功后才开始分发父节点任务
         let task_id = TaskId::from(output_id.get_task_id()?);
         self.tasks
             .lock()

@@ -38,6 +38,7 @@ pub struct DataChunk {
 
 /// `Vis` is a visibility bitmap of rows. When all rows are visible, it is considered compact and
 /// is represented by a single cardinality number rather than that many of ones.
+/// 删除状态的行是visibility=false
 #[derive(Clone, PartialEq)]
 pub enum Vis {
     Bitmap(Bitmap),
@@ -365,6 +366,7 @@ impl DataChunk {
             let array = self.column_at(*column_idx).array();
             array.hash_vec(&mut states[..]);
         }
+        //计算column_idxes字段每行的hash，长度等于chunk记录数
         Ok(finalize_hashers(&mut states[..])
             .into_iter()
             .map(|hash_code| hash_code.into())
@@ -712,6 +714,7 @@ mod tests {
         let num_of_columns: usize = 2;
         let length = 5;
         let mut columns = vec![];
+        //2列每列5行
         for i in 0..num_of_columns {
             let mut builder = PrimitiveArrayBuilder::<i32>::new(length);
             for _ in 0..length {

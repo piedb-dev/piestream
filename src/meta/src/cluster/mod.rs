@@ -112,6 +112,7 @@ where
                     .await? as WorkerId;
 
                 // Generate parallel units.
+                // 默认一个工作阶段构建4个ParallelUnitId，其中一个single 三个Hash
                 let parallel_units = if r#type == WorkerType::ComputeNode {
                     self.generate_cn_parallel_units(DEFAULT_WORK_NODE_PARALLEL_DEGREE, worker_id)
                         .await?

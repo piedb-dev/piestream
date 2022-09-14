@@ -161,11 +161,13 @@ impl<'a, C: BatchTaskContext> ExecutorBuilder<'a, C> {
     #[async_recursion]
     async fn try_build(&self) -> Result<BoxedExecutor> {
         let mut inputs = Vec::with_capacity(self.plan_node.children.len());
+        // 先执行任务内的子节点
         for input_node in &self.plan_node.children {
             let input = self.clone_for_plan(input_node).build().await?;
             inputs.push(input);
         }
 
+        //通过ExecutorBuilder构建Executor
         let real_executor = build_executor! { self, inputs,
             NodeBody::RowSeqScan => RowSeqScanExecutorBuilder,
             NodeBody::Insert => InsertExecutor,

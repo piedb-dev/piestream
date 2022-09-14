@@ -53,6 +53,7 @@ impl FilterExecutor {
         let mut data_chunk_builder =
             DataChunkBuilder::with_default_size(self.child.schema().data_types());
 
+        //接收上有输出的数据
         #[for_await]
         for data_chunk in self.child.execute() {
             let data_chunk = data_chunk?.compact()?;
@@ -100,14 +101,18 @@ impl BoxedExecutorBuilder for FilterExecutor {
         source: &ExecutorBuilder<C>,
         mut inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
+        //只能有一个输入节点
         ensure!(inputs.len() == 1);
 
+        //确定节点类型
         let filter_node = try_match_expand!(
             source.plan_node().get_node_body().unwrap(),
             NodeBody::Filter
         )?;
 
+        //过滤条件
         let expr_node = filter_node.get_search_condition()?;
+        //构建成表达式
         let expr = build_from_prost(expr_node)?;
         Ok(Box::new(Self::new(
             expr,

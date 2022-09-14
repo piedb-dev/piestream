@@ -82,6 +82,7 @@ impl CreateSource for DefaultCreateSource {
                 task_output_id,
             );
 
+            //建立rpc连接
             Ok(ExchangeSourceImpl::Grpc(
                 GrpcExchangeSource::create(prost_source.clone()).await?,
             ))
@@ -143,6 +144,7 @@ impl<CS: 'static + CreateSource, C: BatchTaskContext> GenericExchangeExecutor<CS
     async fn do_execute(self: Box<Self>) {
         let mut sources: Vec<ExchangeSourceImpl> = vec![];
 
+        //构建当前fragment数据来源
         for (prost_source, source_creator) in self.sources.iter().zip_eq(self.source_creators) {
             let source = source_creator
                 .create_source(self.context.clone(), prost_source)

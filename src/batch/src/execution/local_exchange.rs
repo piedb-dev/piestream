@@ -35,6 +35,7 @@ impl LocalExchangeSource {
         context: C,
         task_id: TaskId,
     ) -> Result<Self> {
+        //任务输出
         let task_output = context.get_task_output(output_id)?;
         Ok(Self {
             task_output,

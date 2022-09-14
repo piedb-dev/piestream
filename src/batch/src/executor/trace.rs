@@ -56,6 +56,7 @@ impl TraceExecutor {
         let input_desc = self.input_desc.as_str();
         let span_name = format!("{input_desc}_next");
         let mut child_stream = self.child.execute();
+        //获取上有节点数据
         while let Some(chunk) = child_stream
             .next()
             .instrument(tracing::trace_span!(
@@ -68,6 +69,7 @@ impl TraceExecutor {
             let chunk = chunk?;
             event!(tracing::Level::TRACE, prev = %input_desc, msg = "chunk", "input = \n{:#?}", 
                 chunk);
+            //返回流
             yield chunk;
         }
     }

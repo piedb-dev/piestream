@@ -448,15 +448,16 @@ impl BatchPlanFragmenter {
         parent_exec_node: Option<&mut ExecutionPlanNode>,
     ) {
         let mut execution_plan_node = ExecutionPlanNode::from(node.clone());
-        println!("execution_plan_node={:?}\n", execution_plan_node);
+        //println!("execution_plan_node={:?}\n", execution_plan_node);
         //数据下发到儿子节点策略
         let child_exchange_info = node.distribution().to_prost(builder.parallelism);
+        //println!("child_exchange_info={:?}", child_exchange_info);
         //产生一个新的stage
         let child_stage = self.new_stage(node.inputs()[0].clone(), child_exchange_info);
        // println!("child_stage={:?}", child_stage);
         //当前stage的数据来源于下游stage
         execution_plan_node.source_stage_id = Some(child_stage.id);
-        println!("execution_plan_node={:?}\n", execution_plan_node);
+        //println!("execution_plan_node={:?}\n", execution_plan_node);
 
         if let Some(parent) = parent_exec_node {
             //当前stage内部节点之前的父子关系，存储子节点信息

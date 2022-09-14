@@ -52,6 +52,7 @@ impl GrpcExchangeSource {
                 };
                 client.execute(execute_request).await?
             }
+            //从子framgent获取数据
             None => client.get_data(task_output_id.clone()).await?,
         };
         let source = Self {

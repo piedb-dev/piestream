@@ -35,17 +35,21 @@ impl<S: Stream + Unpin> Stream for MergeStream<S> {
     type Item = S::Item;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        println!("poll_next**************************************");
         let mut poll_count = 0;
         while poll_count < self.sources.len() {
             let idx = (poll_count + self.last_base) % self.sources.len();
             match self.sources[idx].poll_next_unpin(cx) {
                 Poll::Ready(Some(item)) => {
+                    //已经读到数据，立刻返回，所以并没有顺序
                     self.last_base = (idx + 1) % self.sources.len();
                     return Poll::Ready(Some(item));
                 }
                 Poll::Ready(None) => {
+                    //idx和列表最后一个元素交换，并从sources列表中删除最后一个节点并返回
                     let _ = self.sources.swap_remove(idx);
                     // read from the front or we may miss the stream just moved from the back.
+                    //设置为0从新扫描，就是怕删除swap节点遍历不到
                     poll_count = 0;
                     continue;
                 }
@@ -55,9 +59,11 @@ impl<S: Stream + Unpin> Stream for MergeStream<S> {
                 }
             }
         }
+        //都在Pending状态
         if !self.sources.is_empty() {
             Poll::Pending
         } else {
+            //全部都读完
             Poll::Ready(None)
         }
     }

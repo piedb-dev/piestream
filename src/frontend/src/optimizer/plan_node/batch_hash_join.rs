@@ -43,6 +43,7 @@ pub struct BatchHashJoin {
 impl BatchHashJoin {
     pub fn new(logical: LogicalJoin, eq_join_predicate: EqJoinPredicate) -> Self {
         let ctx = logical.base.ctx.clone();
+        //根据left,right策略决定整个fragment下发策略
         let dist = Self::derive_dist(
             logical.left().distribution(),
             logical.right().distribution(),

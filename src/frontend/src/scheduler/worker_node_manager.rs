@@ -82,6 +82,7 @@ impl WorkerNodeManager {
         self.worker_nodes.read().unwrap().len()
     }
 
+    //构建parallel_unit_id->worker映射(一个worker默认有多个parallel_unit_id)
     pub fn get_workers_by_parallel_unit_ids(
         &self,
         parallel_unit_ids: &[ParallelUnitId],

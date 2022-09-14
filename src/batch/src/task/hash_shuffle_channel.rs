@@ -38,11 +38,13 @@ pub struct HashShuffleReceiver {
     receiver: mpsc::Receiver<Option<DataChunkInChannel>>,
 }
 
+//根据hash_info.key计算每行的hashvalue
 fn generate_hash_values(chunk: &DataChunk, hash_info: &HashInfo) -> Result<Vec<usize>> {
     let output_count = hash_info.output_count as usize;
 
     let hasher_builder = CRC32FastBuilder {};
 
+    //chunk计算一个hash值列表（根据pk字段） 返回是output_count取模后的结果
     let hash_values = chunk
         .get_hash_values(
             &hash_info
@@ -60,6 +62,8 @@ fn generate_hash_values(chunk: &DataChunk, hash_info: &HashInfo) -> Result<Vec<u
 }
 
 /// The returned chunks must have cardinality > 0.
+/// 产生output_count个新chunk,每个chunk内容一致，visibility有差异
+/// 
 fn generate_new_data_chunks(
     chunk: &DataChunk,
     hash_info: &exchange_info::HashInfo,
@@ -68,7 +72,9 @@ fn generate_new_data_chunks(
     let output_count = hash_info.output_count as usize;
     let mut vis_maps = vec![vec![]; output_count];
     hash_values.iter().for_each(|hash| {
+        //每个vis_map长度都等于hash_values长度，即chunk记录行数
         for (sink_id, vis_map) in vis_maps.iter_mut().enumerate() {
+            //hash（理解为行标识）等于sink_id，设置为true
             if *hash == sink_id {
                 vis_map.push(true);
             } else {
@@ -78,12 +84,16 @@ fn generate_new_data_chunks(
     });
     let mut res = Vec::with_capacity(output_count);
     for (sink_id, vis_map_vec) in vis_maps.into_iter().enumerate() {
+        //映射成bitmap
         let vis_map: Bitmap = vis_map_vec.into_iter().collect();
+
         let vis_map = if let Some(visibility) = chunk.get_visibility_ref() {
+            //两个bitmap做and操作（标识删除状态的数据bitmap）
             vis_map.bitand(visibility)
         } else {
             vis_map
         };
+        //根据新的vis_map产生新的chunk
         let new_data_chunk = chunk.with_visibility(vis_map);
         trace!(
             "send to sink:{}, cardinality:{}",
@@ -110,9 +120,11 @@ impl ChanSender for HashShuffleSender {
 
 impl HashShuffleSender {
     async fn send_chunk(&mut self, chunk: DataChunk) -> Result<()> {
+        //计算chunk每行hashvalue根据 self.hash_info.keys
         let hash_values = generate_hash_values(&chunk, &self.hash_info)?;
+        //根据hash_info.output_count  产生一组新的chunk
         let new_data_chunks = generate_new_data_chunks(&chunk, &self.hash_info, &hash_values);
-
+        //每组的chunk内容都一致，等于重复了hash_info.output_count次性能是否合适???
         for (sink_id, new_data_chunk) in new_data_chunks.into_iter().enumerate() {
             trace!(
                 "send to sink:{}, cardinality:{}",

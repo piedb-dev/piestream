@@ -52,9 +52,11 @@ impl ExchangeService for ExchangeServiceImpl {
         &self,
         request: Request<GetDataRequest>,
     ) -> std::result::Result<Response<Self::GetDataStream>, Status> {
+        //获取远程地址
         let peer_addr = request
             .remote_addr()
             .ok_or_else(|| Status::unavailable("connection unestablished"))?;
+        //对外输出的任务id
         let pb_task_output_id = request
             .into_inner()
             .task_output_id

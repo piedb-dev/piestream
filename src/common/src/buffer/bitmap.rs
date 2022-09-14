@@ -241,7 +241,7 @@ impl Bitmap {
     }
 
     pub fn iter(&self) -> BitmapIter<'_> {
-        println!("iter1");
+        //println!("iter1");
         BitmapIter {
             bits: &self.bits,
             idx: 0,
@@ -525,6 +525,7 @@ mod tests {
 
     #[test]
     fn test_bitmap_eq() {
+
         let b1: Bitmap = (vec![false; 3]).into_iter().collect();
         let b2: Bitmap = (vec![false; 5]).into_iter().collect();
         assert_ne!(b1, b2);

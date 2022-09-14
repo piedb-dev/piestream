@@ -163,6 +163,7 @@ where
             // Singleton fragment
             let actor = &fragment.actors[0];
 
+            //same_worker_node_as_upstrea在delta节点里赋值，后续还需要研究
             if actor.same_worker_node_as_upstream && !actor.upstream_actor_id.is_empty() {
                 // Schedule the fragment to the same parallel unit as upstream.
                 let parallel_unit = locations.schedule_colocate_with(&actor.upstream_actor_id)?;
@@ -275,6 +276,7 @@ where
         let vnode_mapping = self
             .hash_mapping_manager
             .build_fragment_hash_mapping(fragment.fragment_id, parallel_units);
+        //压缩vnode_mapping，original_indices是位置，data实际就是ParallelUnitId
         let (original_indices, data) = compress_data(&vnode_mapping);
         fragment.vnode_mapping = Some(ParallelUnitMapping {
             original_indices,

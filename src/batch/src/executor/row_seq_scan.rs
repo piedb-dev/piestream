@@ -272,6 +272,7 @@ impl<S: StateStore> Executor for RowSeqScanExecutor<S> {
 impl<S: StateStore> RowSeqScanExecutor<S> {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
+        //new_boxed_executor里已经建立获取数据路径
         match self.scan_type {
             ScanType::TableScan(iter) => {
                 pin_mut!(iter);

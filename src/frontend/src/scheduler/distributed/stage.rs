@@ -236,7 +236,7 @@ impl StageExecution {
                     }),
                     output_id, //父节点任务id
                 };
-                //带上compute节点路由信息,儿子stage先跑，所以已经有值
+                //带上compute节点路由信息,querymanage遍历过程儿子stage运行结束后在运行父节点
                 ExchangeSource {
                     task_output_id: Some(task_output_id),
                     host: Some(status_holder.inner.load_full().location.clone().unwrap()),
@@ -422,7 +422,7 @@ impl StageRunner {
                         child_stage.stage.id == execution_plan_node.source_stage_id.unwrap()
                     })
                     .unwrap();
-                //将task_id关联到其所有stage子任务，存储在exchange_sources
+                //将task_id关联到其stage子任务，存储在exchange_sources，一个exchange节点只接入一个下游stage节点
                 let exchange_sources = child_stage.all_exchange_sources_for(task_id);
 
                 match &execution_plan_node.node {

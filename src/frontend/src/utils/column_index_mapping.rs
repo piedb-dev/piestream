@@ -122,6 +122,7 @@ impl ColIndexMapping {
                 usize::try_from(target).ok()
             })
             .collect_vec();
+        println!("with_shift_offset map={:?}", map.clone());
         Self::new(map)
     }
 
@@ -147,6 +148,7 @@ impl ColIndexMapping {
         for (tar, &src) in cols.iter().enumerate() {
             map[src] = Some(tar);
         }
+        println!("with_remaining_columns map={:?}", map.clone());
         Self::new(map)
     }
 
@@ -179,8 +181,10 @@ impl ColIndexMapping {
         // debug!("composing {:?} and {:?}", self, following);
         let mut map = self.map.clone();
         for tar in &mut map {
+            //map里存储是following里位置信息
             *tar = tar.and_then(|index| following.try_map(index));
         }
+        println!("composite map={:?}", map.clone());
         Self::with_target_size(map, following.target_size())
     }
 
@@ -394,6 +398,7 @@ mod tests {
     #[test]
     fn test_shift_0() {
         let mapping = ColIndexMapping::with_shift_offset(3, 0);
+        //0->0+0,1->1+0 2->2+0
         assert_eq!(mapping.map(0), 0);
         assert_eq!(mapping.map(1), 1);
         assert_eq!(mapping.map(2), 2);
@@ -403,10 +408,15 @@ mod tests {
 
     #[test]
     fn test_composite() {
+        //0->0+3, 1->1+3, 2->2+3
         let add_mapping = ColIndexMapping::with_shift_offset(3, 3);
+        println!("add_mapping={:?}", add_mapping);
         let remaining_cols = vec![3, 5];
+        //3->0, 5->1
         let col_prune_mapping = ColIndexMapping::with_remaining_columns(&remaining_cols, 6);
+        println!("col_prune_mapping={:?}", col_prune_mapping);
         let composite = add_mapping.composite(&col_prune_mapping);
+        println!("composite={:?}", composite);
         assert_eq!(composite.map(0), 0); // 0+3 = 3， 3 -> 0
         assert_eq!(composite.try_map(1), None);
         assert_eq!(composite.map(2), 1); // 2+3 = 5, 5 -> 1

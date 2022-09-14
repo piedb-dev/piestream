@@ -72,6 +72,7 @@ pub struct ComputeNodeContext {
 
 impl BatchTaskContext for ComputeNodeContext {
     fn get_task_output(&self, task_output_id: TaskOutputId) -> Result<TaskOutput> {
+        //返回TaskOutput，其中绑定一个消息接收器
         self.env
             .task_manager()
             .take_output(&task_output_id.to_prost())

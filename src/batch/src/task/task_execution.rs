@@ -226,6 +226,7 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
         );
         //状态设置为running
         *self.state.lock() = TaskStatus::Running;
+        //构造好了执行器，并准备好yield
         let exec = ExecutorBuilder::new(
             self.plan.root.as_ref().unwrap(),
             &self.task_id,
@@ -290,6 +291,7 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
         sender: &mut ChanSenderImpl,
         mut shutdown_rx: Receiver<u64>,
     ) -> Result<()> {
+        //获取到整个stage的输出数据
         let mut data_chunk_stream = root.execute();
         loop {
             tokio::select! {
@@ -347,6 +349,7 @@ impl<C: BatchTaskContext> BatchTaskExecution<C> {
                     output_id.get_output_id(),
                 ))
             })?;
+        //输出对象
         let task_output = TaskOutput {
             receiver,
             output_id: output_id.try_into()?,
