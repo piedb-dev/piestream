@@ -498,17 +498,21 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         B: AsRef<[u8]> + Send,
     {
         // Vnodes that are set and should be accessed.
+        // 获取本次扫描有效vnode迭代器
         let vnodes = self
             .vnodes
             .iter()
             .enumerate()
             .filter(|&(_, set)| set)
             .map(|(i, _)| i as VirtualNode);
+        //println!("vnodes={:?}", vnodes);
 
         // For each vnode, construct an iterator.
         // TODO: if there're some vnodes continuously in the range and we don't care about order, we
         // can use a single iterator.
+        //每个vnode都构造一个迭代器
         let iterators: Vec<_> = try_join_all(vnodes.map(|vnode| {
+            //遍历范围加上vnode信息
             let raw_key_range = prefixed_range(encoded_key_range.clone(), &vnode.to_be_bytes());
             async move {
                 let iter = StorageTableIterInner::new(
@@ -532,6 +536,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
             // Concat all iterators if not to preserve order.
             _ if !ordered => futures::stream::iter(iterators).flatten(),
             // Merge all iterators if to preserve order.
+            //堆排序:n个有序队列合并排序，是否只是保留队列里数据相对顺序还是完全有序，需呀后续在看
             _ => iter_utils::merge_sort(iterators.into_iter().map(Box::pin).collect()),
         };
 

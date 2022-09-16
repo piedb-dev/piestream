@@ -579,6 +579,7 @@ where
     pub async fn create_source(&self, source: &Source) -> Result<()> {
         // This scope guard does clean up jobs ASYNCHRONOUSLY before Err returns.
         // It MUST be cleared before Ok returns.
+        //https://docs.rs/scopeguard/latest/scopeguard/，在退出作用域会自动调用dropfn闭包处理需要清理的数据
         let mut revert_funcs = scopeguard::guard(
             vec![],
             |revert_funcs: Vec<futures::future::BoxFuture<()>>| {

@@ -63,16 +63,19 @@ impl ManagedBarrierState {
 
     /// Notify if we have collected barriers from all actor ids. The state must be `Issued`.
     fn may_notify(&mut self, curr_epoch: u64) {
+        //remaining_actors为空即都处理完才发送
         let to_notify = match self.epoch_barrier_state_map.get(&curr_epoch) {
             Some(ManagedBarrierStateInner::Issued {
                 remaining_actors, ..
-            }) => (remaining_actors.is_empty()),
+            }) => (remaining_actors.is_empty()), 
             _ => unreachable!(),
         };
 
         if to_notify {
+            println!("444444444444444**************");
             let inner = self.epoch_barrier_state_map.remove(&curr_epoch).unwrap();
 
+            //构建create_mview_progress列表
             let create_mview_progress = self
                 .create_mview_progress
                 .remove(&curr_epoch)
@@ -123,18 +126,26 @@ impl ManagedBarrierState {
         );
 
         match self.epoch_barrier_state_map.get_mut(&barrier.epoch.curr) {
+            
             Some(ManagedBarrierStateInner::Stashed { collected_actors }) => {
+                //增加
                 let new = collected_actors.insert(actor_id);
                 assert!(new);
+                println!("222111111111111111111");
             }
             Some(ManagedBarrierStateInner::Issued {
                 remaining_actors, ..
             }) => {
+                //删除actor_id
                 let exist = remaining_actors.remove(&actor_id);
                 assert!(exist);
+                //发送消息
                 self.may_notify(barrier.epoch.curr);
+                println!("333333222111111111111111111");
             }
             None => {
+                println!("111111111111111111");
+                //没有就插入
                 self.epoch_barrier_state_map.insert(
                     barrier.epoch.curr,
                     ManagedBarrierStateInner::Stashed {
@@ -153,12 +164,16 @@ impl ManagedBarrierState {
         actor_ids_to_collect: impl IntoIterator<Item = ActorId>,
         collect_notifier: oneshot::Sender<CollectResult>,
     ) {
+        //转换为Issued状态
         let inner = match self.epoch_barrier_state_map.get(&barrier.epoch.curr) {
             Some(ManagedBarrierStateInner::Stashed { collected_actors }) => {
+                //actor_ids_to_collect减去collected_actors,
+                //collected_actors是直接抛弃
                 let remaining_actors = actor_ids_to_collect
                     .into_iter()
                     .filter(|a| !collected_actors.contains(a))
                     .collect();
+                println!("remaining_actors={:?}", remaining_actors);
                 ManagedBarrierStateInner::Issued {
                     remaining_actors,
                     collect_notifier,
@@ -178,6 +193,7 @@ impl ManagedBarrierState {
                 }
             }
         };
+        //重新插入
         self.epoch_barrier_state_map
             .insert(barrier.epoch.curr, inner);
         self.may_notify(barrier.epoch.curr);

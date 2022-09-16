@@ -136,6 +136,7 @@ impl BitmapBuilder {
 }
 
 /// An immutable bitmap. Use [`BitmapBuilder`] to build it.
+//#[derive(Clone, Debug)]
 #[derive(Clone)]
 pub struct Bitmap {
     bits: Bytes,
@@ -165,6 +166,7 @@ impl std::fmt::Debug for Bitmap {
 }
 
 impl Bitmap {
+    //所有bit都设置为1
     pub fn all_high_bits(num_bits: usize) -> Self {
         let len = Self::num_bytes(num_bits);
         Self {

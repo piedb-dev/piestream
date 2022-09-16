@@ -187,6 +187,7 @@ impl<S: StateStore> Keyspace<S> {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        //加上表信息
         let range = prefixed_range(range, &self.prefix);
         let iter = self
             .store

@@ -238,9 +238,11 @@ impl<S: StateStore> StateTable<S> {
         let encoded_start_key = pk_bounds
             .start_bound()
             .map(|pk| serialize_pk(pk.as_ref(), self.pk_serializer()));
+        println!("encoded_start_key={:?}", encoded_start_key);
         let encoded_end_key = pk_bounds
             .end_bound()
             .map(|pk| serialize_pk(pk.as_ref(), self.pk_serializer()));
+        println!("encoded_end_key={:?}", encoded_end_key);
         let encoded_key_range = (encoded_start_key, encoded_end_key);
         println!("encoded_key_range={:?}", encoded_key_range);
         self.iter_with_encoded_key_range(encoded_key_range, epoch)

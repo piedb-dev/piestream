@@ -142,6 +142,7 @@ impl KafkaSplitEnumerator {
             KafkaEnumeratorOffset::Earliest | KafkaEnumeratorOffset::Latest => partitions
                 .iter()
                 .map(|partition| {
+                    //利用watermark,构建partitions->offset关系
                     self.admin_client
                         .fetch_watermarks(self.topic.as_str(), *partition, KAFKA_SYNC_CALL_TIMEOUT)
                         .map(|watermark| match self.start_offset {
@@ -153,11 +154,13 @@ impl KafkaSplitEnumerator {
                 })
                 .collect(),
 
+            //offset构建
             KafkaEnumeratorOffset::Offset(offset) => partitions
                 .iter()
                 .map(|partition| Ok((*partition, Some(offset))))
                 .collect(),
 
+            //时间戳
             KafkaEnumeratorOffset::Timestamp(time) => self.fetch_offset_for_time(partitions, time),
 
             KafkaEnumeratorOffset::None => partitions
@@ -175,21 +178,25 @@ impl KafkaSplitEnumerator {
         let mut tpl = TopicPartitionList::new();
 
         for partition in partitions {
+            //增加时间偏移
             tpl.add_partition_offset(self.topic.as_str(), *partition, Offset::Offset(time))?;
         }
 
+        //重新获取TopicPartitionList
         let offsets = self
             .admin_client
             .offsets_for_times(tpl, KAFKA_SYNC_CALL_TIMEOUT)?;
 
         let mut result = HashMap::with_capacity(partitions.len());
 
+        //获取TopicPartitionListElem
         for elem in offsets.elements_for_topic(self.topic.as_str()) {
             match elem.offset() {
                 Offset::Offset(offset) => {
                     result.insert(elem.partition(), Some(offset));
                 }
                 _ => {
+                    //获取最近watermarks
                     let (_, high_watermark) = self.admin_client.fetch_watermarks(
                         self.topic.as_str(),
                         elem.partition(),

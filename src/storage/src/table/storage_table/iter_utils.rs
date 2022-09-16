@@ -50,6 +50,7 @@ impl<S: PkAndRowStream> PartialOrd for Node<S> {
 impl<S: PkAndRowStream> Ord for Node<S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // The heap is a max heap, so we need to reverse the order.
+        //升序排序
         self.peeked.0.cmp(&other.peeked.0).reverse()
     }
 }
@@ -61,6 +62,32 @@ pub(super) async fn merge_sort<S>(streams: Vec<S>)
 where
     S: PkAndRowStream + Unpin,
 {
+    /*let mut heap = BinaryHeap::with_capacity(streams.len());
+    for mut stream in streams {
+        if let Some(peeked) = stream.next().await.transpose()? {
+            //println!("peeked={:?}", peeked);
+            //流对象和第一个值组合成堆节点
+            heap.push(Node { stream, peeked });
+        }
+        /*if let Some(peeked) = stream.next().await {
+           let a=peeked?;
+            heap.push(Node { stream, peeked:a});
+        }*/
+    }
+
+    //堆排序逻辑
+    while let Some(mut node) = heap.peek_mut() {
+        // Note: If the `next` returns `Err`, we'll fail to yield the previous item.
+        // This is acceptable since we're not going to handle errors from cell-based table
+        // iteration, so where to fail does not matter. Or we need an `Option` for this.
+        yield match node.stream.next().await.transpose()? {
+            // There still remains data in the stream, take and update the peeked value.
+            Some(new_peeked) =>{println!("new_peeked={:?}", new_peeked);std::mem::replace(&mut node.peeked, new_peeked)},
+            // This stream is exhausted, remove it from the heap.
+            None => {println!("11111");PeekMut::pop(node).peeked},
+        };
+    }*/
+    println!("streams.len={:?}", streams.len());
     let mut heap = BinaryHeap::with_capacity(streams.len());
     for mut stream in streams {
         if let Some(peeked) = stream.next().await.transpose()? {
@@ -77,6 +104,7 @@ where
             // There still remains data in the stream, take and update the peeked value.
             Some(new_peeked) => std::mem::replace(&mut node.peeked, new_peeked),
             // This stream is exhausted, remove it from the heap.
+            //处理流最后一个节点
             None => PeekMut::pop(node).peeked,
         };
     }
@@ -121,7 +149,50 @@ mod tests {
 
         #[for_await]
         for (i, result) in merge_sorted.enumerate() {
+            //println!("i={:?} result={:?}",i, result);
             assert_eq!(result.unwrap(), gen_pk_and_row(i as u8).unwrap());
         }
+        /*#[for_await]
+        for v in merge_sorted {
+            println!("v={:?}",v);
+            //assert_eq!(result.unwrap(), gen_pk_and_row(i as u8).unwrap());
+        }*/
+    }
+
+    #[tokio::test]
+    async fn test_merge_sort1() {
+        let streams = vec![
+            futures::stream::iter(vec![
+                gen_pk_and_row(0),
+                gen_pk_and_row(11),
+                gen_pk_and_row(6),
+                gen_pk_and_row(9),
+            ]),
+            futures::stream::iter(vec![
+                gen_pk_and_row(1),
+                gen_pk_and_row(4),
+                gen_pk_and_row(12),
+                gen_pk_and_row(10),
+            ]),
+            futures::stream::iter(vec![
+                gen_pk_and_row(2),
+                gen_pk_and_row(5),
+                gen_pk_and_row(8),
+            ]),
+            futures::stream::iter(vec![]), // empty stream
+        ];
+
+        let merge_sorted = merge_sort(streams);
+
+        #[for_await]
+        for (i, result) in merge_sorted.enumerate() {
+            println!("i={:?} result={:?}",i, result);
+            //assert_eq!(result.unwrap(), gen_pk_and_row(i as u8).unwrap());
+        }
+        /*#[for_await]
+        for v in merge_sorted {
+            println!("v={:?}",v);
+            //assert_eq!(result.unwrap(), gen_pk_and_row(i as u8).unwrap());
+        }*/
     }
 }

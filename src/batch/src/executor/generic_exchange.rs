@@ -144,7 +144,7 @@ impl<CS: 'static + CreateSource, C: BatchTaskContext> GenericExchangeExecutor<CS
     async fn do_execute(self: Box<Self>) {
         let mut sources: Vec<ExchangeSourceImpl> = vec![];
 
-        //构建当前fragment数据来源
+        //构建当前fragment数据来源，下游frangment在1..n个compute节点有多个任务，
         for (prost_source, source_creator) in self.sources.iter().zip_eq(self.source_creators) {
             let source = source_creator
                 .create_source(self.context.clone(), prost_source)
@@ -162,8 +162,10 @@ impl<CS: 'static + CreateSource, C: BatchTaskContext> GenericExchangeExecutor<CS
     }
 }
 
+//封装成流对象
 #[try_stream(boxed, ok = DataChunk, error = RwError)]
 async fn data_chunk_stream(mut source: ExchangeSourceImpl) {
+    println!("********************");
     loop {
         if let Some(res) = source.take_data().await? {
             if res.cardinality() == 0 {
@@ -224,7 +226,7 @@ mod tests {
 
         let mut stream = executor.execute();
         let mut chunks: Vec<DataChunk> = vec![];
-        while let Some(chunk) = stream.next().await {
+        /*while let Some(chunk) = stream.next().await {
             let chunk = chunk.unwrap();
             chunks.push(chunk);
             if chunks.len() == 100 {
@@ -232,6 +234,6 @@ mod tests {
                 assert_ne!(chunks.len(), 1);
                 chunks.clear();
             }
-        }
+        }*/
     }
 }

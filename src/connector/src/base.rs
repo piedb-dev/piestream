@@ -181,9 +181,11 @@ mod tests {
     #[test]
     fn test_split_impl_get_fn() -> Result<()> {
         let split = KafkaSplit::new(0, Some(0), Some(0), "demo".to_string());
+        println!("split={:?}", split);
         let split_impl = SplitImpl::Kafka(split.clone());
+        //into_kafka函数是EnumAsInner特性
         let get_value = split_impl.into_kafka().unwrap();
-        println!("{:?}", get_value);
+        println!("get_value={:?}", get_value);
         assert_eq!(split.encode_to_bytes(), get_value.encode_to_bytes());
 
         Ok(())

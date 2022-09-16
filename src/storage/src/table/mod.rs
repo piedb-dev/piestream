@@ -51,6 +51,7 @@ impl Distribution {
                 vnodes.finish().into()
             };
         }
+        println!("FALLBACK_VNODES.num_high_bits={:?} FALLBACK_VNODES.len={:?}", FALLBACK_VNODES.num_high_bits(), FALLBACK_VNODES.len());
         Self {
             dist_key_indices: vec![],
             vnodes: FALLBACK_VNODES.clone(),

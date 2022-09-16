@@ -107,6 +107,7 @@ pub struct MemSourceManager {
 
 #[async_trait]
 impl SourceManager for MemSourceManager {
+    //test_create_source_handler里有protobuf传入参数参考
     async fn create_source(&self, source_id: &TableId, info: StreamSourceInfo) -> Result<()> {
         let format = match info.get_row_format()? {
             RowFormatType::Json => SourceFormat::Json,
@@ -120,6 +121,7 @@ impl SourceManager for MemSourceManager {
                 "protobuf file location not provided".to_string(),
             )));
         }
+        //根据source format创建解析器
         let source_parser_rs =
             SourceParserImpl::create(&format, &info.properties, info.row_schema_location.as_str())
                 .await;
@@ -129,6 +131,7 @@ impl SourceManager for MemSourceManager {
             return Err(source_parser_rs.err().unwrap());
         };
 
+        //字段，protobuf字段转内部字段信息
         let columns = info
             .columns
             .iter()

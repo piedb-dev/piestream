@@ -174,6 +174,7 @@ impl StreamService for StreamServiceImpl {
         }))
     }
 
+    //meta/src/stream/source_manager.rs文件调用
     #[cfg_attr(coverage, no_coverage)]
     async fn create_source(
         &self,
@@ -229,12 +230,14 @@ impl StreamServiceImpl {
         let id = TableId::new(source.id); // TODO: use SourceId instead
 
         match &source.get_info()? {
+            //stream source
             Info::StreamSource(info) => {
                 self.env
                     .source_manager()
                     .create_source(&id, info.to_owned())
                     .await?;
             }
+            //table source
             Info::TableSource(info) => {
                 let columns = info
                     .columns

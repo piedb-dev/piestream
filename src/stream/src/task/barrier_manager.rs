@@ -39,6 +39,7 @@ pub struct CollectResult {
     pub create_mview_progress: Vec<ProstCreateMviewProgress>,
 }
 
+#[derive(Debug)]
 enum BarrierState {
     /// `Local` mode should be only used for tests. In this mode, barriers are not managed or
     /// collected, and there's no way to know whether or when a barrier is finished.
@@ -133,20 +134,25 @@ impl LocalBarrierManager {
                 assert!(!to_collect.is_empty());
 
                 let (tx, rx) = oneshot::channel();
+                //传入一个tx
                 state.transform_to_issued(barrier, to_collect, tx);
+                //返回接收器
                 Some(rx)
             }
         };
 
+        //barrier发送给列表中所有actor_id
         for actor_id in to_send {
             let sender = self
                 .senders
                 .get(&actor_id)
                 .unwrap_or_else(|| panic!("sender for actor {} does not exist", actor_id));
+            //发送
             sender.send(barrier.clone()).unwrap();
         }
 
         // Actors to stop should still accept this barrier, but won't get sent to in next times.
+        //stop状态actor依旧可以接受上面代码发送的barrier，删除后下次不能在发送
         if let Some(Mutation::Stop(actors)) = barrier.mutation.as_deref() {
             trace!("remove actors {:?} from senders", actors);
             for actor in actors {
@@ -181,6 +187,7 @@ impl LocalBarrierManager {
     /// When a [`StreamConsumer`] (typically [`DispatchExecutor`]) get a barrier, it should report
     /// and collect this barrier with its own `actor_id` using this function.
     pub fn collect(&mut self, actor_id: ActorId, barrier: &Barrier) -> Result<()> {
+        //println!("self.state={:?}", self.state);
         match &mut self.state {
             #[cfg(test)]
             BarrierState::Local => {}

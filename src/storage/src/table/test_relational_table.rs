@@ -1511,6 +1511,7 @@ async fn test_state_table_iter_with_bounds() {
     let epoch = u64::MAX;
     let pk_bounds = Row(vec![Some(2_i32.into()), Some(22_i32.into())])
         ..Row(vec![Some(6_i32.into()), Some(66_i32.into())]);
+    //开始按范围遍历
     let iter = state.iter_with_pk_bounds(pk_bounds, epoch).await.unwrap();
     pin_mut!(iter);
 

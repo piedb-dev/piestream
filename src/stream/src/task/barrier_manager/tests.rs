@@ -57,6 +57,7 @@ async fn test_managed_barrier_collection() -> Result<()> {
         })
         .collect_vec();
 
+    println!("collected_barriers={:?}", collected_barriers);
     // Report to local barrier manager
     for (i, (actor_id, barrier)) in collected_barriers.into_iter().enumerate() {
         manager.collect(actor_id, &barrier).unwrap();
@@ -86,6 +87,7 @@ async fn test_managed_barrier_collection_before_send_request() -> Result<()> {
         .chain(once(extra_actor_id))
         .collect_vec();
 
+    println!("actor_ids_to_collect={:?} actor_ids_to_send={:?}", actor_ids_to_collect, actor_ids_to_send);
     // Register actors
     let count = actor_ids_to_send.len();
     let mut rxs = actor_ids_to_send
@@ -117,8 +119,10 @@ async fn test_managed_barrier_collection_before_send_request() -> Result<()> {
         })
         .collect_vec();
 
+   
     // Report to local barrier manager
     for (i, (actor_id, barrier)) in collected_barriers.into_iter().enumerate() {
+        println!("****************************{:?}", i);
         manager.collect(actor_id, &barrier).unwrap();
         let notified = collect_rx.try_recv().is_ok();
         assert_eq!(notified, i == count - 1);
