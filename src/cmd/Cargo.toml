@@ -1,0 +1,55 @@
+[package]
+name = "piestream_cmd"
+version = "0.1.10"
+edition = "2021"
+
+[features]
+static-link = ["workspace-static-link"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "3", features = ["derive"] }
+log = { version = "0.4", features = ["release_max_level_info"] }
+madsim = "=0.2.0-alpha.3"
+piestream_compactor = { path = "../storage/compactor" }
+piestream_compute = { path = "../compute" }
+piestream_ctl = { path = "../ctl" }
+piestream_frontend = { path = "../frontend" }
+piestream_meta = { path = "../meta" }
+piestream_rt = { path = "../utils/runtime" }
+tikv-jemallocator = "0.5"
+tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "time",
+    "signal",
+    "fs",
+] }
+# remove this line after madsim-tokio adds tracing feature support
+tokio-polyfill = { version = "1", package = "tokio", default-features = false, features = ["tracing"] }
+tracing = { version = "0.1", features = ["release_max_level_info"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-static-link = { path = "../utils/static-link", optional = true, features = ["enabled"] }
+msql-srv = { git = "https://github.com/wangdexinhp/msql-srv", rev = "ee14d86" }
+
+[[bin]]
+name = "frontend"
+path = "src/bin/frontend_node.rs"
+
+[[bin]]
+name = "meta-node"
+path = "src/bin/meta_node.rs"
+
+[[bin]]
+name = "compute-node"
+path = "src/bin/compute_node.rs"
+
+[[bin]]
+name = "compactor"
+path = "src/bin/compactor.rs"
+
+[[bin]]
+name = "risectl"
+path = "src/bin/ctl.rs"

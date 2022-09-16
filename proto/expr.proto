@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package expr;
+
+import "data.proto";
+
+option optimize_for = SPEED;
+
+message ExprNode {
+  enum Type {
+    INVALID = 0;
+    INPUT_REF = 1;
+    CONSTANT_VALUE = 2;
+    // arithmetics operators
+    ADD = 3;
+    SUBTRACT = 4;
+    MULTIPLY = 5;
+    DIVIDE = 6;
+    MODULUS = 7;
+    // comparison operators
+    EQUAL = 8;
+    NOT_EQUAL = 9;
+    LESS_THAN = 10;
+    LESS_THAN_OR_EQUAL = 11;
+    GREATER_THAN = 12;
+    GREATER_THAN_OR_EQUAL = 13;
+    // logical operators
+    AND = 21;
+    OR = 22;
+    NOT = 23;
+    IN = 24;
+    // bitwise operators
+    BITWISE_AND = 31;
+    BITWISE_OR = 32;
+    BITWISE_XOR = 33;
+    BITWISE_NOT = 34;
+    BITWISE_SHIFT_LEFT = 35;
+    BITWISE_SHIFT_RIGHT = 36;
+    // date functions
+    EXTRACT = 101;
+    TUMBLE_START = 103;
+    // other functions
+    CAST = 201;
+    SUBSTR = 202;
+    LENGTH = 203;
+    LIKE = 204;
+    UPPER = 205;
+    LOWER = 206;
+    TRIM = 207;
+    REPLACE = 208;
+    POSITION = 209;
+    LTRIM = 210;
+    RTRIM = 211;
+    CASE = 212;
+    // ROUND(numeric, integer) -> numeric
+    ROUND_DIGIT = 213;
+    // ROUND(numeric) -> numeric
+    // ROUND(double precision) -> double precision
+    ROUND = 214;
+    ASCII = 215;
+    TRANSLATE = 216;
+    COALESCE = 217;
+    CONCAT_WS = 218;
+    ABS = 219;
+    SPLIT_PART = 220;
+    CEIL = 221;
+    FLOOR = 222;
+    TO_CHAR = 223;
+    MD5 = 224;
+    CHAR_LENGTH = 225;
+    REPEAT = 226;
+    CONCAT_OP = 227;
+    // BOOL_OUT is different from CAST-bool-to-varchar in PostgreSQL.
+    BOOL_OUT = 228;
+    OCTET_LENGTH = 229;
+    BIT_LENGTH = 230;
+
+    // Boolean comparison
+    IS_TRUE = 301;
+    IS_NOT_TRUE = 302;
+    IS_FALSE = 303;
+    IS_NOT_FALSE = 304;
+    IS_NULL = 305;
+    IS_NOT_NULL = 306;
+    IS_DISTINCT_FROM = 307;
+    // Unary operators
+    NEG = 401;
+    // Nested selection operators
+    FIELD = 501;
+    // Array expression.
+    ARRAY = 521;
+    ARRAY_ACCESS = 522;
+    ROW = 523;
+    // Search operator and Search ARGument
+    SEARCH = 998;
+    SARG = 999;
+  }
+  Type expr_type = 1;
+  data.DataType return_type = 3;
+  oneof rex_node {
+    InputRefExpr input_ref = 4;
+    ConstantValue constant = 5;
+    FunctionCall func_call = 6;
+  }
+}
+
+message InputRefExpr {
+  int32 column_idx = 1;
+}
+
+message ConstantValue {
+  // bool array/bitmap: one byte, 0 for false (null), non-zero for true (non-null)
+  // integer, float,  double: big-endianness
+  // interval: encoded to (months, days, milliseconds), big-endianness
+  // varchar: encoded accorded to encoding, currently only utf8 is supported.
+  bytes body = 1;
+}
+
+// For serializing struct value to vec<bytes>.
+message StructValue {
+  repeated bytes fields = 1;
+}
+
+// For serializing list value to vec<bytes>.
+message ListValue {
+  repeated bytes fields = 1;
+}
+
+message FunctionCall {
+  repeated ExprNode children = 1;
+}
+
+// Aggregate Function Calls for Aggregation
+message AggCall {
+  enum Type {
+    INVALID = 0;
+    SUM = 1;
+    MIN = 2;
+    MAX = 3;
+    COUNT = 4;
+    AVG = 5;
+    STRING_AGG = 6;
+    SINGLE_VALUE = 7;
+    APPROX_COUNT_DISTINCT = 8;
+  }
+  message Arg {
+    InputRefExpr input = 1;
+    data.DataType type = 2;
+  }
+  Type type = 1;
+  repeated Arg args = 2;
+  data.DataType return_type = 3;
+  bool distinct = 4;
+}

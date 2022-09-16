@@ -1,0 +1,619 @@
+extend = [
+  { path = "src/risedevtool/grafana.toml" },
+  { path = "src/risedevtool/prometheus.toml" },
+  { path = "src/risedevtool/minio.toml" },
+  { path = "src/risedevtool/etcd.toml" },
+  { path = "src/risedevtool/jaeger.toml" },
+  { path = "src/risedevtool/kafka.toml" },
+  { path = "src/risedevtool/risedev-components.toml" },
+  { path = "src/frontend/test_runner/planner_test.toml" },
+]
+
+env_files = ["./risedev-components.user.env"]
+
+env_scripts = [
+  '''
+#!@duckscript
+
+is_sanitizer_enabled = get_env ENABLE_SANITIZER
+is_all_in_one_enabled = get_env ENABLE_ALL_IN_ONE
+
+if ${is_sanitizer_enabled}
+  set_env RISEDEV_CARGO_BUILD_EXTRA_ARGS "-Zbuild-std --target ${CARGO_MAKE_RUST_TARGET_TRIPLE}"
+  set_env RISEDEV_BUILD_TARGET_DIR "${CARGO_MAKE_RUST_TARGET_TRIPLE}/"
+  set_env RISEDEV_RUSTFLAGS "--cfg tokio_unstable -Zsanitizer=thread"
+else
+  set_env RISEDEV_CARGO_BUILD_EXTRA_ARGS ""
+  set_env RISEDEV_BUILD_TARGET_DIR ""
+  set_env RISEDEV_RUSTFLAGS "--cfg tokio_unstable"
+end
+
+if ${is_all_in_one_enabled}
+  set_env RISEDEV_CARGO_BUILD_CRATE "piestream_cmd_all"
+else
+  set_env RISEDEV_CARGO_BUILD_CRATE "piestream_cmd"
+end
+''',
+]
+
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+skip_git_env_info = true
+skip_rust_env_info = false
+skip_crate_env_info = true
+
+[tasks.clean-full]
+category = "Misc"
+description = "Clean all downloaded binaries by deleting .piestream folder"
+script = '''
+#!@duckscript
+rm -rf "${PREFIX}"
+'''
+
+[tasks.clean-data]
+category = "Misc"
+description = "Clean all data, config and logs"
+script = '''
+#!@duckscript
+rm -rf "${PREFIX_DATA}"
+rm -rf "${PREFIX_LOG}"
+rm -rf "${PREFIX_CONFIG}"
+'''
+
+
+[tasks.l]
+alias = "logs"
+
+[tasks.logs]
+category = "Misc"
+description = "Open logs with VSCode and dump in console"
+script = '''
+#!/bin/bash
+set -e
+
+code "${PREFIX_LOG}" || true
+
+for out_file in ${PREFIX_LOG}/*.log
+do
+  echo ""
+  echo "==="
+  echo "=== Dump log file $out_file ==="
+  echo "==="
+  echo ""
+  cat "$out_file" | tail -n 300
+done
+
+echo ""
+echo ""
+echo ""
+'''
+
+[tasks.check-logs]
+category = "Misc"
+description = "Check if there is panic in log or significant log size issue"
+script = '''
+#!/bin/bash
+set -e
+
+for out_file in ${PREFIX_LOG}/*.log
+do
+  if grep "panicked at" "$out_file" -C 100; then
+    echo "$(tput setaf 3)\"panicked at\" found in $out_file$(tput sgr0), please check if there's any bugs in this PR."
+    echo "You may find \"risedev-logs\" artifacts and download logs after all workflows finish."
+    exit 1
+  fi
+done
+
+if (( "$(du -sk ${PREFIX_LOG} | cut -f1)" > 2000 )) ; then
+    echo "$(tput setaf 3)log size is significantly large ($(du -sh ${PREFIX_LOG} | cut -f1)).$(tput sgr0) Please disable unnecessary logs."
+    exit 1
+fi
+'''
+
+[tasks.link-standalone-binaries]
+category = "RiseDev - Build"
+description = "Link standalone cmds to RiseDev bin"
+condition = { env_not_set = ["ENABLE_ALL_IN_ONE"] }
+script = '''
+#!@shell
+set -e
+rm -f "${PREFIX_BIN}/compute-node"
+rm -f "${PREFIX_BIN}/meta-node"
+rm -f "${PREFIX_BIN}/frontend"
+rm -f "${PREFIX_BIN}/compactor"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/compute-node" "${PREFIX_BIN}/compute-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/meta-node" "${PREFIX_BIN}/meta-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/frontend" "${PREFIX_BIN}/frontend"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/compactor" "${PREFIX_BIN}/compactor"
+'''
+
+[tasks.link-all-in-one-binaries]
+category = "RiseDev - Build"
+description = "Link all-in-one cmds to RiseDev bin"
+condition = { env_set = ["ENABLE_ALL_IN_ONE"] }
+script = '''
+#!@shell
+set -e
+
+rm -rf "${PREFIX_BIN}/piestream"
+mkdir -p "${PREFIX_BIN}/piestream"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/meta-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/compute-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/frontend-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/compactor"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/risectl"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_BIN}/piestream/playground"
+'''
+
+[tasks.link-user-bin]
+category = "RiseDev - Build"
+description = "Link all binaries to .bin"
+condition = { env_set = ["ENABLE_ALL_IN_ONE"] }
+script = '''
+#!@shell
+set -e
+
+rm -rf "${PREFIX_USR_BIN}"
+mkdir -p "${PREFIX_USR_BIN}"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/meta-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/compute-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/frontend-node"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/risectl"
+ln -s "$(pwd)/target/${RISEDEV_BUILD_TARGET_DIR}${BUILD_MODE_DIR}/piestream" "${PREFIX_USR_BIN}/playground"
+'''
+
+[tasks.post-build-piestream]
+category = "RiseDev - Build"
+description = "Copy RisngWave binaries to bin"
+condition = { env_set = ["ENABLE_BUILD_RUST"] }
+dependencies = [
+  "link-standalone-binaries",
+  "link-all-in-one-binaries",
+  "link-user-bin",
+]
+
+[tasks.b]
+alias = "build-piestream"
+
+[tasks.build]
+alias = "build-piestream"
+
+[tasks.extract-dashboard-artifact]
+category = "RiseDev - Build"
+description = "Extract dashboard artifact"
+condition = { env_not_set = ["ENABLE_BUILD_DASHBOARD_V2"] }
+script = '''
+#!@shell
+
+# we allow this script to fail
+
+echo "Extracting dashboard artifacts to ${PREFIX_UI}"
+
+rm -rf "${PREFIX_UI}"
+git worktree prune
+git worktree add "${PREFIX_UI}" origin/dashboard-artifact
+'''
+
+[tasks.export-dashboard-v2]
+category = "RiseDev - Build"
+description = "Build dashboard v2"
+condition = { env_set = ["ENABLE_BUILD_DASHBOARD_V2"] }
+script = """
+#!@shell
+set -e
+
+rm -rf "${PREFIX_UI}"
+cd dashboard && npm run build-static
+cd .. && ln -s "$(pwd)/dashboard/out" "${PREFIX_UI}"
+"""
+
+[tasks.build-piestream]
+category = "RiseDev - Build"
+description = "Build Rust components"
+condition = { env_set = ["ENABLE_BUILD_RUST"] }
+script = '''
+#!@shell
+
+set -e
+echo "$(tput setaf 4)$(tput bold)[Reminder]$(tput sgr0) risedev will only build $(tput setaf 4)piestream_cmd(_all) and risedev$(tput sgr0) crates."
+
+export RUSTFLAGS="${RISEDEV_RUSTFLAGS}"
+echo + RUSTFLAGS="$RUSTFLAGS"
+set -xe
+cargo build -p ${RISEDEV_CARGO_BUILD_CRATE} -p risedev \
+            --profile "${piestream_BUILD_PROFILE}" \
+            ${RISEDEV_CARGO_BUILD_EXTRA_ARGS}
+'''
+
+[tasks.clean]
+category = "RiseDev - Build"
+description = "Clean Rust targets"
+condition = { env_set = ["ENABLE_BUILD_RUST"] }
+script = '''
+#!@shell
+set -e
+cargo clean
+'''
+
+[tasks.build-docs]
+category = "RiseDev - Build"
+description = "Build Rust docs"
+condition = { env_set = ["ENABLE_BUILD_RUST"] }
+script = '''
+#!@shell
+
+set -e
+
+cargo doc --workspace --no-deps --document-private-items
+'''
+
+[tasks.prepare-config]
+category = "RiseDev - Prepare"
+description = "Copy necessary configuration files to RiseDev"
+script = '''
+#!@shell
+
+set -e
+
+cp "src/config/piestream.toml" "${PREFIX_CONFIG}/piestream.toml"
+cp "src/risedevtool/run_command.sh" "${PREFIX_BIN}/run_command.sh"
+cp "src/risedevtool/welcome.sh" "${PREFIX_BIN}/welcome.sh"
+'''
+
+[tasks.pre-start-playground]
+category = "RiseDev - Prepare"
+description = "Prepare playground by downloading necessary tools and build required components"
+dependencies = [
+  "download-minio",
+  "download-mcli",
+  "download-etcd",
+  "download-grafana",
+  "download-prometheus",
+  "download-jaeger",
+  "download-kafka",
+  "build-piestream",
+  "post-build-piestream",
+  "extract-dashboard-artifact",
+  "export-dashboard-v2",
+  "prepare-config",
+]
+
+[tasks.p]
+alias = "playground"
+
+[tasks.playground]
+category = "RiseDev - Start"
+description = "Start a lite piestream playground using piestream all-in-one binary"
+script = '''
+#!@shell
+
+set -e
+
+echo "Use \`./risedev d\` instead if you want to start a full cluster."
+
+set -ex
+
+RUST_BACKTRACE=1 RW_NODE=playground cargo run --bin piestream --profile "${piestream_BUILD_PROFILE}"
+'''
+
+[tasks.ctl]
+category = "RiseDev - Start"
+description = "Start RiseCtl"
+script = '''
+#!@shell
+
+RC_ENV_FILE="${PREFIX_CONFIG}/risectl-env"
+
+if [ ! -f "${RC_ENV_FILE}" ]; then
+  echo "risectl-env file not found. Did you start cluster using $(tput setaf 4)\`./risedev d\`$(tput sgr0)?"
+  exit 1
+fi
+
+source "${RC_ENV_FILE}"
+
+cargo run --bin risectl --profile "${piestream_BUILD_PROFILE}" -- "$@"
+test $? -eq 0 || exit 1
+'''
+
+[tasks.d]
+alias = "dev"
+
+[tasks.dev]
+category = "RiseDev - Start"
+dependencies = ["pre-start-playground"]
+command = "target/${BUILD_MODE_DIR}/risedev-playground"
+args = ["${@}"]
+description = "Start a full piestream dev cluster using risedev-playground"
+
+[tasks.kafka]
+category = "RiseDev - Start"
+description = "Start a piestream dev cluster alongside with a Kafka instance"
+command = "./risedev"
+args = ["dev", "ci-kafka"]
+
+[tasks.kill-risedev]
+category = "RiseDev - Stop"
+description = "Kill piestream dev cluster"
+script = '''
+#!/bin/bash
+
+tmux list-windows -t risedev -F "#{pane_id}" | xargs -I {} tmux send-keys -t {} C-c C-d
+tmux kill-session -t risedev
+test $? -eq 0 || { echo "Failed to stop all RiseDev components."; exit 1; }
+'''
+
+[tasks.kill]
+alias = "kill-risedev"
+
+[tasks.k]
+alias = "kill-risedev"
+
+[tasks.down]
+category = "RiseDev - Stop"
+description = "Kill piestream dev cluster and clean the data"
+dependencies = ["k", "clean-data"]
+
+[tasks.fill-kafka]
+command = "scripts/source/prepare_source.sh"
+
+[tasks.install-tools]
+category = "RiseDev - Check"
+script = """
+#!@shell
+
+set -e
+
+for tool in cargo-llvm-cov cargo-nextest cargo-udeps cargo-hakari cargo-sort cargo-make
+do
+  echo "install: $(tput setaf 4)$tool$(tput sgr0)"
+  cargo install $tool --locked
+  echo
+done
+
+echo "install: $(tput setaf 4)risinglightdb/sqllogictest-rs$(tput sgr0)"
+cargo install --git https://github.com/risinglightdb/sqllogictest-rs --features bin
+echo
+
+echo "check: $(tput setaf 4)tmux >= v3.2a$(tput sgr0)"
+tmux -V || echo "$(tput setaf 3)tmux$(tput sgr0) not found."
+echo
+
+echo "check: $(tput setaf 4)yq >= 4$(tput sgr0)"
+yq -V || echo "$(tput setaf 3)yq$(tput sgr0) not found."
+echo
+
+echo "check: $(tput setaf 4)psql >= 14$(tput sgr0)"
+psql -V || echo "$(tput setaf 3)psql$(tput sgr0) not found."
+echo
+
+echo "check: $(tput setaf 4)cmake$(tput sgr0)"
+cmake --version || echo "$(tput setaf 3)cmake$(tput sgr0) not found."
+echo
+"""
+description = "Install required tools to do pre-CI check and run e2e tests"
+
+[tasks.warn-on-missing-tools]
+private = true
+script = """
+echo "If any command is not found, run $(tput setaf 4)./risedev install-tools$(tput sgr0) to install required tools."
+"""
+
+[tasks.test-cov]
+category = "RiseDev - Test"
+dependencies = ["warn-on-missing-tools"]
+script = """
+#!/bin/bash
+set -e
+
+export CARGO_TARGET_DIR=target/coverage
+cargo llvm-cov nextest --html
+"""
+description = "Run unit tests and report coverage"
+
+[tasks.test]
+category = "RiseDev - Test"
+dependencies = ["warn-on-missing-tools"]
+script = """
+#!/bin/bash
+set -e
+
+cargo nextest run "$@"
+"""
+description = "Run unit tests"
+
+[tasks.sbuild]
+category = "RiseDev - Build in simulation mode"
+description = "Build in simulation mode"
+dependencies = ["warn-on-missing-tools"]
+env = { RUSTFLAGS = "--cfg madsim", CARGO_TARGET_DIR = "target/sim" }
+script = """
+#!/bin/bash
+set -e
+
+cargo build "$@"
+"""
+
+[tasks.stest]
+category = "RiseDev - Deterministic Simulation Test"
+description = "Run unit tests in deterministic simulation mode"
+dependencies = ["warn-on-missing-tools"]
+env = { RUSTFLAGS = "--cfg madsim", CARGO_TARGET_DIR = "target/sim" }
+script = """
+#!/bin/bash
+set -e
+
+cargo nextest run "$@"
+"""
+
+[tasks.check-hakari]
+category = "RiseDev - Check"
+description = "Run cargo hakari check and attempt to fix"
+script = """
+#!@shell
+
+echo "Running $(tput setaf 4)cargo hakari$(tput sgr0) checks and attempting to fix"
+
+# cargo hakari will generate new Cargo.toml regardless whether the original Cargo.toml is correct or not.
+# So we always verify before generate, so as not to change the modified time of Cargo.toml.
+(cargo hakari verify > /dev/null) || cargo hakari generate
+test $? -eq 0 || exit 1
+"""
+
+[tasks.check-dep-sort]
+category = "RiseDev - Check"
+description = "Run cargo sort check and attempt to fix"
+script = """
+#!@shell
+
+echo "Running $(tput setaf 4)cargo sort$(tput sgr0) checks and attempting to fix"
+
+# Rewriting Cargo.toml will cause a full rebuild of all crates, so we always check before fix.
+(cargo sort -w -c > /dev/null) || cargo sort -w
+test $? -eq 0 || { echo "cargo sort check failed. You may run $(tput setaf 4)cargo sort -w$(tput sgr0) to fix it."; exit 1; }
+"""
+
+[tasks.check-fmt]
+category = "RiseDev - Check"
+description = "Run cargo fmt check and attempt to fix"
+script = """
+#!@shell
+
+echo "Running $(tput setaf 4)cargo fmt$(tput sgr0) checks and attempting to fix"
+cargo fmt --all
+test $? -eq 0 || exit 1
+"""
+
+[tasks.check-clippy]
+category = "RiseDev - Check"
+description = "Run cargo clippy check"
+script = """
+#!@shell
+
+echo "Running $(tput setaf 4)cargo clippy$(tput sgr0) checks"
+cargo clippy --workspace --all-targets
+echo "If cargo clippy check failed or generates warning, you may run $(tput setaf 4)cargo clippy --workspace --all-targets --fix$(tput sgr0) to fix it. Note that clippy fix requires manual review, as not all auto fixes are guaranteed to be reasonable."
+"""
+
+[tasks.check]
+category = "RiseDev - Check"
+dependencies = [
+  "warn-on-missing-tools",
+  "check-hakari",
+  "check-dep-sort",
+  "check-fmt",
+  "check-clippy",
+]
+script = """
+#!@shell
+
+echo "Good work! You may run $(tput setaf 4)./risedev test$(tput sgr0) or $(tput setaf 4)./risedev test-cov$(tput sgr0) to run unit tests."
+"""
+description = "Perform pre-CI checks and automatically fix cargo sort, cargo hakari, cargo fmt warnings"
+
+[tasks.c]
+alias = "check"
+
+[tasks.install]
+category = "RiseDev - Prepare"
+description = "Install RiseDev to user local"
+script = """
+#!/bin/bash
+set -e
+
+
+DIR="$(pwd)"
+NAME="${1:-risedev}"
+INSTALL_PATH="$CARGO_HOME/bin/${NAME}"
+
+read -p "Install to ${INSTALL_PATH}? [y/N] " -r
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]
+then
+    exit 1
+fi
+
+cat <<EOF > "${INSTALL_PATH}"
+#!/bin/bash
+set -e
+cd "$DIR"
+./risedev "\\$@"
+EOF
+chmod +x "${INSTALL_PATH}"
+
+echo RiseDev installed to $(tput setaf 4)${INSTALL_PATH}$(tput sgr0)
+echo If you still feel this is not enough, you may copy $(tput setaf 4)risedev$(tput sgr0) to something like $(tput setaf 4)r+$(tput sgr0).
+"""
+
+[tasks.ci-start]
+category = "RiseDev - CI"
+dependencies = ["clean-data", "pre-start-playground"]
+command = "target/${BUILD_MODE_DIR}/risedev-playground"
+args = ["${@}"]
+description = "Clean data and start a full piestream dev cluster using risedev-playground"
+
+[tasks.ci-kill]
+category = "RiseDev - CI"
+dependencies = ["k", "l", "check-logs"]
+description = "Kill cluster, dump logs and check logs"
+
+[tasks.slt]
+category = "RiseDev - SQLLogicTest"
+dependencies = ["warn-on-missing-tools"]
+script = """
+#!/bin/bash
+set -e
+
+sqllogictest "$@"
+"""
+description = "Run SQLLogicTest"
+
+[tasks.compose]
+category = "RiseDev - Compose"
+description = "Compose a docker-compose.yaml file"
+script = '''
+#!@shell
+set -e
+rm -rf ${PREFIX_DOCKER}/*
+mkdir -p "${PREFIX_DOCKER}"
+cargo run --bin risedev-compose -- -d "${PREFIX_DOCKER}" "$@"
+echo docker-compose file generated in $(tput setaf 4)${PREFIX_DOCKER}$(tput sgr0)
+'''
+
+[tasks.compose-deploy]
+category = "RiseDev - Compose"
+description = "Compose a docker-compose.yaml deploy directory"
+script = '''
+#!@shell
+set -e
+rm -rf "${PREFIX_DOCKER}"/*
+mkdir -p "${PREFIX_DOCKER}"
+cargo run --bin risedev-compose -- -d "${PREFIX_DOCKER}" --deploy "$@"
+echo docker-compose file and deploy.sh generated in $(tput setaf 4)${PREFIX_DOCKER}$(tput sgr0)
+echo If you are ready, run $(tput setaf 4)./risedev apply-compose-deploy$(tput sgr0) to do the deployment.
+'''
+
+[tasks.apply-compose-deploy]
+category = "RiseDev - Compose"
+description = "Run deploy.sh"
+script = '''
+#!@shell
+set -e
+
+.piestream/rw-docker/deploy.sh "$@"
+
+echo
+echo "Deploy finished!"
+
+cat .piestream/rw-docker/_message.partial.sh
+'''
+
+[tasks.apply-compose-docker]
+category = "RiseDev - Compose"
+description = "Run deploy.sh"
+script = '''
+#!@shell
+set -e
+
+cp -a .piestream/rw-docker/* docker
+'''

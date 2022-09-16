@@ -1,0 +1,11 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: PieDb Data
+
+  paths:
+    - 'src/**/*.rs'
+    - 'dashboard/**/*.js'
+    - 'src/**/*.html'
+
+  comment: on-failure

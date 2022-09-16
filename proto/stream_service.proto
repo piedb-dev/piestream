@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package stream_service;
+
+import "catalog.proto";
+import "common.proto";
+import "data.proto";
+import "hummock.proto";
+import "stream_plan.proto";
+
+option optimize_for = SPEED;
+
+message HangingChannel {
+  common.ActorInfo upstream = 1;
+  common.ActorInfo downstream = 2;
+}
+
+// Describe the fragments which will be running on this node
+message UpdateActorsRequest {
+  string request_id = 1;
+  repeated stream_plan.StreamActor actors = 2;
+  repeated HangingChannel hanging_channels = 3;
+}
+
+message UpdateActorsResponse {
+  common.Status status = 1;
+}
+
+message BroadcastActorInfoTableRequest {
+  repeated common.ActorInfo info = 1;
+}
+
+// Create channels and gRPC connections for a fragment
+message BuildActorsRequest {
+  string request_id = 1;
+  repeated uint32 actor_id = 2;
+}
+
+message BuildActorsResponse {
+  string request_id = 1;
+  common.Status status = 2;
+}
+
+message DropActorsRequest {
+  string request_id = 1;
+  repeated uint32 actor_ids = 2;
+}
+
+message DropActorsResponse {
+  string request_id = 1;
+  common.Status status = 2;
+}
+
+message ForceStopActorsRequest {
+  string request_id = 1;
+  data.Epoch epoch = 2;
+}
+
+message ForceStopActorsResponse {
+  string request_id = 1;
+  common.Status status = 2;
+}
+
+message InjectBarrierRequest {
+  string request_id = 1;
+  data.Barrier barrier = 2;
+  repeated uint32 actor_ids_to_send = 3;
+  repeated uint32 actor_ids_to_collect = 4;
+}
+
+message InjectBarrierResponse {
+  string request_id = 1;
+  common.Status status = 2;
+}
+
+message BarrierCompleteRequest {
+  string request_id = 1;
+  uint64 prev_epoch = 2;
+}
+message BarrierCompleteResponse {
+  message CreateMviewProgress {
+    uint32 chain_actor_id = 1;
+    bool done = 2;
+    uint64 consumed_epoch = 3;
+  }
+  string request_id = 1;
+  common.Status status = 2;
+  repeated CreateMviewProgress create_mview_progress = 3;
+  message GroupedSstableInfo {
+    uint64 compaction_group_id = 1;
+    hummock.SstableInfo sst = 2;
+  }
+  repeated GroupedSstableInfo sycned_sstables = 4;
+}
+
+// Before starting streaming, the leader node broadcast the actor-host table to needed workers.
+message BroadcastActorInfoTableResponse {
+  common.Status status = 1;
+}
+
+message CreateSourceRequest {
+  catalog.Source source = 1;
+}
+
+message CreateSourceResponse {
+  common.Status status = 1;
+}
+
+message DropSourceRequest {
+  uint32 source_id = 1;
+}
+
+message DropSourceResponse {
+  common.Status status = 1;
+}
+
+message SyncSourcesRequest {
+  repeated catalog.Source sources = 1;
+}
+
+message SyncSourcesResponse {
+  common.Status status = 1;
+}
+
+service StreamService {
+  rpc UpdateActors(UpdateActorsRequest) returns (UpdateActorsResponse);
+  rpc BuildActors(BuildActorsRequest) returns (BuildActorsResponse);
+  rpc BroadcastActorInfoTable(BroadcastActorInfoTableRequest) returns (BroadcastActorInfoTableResponse);
+  rpc DropActors(DropActorsRequest) returns (DropActorsResponse);
+  rpc ForceStopActors(ForceStopActorsRequest) returns (ForceStopActorsResponse);
+  rpc InjectBarrier(InjectBarrierRequest) returns (InjectBarrierResponse);
+  rpc CreateSource(CreateSourceRequest) returns (CreateSourceResponse);
+  rpc SyncSources(SyncSourcesRequest) returns (SyncSourcesResponse);
+  rpc DropSource(DropSourceRequest) returns (DropSourceResponse);
+  rpc BarrierComplete(BarrierCompleteRequest) returns (BarrierCompleteResponse);
+}
+
+// TODO: Lifecycle management for actors.
