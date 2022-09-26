@@ -105,6 +105,7 @@ impl SharedContext {
         self.barrier_manager.lock()
     }
 
+    //获取上下游之间sender对象
     #[inline]
     pub fn take_sender(&self, ids: &UpDownActorIds) -> Result<Sender<Message>> {
         self.lock_channel_map()
@@ -125,6 +126,7 @@ impl SharedContext {
             })
     }
 
+    //获取上下游之间receiver对象
     #[inline]
     pub fn take_receiver(&self, ids: &UpDownActorIds) -> Result<Receiver<Message>> {
         self.lock_channel_map()
@@ -145,6 +147,7 @@ impl SharedContext {
             })
     }
 
+    //构建上下游actor_id->(sender,receiver)映射
     #[inline]
     pub fn add_channel_pairs(&self, ids: UpDownActorIds, channels: ConsumableChannelPair) {
         assert!(
@@ -171,6 +174,7 @@ impl SharedContext {
 /// Generate a globally unique executor id. Useful when constructing per-actor keyspace
 pub fn unique_executor_id(actor_id: u32, operator_id: u64) -> u64 {
     assert!(operator_id <= u32::MAX as u64);
+    //前32字节actor_id,后32字节operator_id
     ((actor_id as u64) << 32) + operator_id
 }
 

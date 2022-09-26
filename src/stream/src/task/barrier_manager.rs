@@ -109,6 +109,7 @@ impl LocalBarrierManager {
         actor_ids_to_send: impl IntoIterator<Item = ActorId>,
         actor_ids_to_collect: impl IntoIterator<Item = ActorId>,
     ) -> Result<()> {
+        //去掉发送队列重复数据
         let to_send = {
             let to_send: HashSet<ActorId> = actor_ids_to_send.into_iter().collect();
             match &self.state {
@@ -117,6 +118,7 @@ impl LocalBarrierManager {
                 _ => to_send,
             }
         };
+        //去掉接收队列重复数据
         let to_collect: HashSet<ActorId> = actor_ids_to_collect.into_iter().collect();
         trace!(
             "send barrier {:?}, senders = {:?}, actor_ids_to_collect = {:?}",
@@ -124,6 +126,7 @@ impl LocalBarrierManager {
             to_send,
             to_collect
         );
+
 
         let rx = match &mut self.state {
             #[cfg(test)]
@@ -134,7 +137,7 @@ impl LocalBarrierManager {
                 assert!(!to_collect.is_empty());
 
                 let (tx, rx) = oneshot::channel();
-                //传入一个tx
+                //传入actor_id收集列表和tx   函数功能: barrier都转issued状态
                 state.transform_to_issued(barrier, to_collect, tx);
                 //返回接收器
                 Some(rx)
@@ -147,7 +150,7 @@ impl LocalBarrierManager {
                 .senders
                 .get(&actor_id)
                 .unwrap_or_else(|| panic!("sender for actor {} does not exist", actor_id));
-            //发送
+            //发送,register_sender函数时每个 actor_id存储了一个sender
             sender.send(barrier.clone()).unwrap();
         }
 

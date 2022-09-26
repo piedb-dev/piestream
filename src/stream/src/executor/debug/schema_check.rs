@@ -31,6 +31,7 @@ pub async fn schema_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
         let message = message?;
 
         if let Message::Chunk(chunk) = &message {
+            println!("chunk={:?}", chunk);
             event!(
                 tracing::Level::TRACE,
                 "input schema = \n{:#?}\nexpected schema = \n{:#?}",
@@ -42,23 +43,32 @@ pub async fn schema_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
                 info.schema.fields()
             );
 
+            /*
+                let it = (0..2).zip_longest(6..9);
+                println!("it={:?}", it);
+                itertools::assert_equal(it, vec![Both(0, 6),Both(1, 7), Right(8)]);
+                chunk里字段定义和schema对比
+            */
             for (i, pair) in chunk
                 .columns()
                 .iter()
                 .zip_longest(info.schema.fields())
                 .enumerate()
             {
-                let array = pair.as_ref().left().map(|c| c.array_ref());
+                println!("pair={:?}", pair);
+                let array = pair.as_ref().left().map(|c| {c.array_ref()});
+                //构建字段builder对象
                 let builder = pair
                     .as_ref()
                     .right()
                     .map(|f| f.data_type.create_array_builder(0)); // TODO: check `data_type` directly
 
+                //验证字段与类型
                 macro_rules! check_schema {
                     ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
                         use piestream_common::array::ArrayBuilderImpl;
                         use piestream_common::array::ArrayImpl;
-
+                        
                         match (array, &builder) {
                             $( (Some(ArrayImpl::$variant_name(_)), Some(ArrayBuilderImpl::$variant_name(_))) => {} ),*
                             _ => panic!("schema check failed on {}: column {} should be {:?}, while stream chunk gives {:?}",
@@ -132,6 +142,7 @@ mod tests {
         ));
         tx.push_barrier(1, false);
 
+        //类型和数据对不上
         let checked = schema_check(source.info().into(), source.boxed().execute());
         pin_mut!(checked);
         checked.next().await.unwrap().unwrap();

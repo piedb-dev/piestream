@@ -93,7 +93,7 @@ impl MemTable {
             }
             Entry::Occupied(mut e) => match e.get_mut() {
                 RowOp::Insert(original_value) => {
-                    //insert记录真执行删除，有些不理解记录不存在执行插入，存在直接删除，而不是修改rowop
+                    //insert记录真执行删除
                     debug_assert_eq!(original_value, &old_value);
                     e.remove();
                 }
@@ -107,7 +107,7 @@ impl MemTable {
                 RowOp::Update(value) => {
                     let (original_old_value, original_new_value) = std::mem::take(value);
                     debug_assert_eq!(original_new_value, old_value);
-                    //设置rowop:Delete,保留了原始字段值
+                    //设置rowop:Delete状态,删除最原始字段值
                     e.insert(RowOp::Delete(original_old_value));
                 }
             },
@@ -126,7 +126,7 @@ impl MemTable {
                     e.insert(RowOp::Update((old_value, new_value)));
                 }
                 RowOp::Delete(_) => {
-                    //应该是删除状态不让修改
+                    //应该是删除状态不让修改，原始值已经删除了，不能再改，是否修改成insert，new_value也是完整数据
                     panic!(
                         "invalid flush status: double delete {:?} -> {:?}",
                         e.key(),

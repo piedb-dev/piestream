@@ -40,6 +40,7 @@ impl<B: BufMut> Serializer<B> {
     }
 
     /// Set whether data is serialized in reverse order.
+    /// 设置是否降序排列
     pub fn set_reverse(&mut self, reverse: bool) {
         self.output.flip = reverse;
     }
@@ -611,7 +612,19 @@ mod tests {
     }
 
     #[test]
+    fn test_serializer() {
+        let mut serializer = Serializer::new(vec![]);
+        1_i32.serialize(& mut serializer);
+        println!("serializer={:?}", serializer.into_inner());
+    }
+
+    #[test]
     fn test_option() {
+        let v=vec![];
+        let mut serializer = Serializer::new(v);
+        1_i32.serialize(& mut serializer);
+        println!("serializer={:?}", serializer.into_inner());
+
         assert_eq!(to_vec(&(None as Option<u8>)).unwrap(), [0]);
         assert_eq!(to_vec(&Some(0x12u8)).unwrap(), [1, 0x12]);
     }

@@ -29,6 +29,7 @@ impl ExecutorBuilder for SourceExecutorBuilder {
     ) -> Result<BoxedExecutor> {
         let node = try_match_expand!(node.get_node_body().unwrap(), NodeBody::Source)?;
         let (sender, barrier_receiver) = unbounded_channel();
+        //注册
         stream
             .context
             .lock_barrier_manager()

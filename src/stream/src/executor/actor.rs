@@ -149,6 +149,7 @@ where
             res
         };
 
+        //构造成BarrierStream对象
         let stream = Box::new(self.consumer).execute();
         pin_mut!(stream);
 

@@ -333,6 +333,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
     pub async fn get_row(&self, pk: &Row, epoch: u64) -> StorageResult<Option<Row>> {
         // TODO: use multi-get for storage get_row
         let serialized_pk = self.serialize_pk_with_vnode(pk);
+        println!("into ******************************serialized_pk={:?}", serialized_pk);
 
         let sentinel_key =
             serialize_pk_and_column_id(&serialized_pk, &SENTINEL_CELL_ID).map_err(err)?;
@@ -341,12 +342,15 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
             return Ok(None);
         };
 
-        println!("into ******************************");
+        println!("into ******************************serialized_pk={:?} SENTINEL_CELL_ID={:?}", serialized_pk, SENTINEL_CELL_ID);
         ///查询多次，效率值得怀疑
         let mut deserializer = CellBasedRowDeserializer::new(&*self.mapping);
         for column_id in self.column_ids() {
-            println!("******************column_id={:?}", column_id);
             let key = serialize_pk_and_column_id(&serialized_pk, column_id).map_err(err)?;
+            /*
+                column_id=0
+                key=[0, 1, 128, 0, 0, 6, 128, 0, 0, 0]
+            */
             if let Some(value) = self.keyspace.get(&key, epoch).await? {
                 let deserialize_res = deserializer.deserialize(&key, &value).map_err(err)?;
                 assert!(deserialize_res.is_none());
@@ -406,14 +410,17 @@ impl<S: StateStore, E: Encoding> StorageTableBase<S, E, READ_WRITE> {
                 RowOp::Insert(row) => {
                     //获取vnode,根据hash
                     let vnode = self.compute_vnode_by_row(&row);
-                    //编码  返回key里会带vnode+字段id等信息
+                    //编码  返回key里会带vnode+字段id等信息，所以返回是vec
                     let bytes = self
                         .row_serializer
                         .cell_based_serialize(vnode, &pk, row)
                         .map_err(err)?;
+                    println!("**************insert start**********");
                     for (key, value) in bytes {
+                        println!("key={:?} value={:?}", key, value);
                         local.put(key, StorageValue::new_default_put(value))
                     }
+                    println!("**************insert end**********");
                 }
                 RowOp::Delete(old_row) => {
                     let vnode = self.compute_vnode_by_row(&old_row);
@@ -494,8 +501,8 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         ordered: bool,
     ) -> StorageResult<StorageTableIter<S>>
     where
-        R: RangeBounds<B> + Send + Clone,
-        B: AsRef<[u8]> + Send,
+        R: RangeBounds<B> + Send + Clone ,
+        B: AsRef<[u8]> + Send ,
     {
         // Vnodes that are set and should be accessed.
         // 获取本次扫描有效vnode迭代器
@@ -507,6 +514,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
             .map(|(i, _)| i as VirtualNode);
         //println!("vnodes={:?}", vnodes);
 
+        //println!("range.start_bound={:?} range.end_bound={:?}", encoded_key_range.start_bound(), encoded_key_range.end_bound());
         // For each vnode, construct an iterator.
         // TODO: if there're some vnodes continuously in the range and we don't care about order, we
         // can use a single iterator.
@@ -514,6 +522,20 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         let iterators: Vec<_> = try_join_all(vnodes.map(|vnode| {
             //遍历范围加上vnode信息
             let raw_key_range = prefixed_range(encoded_key_range.clone(), &vnode.to_be_bytes());
+            println!("raw_key_range={:?}", raw_key_range);
+            /*
+                查全表：
+                raw_key_range=(Included([0]), Excluded([1]))
+                raw_key_range=(Included([1]), Excluded([2]))
+                raw_key_range=(Included([2]), Excluded([3]))
+                raw_key_range=(Included([3]), Excluded([4]))
+                raw_key_range=(Included([4]), Excluded([5]))
+                raw_key_range=(Included([5]), Excluded([6]))
+                             。。。。。
+                raw_key_range=(Included([253]), Excluded([254]))
+                raw_key_range=(Included([254]), Excluded([255]))
+                raw_key_range=(Included([255]), Unbounded)
+             */
             async move {
                 let iter = StorageTableIterInner::new(
                     &self.keyspace,
@@ -565,7 +587,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         epoch: u64,
     ) -> StorageResult<StorageTableIter<S>>
     where
-        R: RangeBounds<B> + Send + Clone,
+        R: RangeBounds<B> + Send + Clone + std::fmt::Debug ,
         B: AsRef<[u8]> + Send,
     {
         // Currently batch does not expect scan order, so we just concat mutiple ranges.
@@ -717,7 +739,7 @@ impl<S: StateStore> StorageTableIterInner<S> {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
-        //wait_epoch作用是啥，等待在内存状态表的数据提交完毕???
+        //TODO(liqiu)wait_epoch作用是啥，等待在内存状态表的数据提交完毕???
         if wait_epoch {
             keyspace.state_store().wait_epoch(epoch).await?;
         }

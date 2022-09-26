@@ -39,6 +39,38 @@ use crate::Keyspace;
 /// `CellBasedTable` provides the transform from the kv encoding (hummock) to cell_based row
 /// encoding.
 
+#[tokio::test]
+async fn test_state_table1() -> StorageResult<()> {
+    let state_store = MemoryStateStore::new();
+    let column_descs = vec![
+        ColumnDesc::unnamed(ColumnId::from(0), DataType::Int32),
+        //ColumnDesc::unnamed(ColumnId::from(0), DataType::Int16),
+        ColumnDesc::unnamed(ColumnId::from(1), DataType::Int32),
+        ColumnDesc::unnamed(ColumnId::from(2), DataType::Int32),
+    ];
+    //let order_types = vec![OrderType::Ascending];
+    let order_types = vec![OrderType::Descending];
+    let pk_index = vec![0_usize];
+    let mut state_table = StateTable::new(
+        state_store.clone(),
+        TableId::from(0x42),
+        column_descs,
+        order_types,
+        None,
+        pk_index,
+    );
+    let mut epoch: u64 = 0;
+    state_table
+        .insert(Row(vec![
+            Some(1_i32.into()),
+            //Some(1_i16.into()),
+            Some(11_i32.into()),
+            Some(111_i32.into()),
+        ]))
+        .unwrap();
+    state_table.commit(epoch).await.unwrap();
+        Ok(())
+}
 // test state table
 #[tokio::test]
 async fn test_state_table() -> StorageResult<()> {

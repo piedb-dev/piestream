@@ -187,6 +187,7 @@ impl LocalStreamManager {
     /// Use `epoch` to find collect rx. And wait for all actor to be collected before
     /// returning.
     pub async fn collect_barrier(&self, epoch: u64) -> CollectResult {
+        //找到epoch对应收集器rx
         let rx = {
             let core = self.core.lock();
             let mut barrier_manager = core.context.lock_barrier_manager();
@@ -241,6 +242,7 @@ impl LocalStreamManager {
 
     /// Force stop all actors on this worker.
     pub async fn stop_all_actors(&self, epoch: Epoch) -> Result<()> {
+        //获取同barrier相关的actor发送和接收列表
         let (actor_ids_to_send, actor_ids_to_collect) = {
             let core = self.core.lock();
             let actor_ids_to_send = core.context.lock_barrier_manager().all_senders();
@@ -250,14 +252,18 @@ impl LocalStreamManager {
         if actor_ids_to_send.is_empty() || actor_ids_to_collect.is_empty() {
             return Ok(());
         }
+        //构建一个stop barrier
         let barrier = &Barrier {
             epoch,
             mutation: Some(Arc::new(Mutation::Stop(actor_ids_to_collect.clone()))),
             span: tracing::Span::none(),
         };
 
+        //删除<barrier.epoch.prev的接收器
         self.drain_collect_rx(barrier.epoch.prev);
+        //发送stop消息
         self.send_barrier(barrier, actor_ids_to_send, actor_ids_to_collect)?;
+        //等待stop消息全部广播出去
         self.collect_barrier(barrier.epoch.prev).await;
         // Clear shared buffer in storage to release memory
         self.clear_storage_buffer().await;
@@ -312,6 +318,7 @@ impl LocalStreamManager {
     /// now.
     pub async fn build_actors(&self, actors: &[ActorId], env: StreamEnvironment) -> Result<()> {
         // Ensure compaction group mapping is available locally.
+        //rpc加载compaction信息
         dispatch_hummock_state_store!(self.state_store(), store, {
             store.update_compaction_group_cache().await?;
         });
@@ -337,6 +344,7 @@ impl LocalStreamManager {
 }
 
 fn update_upstreams(context: &SharedContext, ids: &[UpDownActorIds]) {
+    //给每个id构建消息通道
     ids.iter()
         .map(|id| {
             let (tx, rx) = channel(LOCAL_OUTPUT_CHANNEL_SIZE);
@@ -411,6 +419,7 @@ impl LocalStreamManagerCore {
         let mut dispatcher_impls = Vec::with_capacity(dispatchers.len());
 
         for dispatcher in dispatchers {
+            //获取到下游节点的输出对象列表，包含一个sender对象
             let outputs = dispatcher
                 .downstream_actor_id
                 .iter()
@@ -488,6 +497,7 @@ impl LocalStreamManagerCore {
         let op_info = node.get_identity().clone();
         // Create the input executor before creating itself
         // The node with no input must be a `MergeNode`
+        //迭代创建输入节点
         let input: Vec<_> = node
             .input
             .iter()
@@ -506,6 +516,7 @@ impl LocalStreamManagerCore {
             })
             .try_collect()?;
 
+        //主键列表
         let pk_indices = node
             .get_pk_indices()
             .iter()
@@ -514,6 +525,7 @@ impl LocalStreamManagerCore {
 
         // We assume that the operator_id of different instances from the same RelNode will be the
         // same.
+        // 生成唯一id
         let executor_id = unique_executor_id(actor_id, node.operator_id);
         let operator_id = unique_operator_id(fragment_id, node.operator_id);
 
@@ -530,7 +542,10 @@ impl LocalStreamManagerCore {
             vnode_bitmap,
         };
 
+        //创建执行器
         let executor = create_executor(executor_params, self, node, store)?;
+        //封装成debug执行器，
+        //TODO(liqiu) 是否对性能有影响
         let executor = Self::wrap_executor_for_debug(
             executor,
             actor_id,
@@ -596,10 +611,12 @@ impl LocalStreamManagerCore {
                     Ok(self.mock_source.1.take().unwrap())
                 } else {
                     let upstream_addr = self.get_actor_info(up_id)?.get_host()?.into();
+                    //判断上游和当前是否在同一个compute节点
                     if !is_local_address(&upstream_addr, &self.context.addr) {
                         // Get the sender for `RemoteInput` to forward received messages to
                         // receivers in `ReceiverExecutor` or
                         // `MergerExecutor`.
+                        //获取发送器
                         let sender = self.context.take_sender(&(*up_id, actor_id))?;
                         // spawn the `RemoteInput`
                         let up_id = *up_id;
@@ -642,6 +659,7 @@ impl LocalStreamManagerCore {
         Ok(rxs)
     }
 
+    //构建一个actor，等于启动一个fragment 
     fn build_actors(&mut self, actors: &[ActorId], env: StreamEnvironment) -> Result<()> {
         for actor_id in actors {
             let actor_id = *actor_id;
@@ -653,6 +671,7 @@ impl LocalStreamManagerCore {
                 .map(|b| b.try_into())
                 .transpose()?;
 
+            //创建执行器
             let executor = self.create_nodes(
                 actor.fragment_id,
                 actor_id,
@@ -662,7 +681,10 @@ impl LocalStreamManagerCore {
                 vnode_bitmap,
             )?;
 
+            //下发策略
             let dispatcher = self.create_dispatcher(executor, &actor.dispatcher, actor_id)?;
+            
+            //构建成一个StreamConsumer
             let actor = Actor::new(
                 dispatcher,
                 actor_id,
@@ -672,6 +694,7 @@ impl LocalStreamManagerCore {
             );
             let monitor = tokio_metrics::TaskMonitor::new();
 
+            //开始执行，执行的是一个fragment路径
             self.handles.insert(
                 actor_id,
                 tokio::spawn(monitor.instrument(async move {
@@ -682,6 +705,7 @@ impl LocalStreamManagerCore {
 
             let actor_id_str = actor_id.to_string();
 
+            //循环写各种指标
             let metrics = self.streaming_metrics.clone();
             let task = tokio::spawn(async move {
                 loop {
@@ -739,6 +763,7 @@ impl LocalStreamManagerCore {
     }
 
     pub fn take_all_handles(&mut self) -> Result<HashMap<ActorId, ActorHandle>> {
+        //返回self.handles ，请清空self.handles
         Ok(std::mem::take(&mut self.handles))
     }
 
@@ -762,6 +787,7 @@ impl LocalStreamManagerCore {
     ) -> Result<()> {
         for actor in req.get_info() {
             let ret = self.actor_infos.insert(actor.get_actor_id(), actor.clone());
+            //增加验证,当actor_id在actor_infos已经存在，actor需要完成等于对应的hashmap里的值
             if let Some(prev_actor) = ret && actor != &prev_actor{
                 return Err(ErrorCode::InternalError(format!(
                     "actor info mismatch when broadcasting {}",
@@ -788,13 +814,17 @@ impl LocalStreamManagerCore {
     /// `drop_all_actors` is invoked by meta node via RPC once the stop barrier arrives at all the
     /// sink. All the actors in the actors should stop themselves before this method is invoked.
     fn drop_all_actors(&mut self) {
+        //停掉所有handle
         for (actor_id, handle) in self.handles.drain() {
+            //retain函数条件为true，在对象里保留
             self.context.retain(|&(up_id, _)| up_id != actor_id);
             self.actor_monitor_tasks.remove(&actor_id).unwrap().abort();
             self.actors.remove(&actor_id);
             // Task should have already stopped when this method is invoked.
+            //任务还没完成会异常
             handle.abort();
         }
+        //清空
         self.actor_infos.clear();
     }
 
@@ -803,6 +833,7 @@ impl LocalStreamManagerCore {
         actors: &[stream_plan::StreamActor],
         hanging_channels: &[stream_service::HangingChannel],
     ) -> Result<()> {
+        //本地ids
         let local_actor_ids: HashSet<ActorId> = HashSet::from_iter(
             actors
                 .iter()
@@ -811,8 +842,10 @@ impl LocalStreamManagerCore {
                 .into_iter(),
         );
 
+        //更新到本地类对象存储
         for actor in actors {
             let ret = self.actors.insert(actor.get_actor_id(), actor.clone());
+            //actor存在重复
             if ret.is_some() {
                 return Err(ErrorCode::InternalError(format!(
                     "duplicated actor {}",
@@ -822,24 +855,29 @@ impl LocalStreamManagerCore {
             }
         }
 
+        //构造本地上下游消息通道
         for actor in actors {
             // At this time, the graph might not be complete, so we do not check if downstream
             // has `current_id` as upstream.
+            //构建列表 vec![(current_id, down_id0),(current_id, down_id1), ...]
             let down_id = actor
                 .dispatcher
                 .iter()
                 .flat_map(|x| x.downstream_actor_id.iter())
                 .map(|id| (actor.actor_id, *id))
                 .collect_vec();
+            //增加消息通道
             update_upstreams(&self.context, &down_id);
 
             // Add remote input channels.
             let mut up_id = vec![];
             for upstream_id in actor.get_upstream_actor_id() {
+                //不在local列表，
                 if !local_actor_ids.contains(upstream_id) {
                     up_id.push((*upstream_id, actor.actor_id));
                 }
             }
+            //增加消息通道
             update_upstreams(&self.context, &up_id);
         }
 

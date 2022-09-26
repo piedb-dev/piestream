@@ -53,8 +53,8 @@ impl Default for MemoryStateStore {
 
 fn to_bytes_range<R, B>(range: R) -> (Bound<KeyWithEpoch>, Bound<KeyWithEpoch>)
 where
-    R: RangeBounds<B> + Send,
-    B: AsRef<[u8]>,
+    R: RangeBounds<B> + Send ,
+    B: AsRef<[u8]> ,
 {
     let start = match range.start_bound() {
         Included(k) => Included((Bytes::copy_from_slice(k.as_ref()), Reverse(u64::MAX))),
@@ -66,7 +66,7 @@ where
         Excluded(k) => Excluded((Bytes::copy_from_slice(k.as_ref()), Reverse(u64::MAX))),
         Unbounded => Unbounded,
     };
-    //println!("start={:?} end={:?}", start, end);
+    println!("to_bytes_range start={:?} end={:?}", start, end);
     (start, end)
 }
 
@@ -193,6 +193,7 @@ impl StateStore for MemoryStateStore {
                 //println!("key={:?} value={:?}", key, value);
                 size += key.len() + value.size();
                 //key带上epoch ,按照epoch降序排列 
+                println!("ingest_batch key={:?} epoch={:?}", key ,epoch);
                 inner.insert((key, Reverse(epoch)), value.user_value);
             }
             //println!("ingest_batch={:?}", inner);

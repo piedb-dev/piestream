@@ -28,10 +28,12 @@ pub async fn epoch_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
 
     #[for_await]
     for message in input {
+        //println!("************");
         let message = message?;
 
         if let Message::Barrier(b) = &message {
             let new_epoch = b.epoch.curr;
+            //new_epoch必须大于等于last_epoch
             let stale = last_epoch
                 .map(|last_epoch| last_epoch > new_epoch)
                 .unwrap_or(false);
@@ -126,7 +128,6 @@ mod tests {
         source = source.stop_on_finish(false);
         let checked = epoch_check(source.info().into(), source.boxed().execute());
         pin_mut!(checked);
-
         assert!(checked.next().await.transpose().unwrap().is_none());
     }
 }

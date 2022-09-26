@@ -45,6 +45,7 @@ impl StreamService for StreamServiceImpl {
         request: Request<UpdateActorsRequest>,
     ) -> std::result::Result<Response<UpdateActorsResponse>, Status> {
         let req = request.into_inner();
+        //构建actor上下游拓普关系
         let res = self.mgr.update_actors(&req.actors, &req.hanging_channels);
         match res {
             Err(e) => {
@@ -85,7 +86,7 @@ impl StreamService for StreamServiceImpl {
         request: Request<BroadcastActorInfoTableRequest>,
     ) -> std::result::Result<Response<BroadcastActorInfoTableResponse>, Status> {
         let table = request.into_inner();
-
+        //更新actor地址信息
         let res = self.mgr.update_actor_info(table);
         match res {
             Err(e) => {
@@ -105,6 +106,7 @@ impl StreamService for StreamServiceImpl {
     ) -> std::result::Result<Response<DropActorsResponse>, Status> {
         let req = request.into_inner();
         let actors = req.actor_ids;
+        //删除actor列表
         self.mgr.drop_actor(&actors)?;
         Ok(Response::new(DropActorsResponse {
             request_id: req.request_id,
@@ -119,6 +121,7 @@ impl StreamService for StreamServiceImpl {
     ) -> std::result::Result<Response<ForceStopActorsResponse>, Status> {
         let req = request.into_inner();
         let epoch = req.epoch.unwrap();
+        //停止所有actor
         self.mgr
             .stop_all_actors(Epoch {
                 curr: epoch.curr,
@@ -140,6 +143,7 @@ impl StreamService for StreamServiceImpl {
         let barrier =
             Barrier::from_protobuf(req.get_barrier().map_err(tonic_err)?).map_err(tonic_err)?;
 
+        //注入消息
         self.mgr
             .send_barrier(&barrier, req.actor_ids_to_send, req.actor_ids_to_collect)?;
 
@@ -158,6 +162,7 @@ impl StreamService for StreamServiceImpl {
         let collect_result = self.mgr.collect_barrier(req.prev_epoch).await;
         // Must finish syncing data written in the epoch before respond back to ensure persistency
         // of the state.
+        //barrier完成前相关数据持久划
         let synced_sstables = self.mgr.sync_epoch(req.prev_epoch).await;
 
         Ok(Response::new(BarrierCompleteResponse {

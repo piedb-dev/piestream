@@ -161,6 +161,7 @@ impl SourceReader {
                 pin_mut!(chunk_future);
                 pin_mut!(abort_future);
 
+                //一个任务返回即返回
                 match futures::future::select(chunk_future, abort_future).await {
                     futures::future::Either::Left((chunk, _)) => {
                         chunk_result = Some(chunk);
@@ -183,6 +184,7 @@ impl SourceReader {
                     Ok(c) => yield c,
                     Err(e) => {
                         error!("hang up stream reader due to polling error: {}", e);
+                        //等价c++ go to命令
                         break 'outer;
                     }
                 }
@@ -196,6 +198,7 @@ impl SourceReader {
     async fn barrier_receiver(mut rx: UnboundedReceiver<Barrier>, notifier: Arc<Notify>) {
         while let Some(barrier) = rx.recv().await {
             yield Message::Barrier(barrier);
+            //发送通知
             notifier.notify_one();
         }
         return Err(internal_error(
@@ -209,13 +212,16 @@ impl SourceReader {
     ) -> impl Stream<Item = Either<Result<Message>, Result<StreamChunkWithState>>> {
         let notifier = Arc::new(Notify::new());
 
+        //构建接收barrier stream对象
         let barrier_receiver = Self::barrier_receiver(self.barrier_receiver, notifier.clone());
+        //构建读取流对像
         let stream_reader = Self::stream_reader(
             self.stream_reader,
             notifier,
             self.expected_barrier_latency_ms,
             abort_notifier,
         );
+        //数据流与barrier汇合，PollNext::Left 优先遍历left数据，即barrier
         select_with_strategy(
             barrier_receiver.map(Either::Left),
             stream_reader.map(Either::Right),
@@ -296,6 +302,7 @@ impl<S: StateStore> SourceExecutor<S> {
         let barrier = barrier_receiver.recv().await.unwrap();
 
         if let Some(mutation) = barrier.mutation.as_ref() {
+            //通过actor_id获取到splits
             if let Mutation::AddOutput(add_output) = mutation.as_ref() {
                 if let Some(splits) = add_output.splits.get(&self.actor_id) {
                     self.stream_source_splits = splits.clone();
@@ -313,6 +320,7 @@ impl<S: StateStore> SourceExecutor<S> {
                     .try_recover_from_state_store(ele, epoch)
                     .await
                 {
+                    //TODO(liqiu),从持久化里恢复，同barrier传有啥不一样？？？
                     Ok(recover_state) if recover_state.is_some() => {
                         *ele = recover_state.unwrap();
                     }

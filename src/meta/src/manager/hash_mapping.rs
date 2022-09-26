@@ -150,6 +150,7 @@ impl HashMappingManagerCore {
         let mut one_more_count = VIRTUAL_NODE_COUNT % parallel_units.len();
         let mut init_bound = 0;
 
+        //计算出每个parallel对应的vnode数量
         parallel_units.iter().for_each(|parallel_unit| {
             let vnode_count = if one_more_count > 0 {
                 one_more_count -= 1;
@@ -175,7 +176,7 @@ impl HashMappingManagerCore {
                 .or_default()
                 .push(*parallel_unit_id);
         });
-
+        println!("owner_mapping={:?}",owner_mapping.clone());
         let mapping_info = HashMappingInfo {
             vnode_mapping: vnode_mapping.clone(),
             owner_mapping,
@@ -183,7 +184,8 @@ impl HashMappingManagerCore {
         };
 
         self.hash_mapping_infos.insert(fragment_id, mapping_info);
-
+        println!("vnode_mapping={:?}",vnode_mapping.clone());
+        
         vnode_mapping
     }
 

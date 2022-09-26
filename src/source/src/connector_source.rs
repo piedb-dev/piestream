@@ -177,6 +177,7 @@ impl SourceChunkBuilder for ConnectorSourceReader {}
 #[async_trait]
 impl StreamSourceReader for ConnectorSourceReader {
     async fn next(&mut self) -> Result<StreamChunkWithState> {
+        //获取到kafka等过来的数据
         let batch = self.message_rx.recv().await.unwrap();
 
         let batch = match batch {
@@ -189,9 +190,11 @@ impl StreamSourceReader for ConnectorSourceReader {
 
         for msg in batch {
             if let Some(content) = msg.payload {
+                //存储split_id->offset映射
                 *split_offset_mapping
                     .entry(msg.split_id.clone())
                     .or_insert_with(|| "".to_string()) = msg.offset.to_string();
+                //解析
                 events.push(self.parser.parse(content.as_ref(), &self.columns)?);
             }
         }
@@ -224,6 +227,7 @@ impl Drop for ConnectorSourceReader {
 }
 
 impl ConnectorSourceReader {
+    //增加split
     pub async fn add_split(&mut self, split: ConnectorState) -> Result<()> {
         if let Some(append_splits) = split {
             for split in append_splits {
@@ -311,6 +315,7 @@ impl ConnectorSource {
             1
         });
         let config = self.config.clone();
+        //用户定义column_ids获取SourceColumDesc
         let columns = self.get_target_columns(column_ids)?;
         let source_metrics = metrics.clone();
 

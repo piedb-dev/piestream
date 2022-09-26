@@ -99,6 +99,7 @@ impl OrderedRowSerializer {
         //zip_eq需要保证左右两边数组记录条数一样  (pk字段值， order类型)
         for (datum, order_type) in datums.zip_eq(self.order_types.iter()) {
             let mut serializer = memcomparable::Serializer::new(vec![]);
+            //设置order模式
             serializer.set_reverse(*order_type == OrderType::Descending);
             serialize_datum_into(datum, &mut serializer).unwrap();
             append_to.extend(serializer.into_inner());
@@ -236,10 +237,10 @@ pub fn serialize_pk(pk: &Row, serializer: &OrderedRowSerializer) -> Vec<u8> {
     result
 }
 
-
+//column_id=0 return[128, 0, 0, 0]
 pub fn serialize_column_id(column_id: &ColumnId) -> [u8; 4] {
     let id = column_id.get_id();
-    //为了省空间做了异或
+    //异或
     (id as u32 ^ (1 << 31)).to_be_bytes()
 }
 

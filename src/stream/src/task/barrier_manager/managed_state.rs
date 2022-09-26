@@ -28,6 +28,7 @@ use crate::task::ActorId;
 enum ManagedBarrierStateInner {
     /// Barriers from some actors have been collected and stashed, however no `send_barrier`
     /// request from the meta service is issued.
+    /// Barriers被收集和隐藏，但meta service没有‘send_barrier’请求，即不会对外发布
     Stashed {
         /// Actor ids we've collected and stashed.
         collected_actors: HashSet<ActorId>,
@@ -72,7 +73,7 @@ impl ManagedBarrierState {
         };
 
         if to_notify {
-            println!("444444444444444**************");
+            //println!("444444444444444**************create_mview_progress.len={:?}", self.create_mview_progress.len());
             let inner = self.epoch_barrier_state_map.remove(&curr_epoch).unwrap();
 
             //构建create_mview_progress列表
@@ -95,6 +96,7 @@ impl ManagedBarrierState {
                 })
                 .collect();
 
+            //println!("create_mview_progress={:?}", create_mview_progress);
             match inner {
                 ManagedBarrierStateInner::Issued {
                     collect_notifier, ..
@@ -131,7 +133,7 @@ impl ManagedBarrierState {
                 //增加
                 let new = collected_actors.insert(actor_id);
                 assert!(new);
-                println!("222111111111111111111");
+                //println!("222111111111111111111");
             }
             Some(ManagedBarrierStateInner::Issued {
                 remaining_actors, ..
@@ -141,10 +143,10 @@ impl ManagedBarrierState {
                 assert!(exist);
                 //发送消息
                 self.may_notify(barrier.epoch.curr);
-                println!("333333222111111111111111111");
+                //println!("333333222111111111111111111");
             }
             None => {
-                println!("111111111111111111");
+                //println!("111111111111111111");
                 //没有就插入
                 self.epoch_barrier_state_map.insert(
                     barrier.epoch.curr,
@@ -167,8 +169,9 @@ impl ManagedBarrierState {
         //转换为Issued状态
         let inner = match self.epoch_barrier_state_map.get(&barrier.epoch.curr) {
             Some(ManagedBarrierStateInner::Stashed { collected_actors }) => {
-                //actor_ids_to_collect减去collected_actors,
-                //collected_actors是直接抛弃
+                ///TOTO(liqiu):逻辑有些不理解
+                ///actor_ids_to_collect减去collected_actors
+                ///即在actor_ids_to_collect列表不在collected_actors数据转ManagedBarrierStateInner::Issued状态
                 let remaining_actors = actor_ids_to_collect
                     .into_iter()
                     .filter(|a| !collected_actors.contains(a))

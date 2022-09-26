@@ -128,6 +128,7 @@ impl<S: StateStore> MaterializeExecutor<S> {
                 Message::Chunk(chunk) => {
                     for (idx, op) in chunk.ops().iter().enumerate() {
                         // check visibility
+                        //检测是否可见
                         let visible = chunk
                             .visibility()
                             .as_ref()
@@ -140,6 +141,7 @@ impl<S: StateStore> MaterializeExecutor<S> {
                         // assemble pk row
 
                         // assemble row
+                        //获取index信息
                         let row = Row(chunk
                             .columns()
                             .iter()
@@ -158,6 +160,7 @@ impl<S: StateStore> MaterializeExecutor<S> {
 
                     Message::Chunk(chunk)
                 }
+                //收到barrier进行提交
                 Message::Barrier(b) => {
                     // FIXME(ZBW): use a better error type
                     self.state_table.commit(b.epoch.prev).await?;

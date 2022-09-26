@@ -86,6 +86,7 @@ impl InsertExecutor {
             assert!(data_chunk.visibility().is_none());
 
             // add row-id column as first column
+            //自动生成一批row_id
             let row_ids = source_desc.next_row_id_batch(len);
             let mut builder = I64ArrayBuilder::new(len);
             row_ids
@@ -100,6 +101,7 @@ impl InsertExecutor {
             let columns = rowid_column.chain(child_columns).collect();
             let chunk = StreamChunk::new(vec![Op::Insert; len], columns, None);
 
+            //并没有持久化存储，只是构建了流数据传递通道
             let notifier = source.write_chunk(chunk)?;
             notifiers.push(notifier);
         }

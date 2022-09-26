@@ -50,10 +50,7 @@ impl<S: StateStore> SourceStateHandler<S> {
         Self { keyspace }
     }
 
-    /// This function provides the ability to persist the source state
-    /// and needs to be invoked by the ``SourceReader`` to call it,
-    /// and will return the error when the dependent ``StateStore`` handles the error.
-    /// The caller should ensure that the passed parameters are not empty.
+ 
     pub async fn take_snapshot<SS>(&self, states: Vec<SS>, epoch: u64) -> Result<()>
     where
         SS: SplitMetaData,
@@ -62,11 +59,14 @@ impl<S: StateStore> SourceStateHandler<S> {
             // TODO should be a clear Error Code
             Err(anyhow!("states require not null"))
         } else {
+            //批量写入口
             let mut write_batch = self.keyspace.state_store().start_write_batch(WriteOptions {
                 epoch,
                 table_id: self.keyspace.table_id(),
             });
+            //获取到批量写空间
             let mut local_batch = write_batch.prefixify(&self.keyspace);
+            //迭代写实现SplitMetaData的数据来源对象
             states.iter().for_each(|state| {
                 let value = state.encode_to_bytes();
                 // TODO(Yuanxin): Implement value meta
@@ -108,6 +108,7 @@ impl<S: StateStore> SourceStateHandler<S> {
         epoch: u64,
     ) -> RwResult<Option<SplitImpl>> {
         // let connector_type = stream_source_split.get_type();
+        //id获取到持久化的split对象
         match self.restore_states(stream_source_split.id(), epoch).await {
             Ok(Some(s)) => Ok(Some(
                 SplitImpl::restore_from_bytes(&s).map_err(|e| internal_error(e.to_string()))?,
@@ -186,8 +187,10 @@ mod tests {
         state_handler: SourceStateHandler<MemoryStateStore>,
         current_epoch: u64,
     ) -> (Vec<TestSourceState>, Result<()>) {
+
         let states = test_state_store_vec();
         println!("Vec<TestSourceStat>={:?}", states.clone());
+        //持久化SourceState
         let rs = state_handler
             .take_snapshot(states.clone(), current_epoch)
             .await;
@@ -196,6 +199,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_take_snapshot() {
+        use std::borrow::Borrow;
+
         let current_epoch = 1000;
         let state_store_handler = SourceStateHandler::new(new_test_keyspace());
         let _rs = take_snapshot_and_get_states(state_store_handler.clone(), current_epoch).await;
@@ -204,6 +209,11 @@ mod tests {
             .scan(None, current_epoch)
             .await
             .unwrap();
+        println!("stored_states.len={:?}", stored_states.len());
+        for (key, value) in stored_states.clone(){
+            println!("key={:?}", String::from_utf8_lossy(key.borrow()));
+            println!("value={:?}", TestSourceState::restore_from_bytes(&value));
+        }
         assert_ne!(0, stored_states.len());
     }
 

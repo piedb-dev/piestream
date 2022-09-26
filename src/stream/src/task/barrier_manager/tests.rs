@@ -23,7 +23,9 @@ use super::*;
 async fn test_managed_barrier_collection() -> Result<()> {
     let mut manager = LocalBarrierManager::new();
     assert!(!manager.is_local_mode());
+    println!("!manager.is_local_mode()={:?}", !manager.is_local_mode());
 
+    //注册actor->sender,返回actor_id->receiver
     let register_sender = |actor_id: u32| {
         let (barrier_tx, barrier_rx) = unbounded_channel();
         manager.register_sender(actor_id, barrier_tx);
@@ -41,13 +43,18 @@ async fn test_managed_barrier_collection() -> Result<()> {
 
     // Send a barrier to all actors
     let epoch = 114514;
+
+    //构建barrier
     let barrier = Barrier::new_test_barrier(epoch);
+
+    //发送barrier,输入两个参数一个是发送actor_id列表，一个是接收actor_id列表
     manager
         .send_barrier(&barrier, actor_ids.clone(), actor_ids)
         .unwrap();
+    //拿到一个collect_rx
     let mut collect_rx = manager.remove_collect_rx(barrier.epoch.prev);
 
-    // Collect barriers from actors
+    // Collect barriers from actors,接收到send_barrier函数发送的barrier
     let collected_barriers = rxs
         .iter_mut()
         .map(|(actor_id, rx)| {
@@ -62,6 +69,7 @@ async fn test_managed_barrier_collection() -> Result<()> {
     for (i, (actor_id, barrier)) in collected_barriers.into_iter().enumerate() {
         manager.collect(actor_id, &barrier).unwrap();
         let notified = collect_rx.try_recv().is_ok();
+        println!("notified={:?}", notified);
         assert_eq!(notified, i == count - 1);
     }
 
@@ -90,6 +98,7 @@ async fn test_managed_barrier_collection_before_send_request() -> Result<()> {
     println!("actor_ids_to_collect={:?} actor_ids_to_send={:?}", actor_ids_to_collect, actor_ids_to_send);
     // Register actors
     let count = actor_ids_to_send.len();
+    //注册三个actor_id
     let mut rxs = actor_ids_to_send
         .clone()
         .into_iter()
@@ -100,7 +109,8 @@ async fn test_managed_barrier_collection_before_send_request() -> Result<()> {
     let epoch = 114514;
     let barrier = Barrier::new_test_barrier(epoch);
 
-    // Collect a barrer before sending
+    // Collect a barrer before sending 
+    // 发送前就已经接收到barrier,send_barrier函数处理会忽略该actor_id
     manager.collect(extra_actor_id, &barrier).unwrap();
 
     // Send the barrier to all actors

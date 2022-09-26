@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use crate::base::SplitMetaData;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Hash)]
+
+//topic下有多个partition,一个partition生成一个KafkaSplit对象
 pub struct KafkaSplit {
     pub(crate) topic: String,
     pub(crate) partition: i32,
@@ -55,6 +57,7 @@ impl KafkaSplit {
         }
     }
 
+    //重置start_offset构造新对象
     pub fn copy_with_offset(&self, start_offset: String) -> Self {
         Self::new(
             self.partition,

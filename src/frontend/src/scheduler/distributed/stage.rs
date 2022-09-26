@@ -304,6 +304,7 @@ impl StageRunner {
     async fn schedule_tasks(&self) -> SchedulerResult<()> {
         let mut futures = vec![];
 
+        //需要扫表的任务
         if let Some(table_scan_info) = self.stage.table_scan_info.as_ref() 
                         && let Some(vnode_bitmaps) = table_scan_info.vnode_bitmaps.as_ref() {
             // If the stage has table scan nodes, we create tasks according to the data distribution

@@ -93,7 +93,7 @@ impl BitmapBuilder {
             }
             _ => {}
         }
-        println!("self.data={:?} self.head={:?}", self.data,self.head );
+        //println!("self.data={:?} self.head={:?}", self.data,self.head );
     }
 
     pub fn append(&mut self, bit_set: bool) -> &mut Self {

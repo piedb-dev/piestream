@@ -140,7 +140,7 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
             Some(row_op) => match row_op {
                 RowOp::Insert(row) => Ok(Some(Cow::Borrowed(row))),
                 RowOp::Delete(_) => Ok(None),
-                RowOp::Update((_, row)) => Ok(Some(Cow::Borrowed(row))),
+                RowOp::Update((_, row)) => Ok(Some(Cow::Borrowed(row))),//返回最新行
             },
             //状态表中没查询到，在查存储表
             None => Ok(self.storage_table.get_row(pk, epoch).await?.map(Cow::Owned)),
@@ -168,8 +168,8 @@ impl<S: StateStore, E: Encoding> StateTableBase<S, E> {
         Ok(())
     }
 
-    /// Insert a row into state table. Must provide a full row of old value corresponding to the
-    /// column desc of the table.
+    /// Isert a row into state table. Must provide a full row of old value corresponding to the
+    /// column desc of the table.n
     pub fn delete(&mut self, old_value: Row) -> StorageResult<()> {
         let mut datums = vec![];
         for pk_index in self.pk_indices() {

@@ -78,6 +78,7 @@ where
                     Some(new_chunk) => yield Message::Chunk(new_chunk),
                     None => continue,
                 },
+                //其他类型走下面路径
                 m => yield m,
             }
         }

@@ -35,7 +35,7 @@ impl<S: Stream + Unpin> Stream for MergeStream<S> {
     type Item = S::Item;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        println!("poll_next**************************************");
+        //println!("poll_next**************************************");
         let mut poll_count = 0;
         while poll_count < self.sources.len() {
             let idx = (poll_count + self.last_base) % self.sources.len();

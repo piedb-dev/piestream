@@ -70,6 +70,7 @@ impl LimitExecutor {
 
         #[for_await]
         for data_chunk in self.child.execute() {
+            println!("**************data_chunk={:?}", data_chunk);
             if returned == self.limit {
                 break;
             }
@@ -80,6 +81,7 @@ impl LimitExecutor {
                 continue;
             }
 
+            //skipped 正好等于 self.offset 
             if skipped == self.offset && cardinality + returned <= self.limit {
                 returned += cardinality;
                 yield data_chunk;
@@ -108,6 +110,7 @@ impl LimitExecutor {
                 returned += r - l;
                 skipped += l;
             }
+            //转compact了
             yield data_chunk
                 .with_visibility(new_vis.into_iter().collect())
                 .compact()?;
@@ -143,7 +146,7 @@ mod tests {
     use super::*;
     use crate::executor::test_utils::MockExecutor;
 
-    fn create_column(vec: &[Option<i32>]) -> Result<Column> {
+    fn create_column(vec: &[Option<i32>]) -> Result<Column> {        
         let array = PrimitiveArray::from_slice(vec).map(|x| Arc::new(x.into()))?;
         Ok(Column::new(array))
     }
@@ -162,6 +165,7 @@ mod tests {
                 .as_slice(),
         )
         .unwrap();
+        println!("col={:?}", col);
         let schema = Schema {
             fields: vec![Field::unnamed(DataType::Int32)],
         };
@@ -186,6 +190,7 @@ mod tests {
         #[for_await]
         for chunk in stream {
             let chunk = chunk.unwrap();
+            println!("chunk={:?}",chunk);
             results.push(chunk);
         }
         let chunks =
@@ -353,9 +358,9 @@ mod tests {
     #[tokio::test]
     async fn test_limit_executor() {
         test_limit_all_visible(18, 18, 11, 0).await;
-        test_limit_all_visible(18, 3, 9, 0).await;
-        test_limit_all_visible(18, 3, 10, 0).await;
-        test_limit_all_visible(18, 3, 11, 0).await;
+        //test_limit_all_visible(18, 3, 9, 0).await;
+        //test_limit_all_visible(18, 3, 10, 0).await;
+        //test_limit_all_visible(18, 3, 11, 0).await;
     }
 
     #[tokio::test]

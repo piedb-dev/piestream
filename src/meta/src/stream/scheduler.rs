@@ -166,9 +166,11 @@ where
             //same_worker_node_as_upstrea在delta节点里赋值，后续还需要研究
             if actor.same_worker_node_as_upstream && !actor.upstream_actor_id.is_empty() {
                 // Schedule the fragment to the same parallel unit as upstream.
+                //需要将fragment调度到与上游相同的parallel unit
                 let parallel_unit = locations.schedule_colocate_with(&actor.upstream_actor_id)?;
 
                 // Build vnode mapping.
+                // parallel_unit->VIRTUAL_NODE_COUNT个vnode节点
                 self.set_fragment_vnode_mapping(fragment, &[parallel_unit.clone()])?;
 
                 // Record actor locations.
@@ -176,11 +178,15 @@ where
                     .actor_locations
                     .insert(fragment.actors[0].actor_id, parallel_unit);
             } else {
+                
                 // Choose one parallel unit to schedule from single parallel units.
+                // 获取所有节点的single类型ParallelUnit列表
                 let single_parallel_units = self
                     .cluster_manager
                     .list_parallel_units(Some(ParallelUnitType::Single))
                     .await;
+                println!("single parallel_units.len={:?}", single_parallel_units.len());
+                //轮询single_parallel_units列表，获取parallel_unit
                 let single_idx = self
                     .single_rr
                     .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |idx| {
@@ -208,6 +214,7 @@ where
                 .cluster_manager
                 .list_parallel_units(Some(ParallelUnitType::Hash))
                 .await;
+            println!("hash parallel_units.len={:?} fragment.actors.len={:?}", parallel_units.len(), fragment.actors.len());
             // FIXME(Kexiang): select appropriate parallel_units, currently only support
             // `parallel_degree < parallel_units.size()`
             parallel_units.truncate(fragment.actors.len());
@@ -216,12 +223,14 @@ where
             self.set_fragment_vnode_mapping(fragment, &parallel_units)?;
 
             // Find out the vnodes that a parallel unit owns.
+            // 获取fragment对应vnode_mapping
             let vnode_mapping = self
                 .hash_mapping_manager
                 .get_fragment_hash_mapping(&fragment.fragment_id)
                 .unwrap();
 
             let mut vnode_bitmaps = HashMap::new();
+            //parallel_unit->BitmapBuilder
             vnode_mapping
                 .iter()
                 .enumerate()
@@ -231,6 +240,7 @@ where
                         .or_insert_with(|| BitmapBuilder::zeroed(VIRTUAL_NODE_COUNT))
                         .set(vnode, true);
                 });
+             //parallel_unit->Bitmap
             let vnode_bitmaps = vnode_bitmaps
                 .into_iter()
                 .map(|(u, b)| (u, b.finish()))
@@ -239,6 +249,7 @@ where
             // Record actor locations and set vnodes into the actors.
             for (idx, actor) in fragment.actors.iter_mut().enumerate() {
                 if actor.same_worker_node_as_upstream && !actor.upstream_actor_id.is_empty() {
+                    //上下游需要parallel_unit一致
                     let parallel_unit =
                         locations.schedule_colocate_with(&actor.upstream_actor_id)?;
                     actor.vnode_bitmap =
@@ -247,6 +258,7 @@ where
                         .actor_locations
                         .insert(actor.actor_id, parallel_unit);
                 } else {
+                    //轮巡
                     actor.vnode_bitmap = Some(
                         vnode_bitmaps
                             .get(&parallel_units[idx % parallel_units.len()].id)
@@ -320,6 +332,7 @@ mod test {
         let cluster_manager =
             Arc::new(ClusterManager::new(env.clone(), Duration::from_secs(3600)).await?);
 
+        //生成4个compute节点
         let node_count = 4;
         for i in 0..node_count {
             let host = HostAddress {
@@ -336,6 +349,7 @@ mod test {
         let mut locations = ScheduledLocations::new();
 
         let mut actor_id = 1u32;
+        //构建了6个Fragment
         let mut single_fragments = (1..6u32)
             .map(|id| {
                 let fragment = Fragment {
@@ -363,6 +377,7 @@ mod test {
             })
             .collect_vec();
 
+        println!("actor_id={:?}", actor_id);
         let parallel_degree = DEFAULT_WORK_NODE_PARALLEL_DEGREE - 1;
         let mut normal_fragments = (6..8u32)
             .map(|fragment_id| {
@@ -387,6 +402,7 @@ mod test {
                     })
                     .collect_vec();
                 actor_id += node_count * 7;
+                println!("actor_id={:?}", actor_id);
                 Fragment {
                     fragment_id,
                     fragment_type: 0,

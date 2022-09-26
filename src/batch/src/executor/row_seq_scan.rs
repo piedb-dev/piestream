@@ -148,19 +148,36 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         let table_id = TableId {
             table_id: table_desc.table_id,
         };
-        //获取到字段信息
+        /*
+            { table_desc: Some(CellBasedTableDesc { table_id: 1002, columns: [ColumnDesc { column_type: Some(DataType { 
+                type_name: Int64, precision: 0, scale: 0, is_nullable: true, interval_type: Invalid, field_type: [] }), 
+                column_id: 0, name: "_row_id", field_descs: [], type_name: "" }, ColumnDesc { column_type: Some(DataType { 
+                type_name: Int32, precision: 0, scale: 0, is_nullable: true, interval_type: Invalid, field_type: [] }), 
+                column_id: 1, name: "v1", field_descs: [], type_name: "" }, ColumnDesc { column_type: Some(DataType { 
+                type_name: Int32, precision: 0, scale: 0, is_nullable: true, interval_type: Invalid, field_type: [] }), 
+                column_id: 2, name: "v2", field_descs: [], type_name: "" }, ColumnDesc { column_type: Some(DataType { 
+                type_name: Int32, precision: 0, scale: 0, is_nullable: true, interval_type: Invalid, field_type: [] }), 
+                column_id: 3, name: "v3", field_descs: [], type_name: "" }], order_key: [OrderedColumnDesc { column_desc:
+                Some(ColumnDesc { column_type: Some(DataType { type_name: Int64, precision: 0, scale: 0, is_nullable: true, 
+                interval_type: Invalid, field_type: [] }), column_id: 0, name: "_row_id", field_descs: [], type_name: "" }), 
+                order: Ascending }], pk_indices: [0], dist_key_indices: [0] }), column_ids: [1, 2, 3], scan_range: Some(ScanRange { 
+                eq_conds: [], lower_bound: Some(Bound { value: [0, 0, 0, 0, 0, 0, 0, 1], inclusive: false }), upper_bound: None }), vnode_bitmap: None }
+         */
+        println!("*************seq_scan_node={:?}", seq_scan_node);
+        //获取到表字段信息，里面包含“_row_id”字段
         let column_descs = table_desc
             .columns
             .iter()
             .map(ColumnDesc::from)
             .collect_vec();
-        //字段号
+        //字段号，不包含隐含字段
         let column_ids = seq_scan_node
             .column_ids
             .iter()
             .copied()
             .map(ColumnId::from)
             .collect();
+        println!("*************column_ids={:?}", column_ids);
         //排序字段信息
         let pk_descs: Vec<OrderedColumnDesc> =
             table_desc.order_key.iter().map(|d| d.into()).collect();
@@ -175,14 +192,14 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 .map(|desc| desc.column_desc.data_type.clone()),
         );
 
-        //pk
+        //pk字段默认"_row_id""
         let pk_indices = table_desc
             .pk_indices
             .iter()
             .map(|&k| k as usize)
             .collect_vec();
 
-        //分区key
+        //分区key 默认 “_row_id”
         let dist_key_indices = table_desc
             .dist_key_indices
             .iter()
@@ -213,6 +230,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 distribution,
             );
             
+            //获取到查询表信息
             let keyspace = Keyspace::table_root(state_store.clone(), &table_id);
             //扫表类型
             let scan_type = if pk_prefix_value.size() == 0 && is_full_range(&next_col_bounds) {

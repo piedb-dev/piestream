@@ -51,7 +51,9 @@ impl SplitReader for KafkaSplitReader {
 
         let mut config = ClientConfig::new();
 
-        // disable partition eof
+        // disable partition eof 到达分区末尾时发出EOF事件
+        //enable.auto.commit 设置为false原因 https://blog.csdn.net/lovedingd/article/details/123076583
+        //auto.offset.reset 当offset没有设置时自动设置为最小 https://blog.csdn.net/luoww1/article/details/52023967
         config.set("enable.partition.eof", "false");
         config.set("enable.auto.commit", "false");
         config.set("auto.offset.reset", "smallest");
@@ -70,6 +72,7 @@ impl SplitReader for KafkaSplitReader {
             );
         }
 
+        //设置日志级别，构建消费者
         let consumer: StreamConsumer = config
             .set_log_level(RDKafkaLogLevel::Info)
             .create_with_context(DefaultConsumerContext)
@@ -93,16 +96,18 @@ impl SplitReader for KafkaSplitReader {
                     }
                 }
             }
-
+            //设置topic,partition,offset信息 
             consumer.assign(&tpl).map_err(|e| anyhow!(e.to_string()))?;
         }
 
+        //用一个消费者构建读对象
         Ok(Self {
             consumer: Arc::new(consumer),
             assigned_splits: HashMap::new(),
         })
     }
 
+    //用消息流方式读取数据，并转换为SourceMessage
     async fn next(&mut self) -> Result<Option<Vec<SourceMessage>>> {
         let mut stream = self
             .consumer

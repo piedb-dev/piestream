@@ -177,6 +177,7 @@ pub fn new_output(
     down_id: ActorId,
     metrics: Arc<StreamingMetrics>,
 ) -> Result<Box<dyn Output>> {
+    //获取到发送器
     let tx = context.take_sender(&(actor_id, down_id))?;
     if is_local_address(&addr, &context.addr) {
         // if this is a local downstream actor

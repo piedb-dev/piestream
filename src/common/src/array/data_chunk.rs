@@ -234,10 +234,12 @@ impl DataChunk {
 
     /// `compact` will convert the chunk to compact format.
     /// Compact format means that `visibility == None`.
+    /// 转成了commpact格式
     pub fn compact(self) -> ArrayResult<Self> {
         match &self.vis2 {
             Vis::Compact(_) => Ok(self),
             Vis::Bitmap(visibility) => {
+                //求和
                 let cardinality = visibility
                     .iter()
                     .fold(0, |vis_cnt, vis| vis_cnt + vis as usize);

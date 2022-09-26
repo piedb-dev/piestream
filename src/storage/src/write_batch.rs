@@ -90,6 +90,7 @@ where
 
     /// Ingests this batch into the associated state store.
     pub async fn ingest(mut self) -> StorageResult<()> {
+        //按key进行了排序
         self.preprocess()?;
         //存储
         self.store
@@ -113,7 +114,7 @@ where
         使用给定的 `prefix` 创建一个 [`KeySpaceWriteBatch`]当正在写时会自动给key增加前缀。
      */
     pub fn prefixify<'a>(&'a mut self, keyspace: &'a Keyspace<S>) -> KeySpaceWriteBatch<'a, S> {
-        println!("batch={:?} write_options={:?}",self.batch, self.write_options);
+        //println!("batch={:?} write_options={:?}",self.batch, self.write_options);
         KeySpaceWriteBatch {
             keyspace,
             global: self,

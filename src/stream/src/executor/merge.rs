@@ -75,6 +75,7 @@ impl RemoteInput {
                         .inc_by(bytes as u64);
 
                     // add deserialization duration metric with given sampling frequency
+                    //SAMPLING_FREQUENCY 次彩一次指标
                     let msg_res = if rr % SAMPLING_FREQUENCY == 0 {
                         let start_time = Instant::now();
                         let msg_res = Message::from_protobuf(

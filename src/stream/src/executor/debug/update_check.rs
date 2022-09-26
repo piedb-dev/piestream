@@ -37,6 +37,8 @@ pub async fn update_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
                 .map(|r| (r.unzip()))
                 .tuple_windows()
             {
+                println!("op1={:?},row1={:?},op2={:?},row2={:?}", op1, row1, op2, row2);
+                //TODO(liqiu):两条规则没有理解. 需要深入看看，感觉update数据会指定插入在某个位置
                 if (op1 == None && op2 == Some(Op::UpdateInsert)) // the first row is U+
                     || (op1 == Some(Op::UpdateDelete) && op2 != Some(Op::UpdateInsert))
                 {
@@ -63,6 +65,38 @@ mod tests {
     use super::*;
     use crate::executor::test_utils::MockSource;
     use crate::executor::Executor;
+
+    #[tokio::test]
+    async fn test_not_next_to_each_other1() {
+       let chunk=StreamChunk::from_pretty(
+            "     I
+            U-  114 
+            U-  514
+            U+ 1919 
+            U+  810",
+        );
+
+        for row in once(None)      
+        .chain(chunk.rows().map(Some))
+        .chain(once(None)){
+            println!("a={:?}", row);
+        }
+
+        for row in once(None)      
+        .chain(chunk.rows().map(Some)){
+            println!("b={:?}", row);
+        }
+
+        //for ((op1, row1), (op2, row2)) in once(None)
+        for (row1, row2) in once(None)      
+                .chain(chunk.rows().map(Some))
+                .chain(once(None))
+                .map(|r| (r.unzip()))
+                .tuple_windows::<_>(){
+                        println!("row1={:?} row2={:?}", row1, row2);
+                }
+
+    }
 
     #[should_panic]
     #[tokio::test]
