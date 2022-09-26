@@ -71,6 +71,26 @@ impl<T: Send + Sync> LruValue for T {}
 /// that any successful `LruCacheShard::lookup/LruCacheShard::insert` have a
 /// matching `LruCache::release` (to move into state 2) or `LruCacheShard::erase`
 /// (to move into state 3).
+/*
+条目是可变长度的堆分配结构。
+条目由 cache and/or 任何外部实体引用。
+缓存将其所有条目保存在哈希表中。一些元素也存储在 LRU 列表中。
+`LruHandle` 可以处于以下状态：
+1. 存在外部引用与在哈希表中。在这种情况下，该条目不在LRU列表中
+(`refs` >= 1 && `in_cache` == true)
+ 2. 没有外部引用与在哈希表中。
+在这种情况下，该条目在 LRU 列表中并且可以被释放。
+(`refs` == 0 && `in_cache` == true)
+3. 存在外部引用且不在哈希表中。
+在这种情况下，该条目不在 LRU 列表中，也不在哈希表中。
+当 refs 变为 0 时，可以释放该条目。
+(`refs` >= 1 && `in_cache` == false)
+所有新创建的 `LruHandle` 都处于状态 1。如果在状态 1 的记录调用 `LruCacheShard::release`，它将进入状态 2。
+要从状态 1 移动到状态 3，请使用相同的键（但可能值不同）调用 `LruCacheShard::erase` 或 `LruCacheShard::insert`。
+要从状态 2 移动到状态 1，请使用 `LruCacheShard::lookup`。
+在销毁之前，确保没有句柄处于状态 1。这意味着任何成功的 `LruCacheShard::lookup/LruCacheShard::insert`
+都具有匹配的 `LruCache::release`（进入状态 2）或 `LruCacheShard::擦除`（进入状态 3）
+ */
 pub struct LruHandle<K: LruKey, T: LruValue> {
     /// next element in the linked-list of hash bucket, only used by hash-table.
     next_hash: *mut LruHandle<K, T>,
@@ -146,6 +166,7 @@ impl<K: LruKey, T: LruValue> LruHandle<K, T> {
 
     fn unref(&mut self) -> bool {
         debug_assert!(self.refs > 0);
+        //println!("refs={:?}", self.refs);
         self.refs -= 1;
         self.refs == 0
     }
@@ -245,9 +266,11 @@ impl<K: LruKey, T: LruValue> LruHandleTable<K, T> {
 
     /// Insert a handle into the hash table. Return the handle of the previous value if the key
     /// exists.
+    /// 插入到hash table, key存储返回上一次的值
     unsafe fn insert(&mut self, hash: u64, h: *mut LruHandle<K, T>) -> *mut LruHandle<K, T> {
         debug_assert!(!h.is_null());
         debug_assert!(!(*h).is_in_cache());
+        //设置in_cache
         (*h).set_in_cache(true);
         debug_assert!(self.list.len().is_power_of_two());
         let idx = (hash as usize) & (self.list.len() - 1);
@@ -257,11 +280,12 @@ impl<K: LruKey, T: LruValue> LruHandleTable<K, T> {
         } else {
             (*prev).next_hash = h;
         }
-
+        //println!("insert is_in_lru={:?}", (*ptr).is_in_lru());
         if !ptr.is_null() {
             debug_assert!((*ptr).is_same_key((*h).get_key()));
             debug_assert!((*ptr).is_in_cache());
             // The handle to be removed is set not in cache.
+            //就数据in_cache设置为false
             (*ptr).set_in_cache(false);
             (*h).next_hash = (*ptr).next_hash;
             return ptr;
@@ -331,10 +355,13 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         object_capacity: usize,
         listeners: Vec<Arc<dyn LruCacheEventListener<K = K, T = T>>>,
     ) -> Self {
+        //构建LruHandle
         let mut lru = Box::new(LruHandle::default());
         lru.prev = lru.as_mut();
         lru.next = lru.as_mut();
         let mut object_pool = Vec::with_capacity(object_capacity);
+        //println!("object_capacity={:?}", object_capacity);
+        //申请了object_capacity个LruHandle对象
         for _ in 0..object_capacity {
             object_pool.push(Box::new(LruHandle::default()));
         }
@@ -385,12 +412,18 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
     unsafe fn evict_from_lru(&mut self, charge: usize, last_reference_list: &mut Vec<T>) {
         // TODO: may want to optimize by only loading at the beginning and storing at the end for
         // only once.
+        //println!("usage={:?} charge={:?} self.capacity={:?}",self.usage.load(Ordering::Relaxed),  charge, self.capacity);
         while self.usage.load(Ordering::Relaxed) + charge > self.capacity
             && !std::ptr::eq(self.lru.next, self.lru.as_mut())
         {
+            //println!("*****************evict_from_lru*************");
+            //删除最后数据
             let old_ptr = self.lru.next;
+            //hash table删除旧数据
             self.table.remove((*old_ptr).hash, (*old_ptr).get_key());
+            //lru删除
             self.lru_remove(old_ptr);
+            //清除handle
             let (key, value) = self.clear_handle(old_ptr);
             for listener in &self.listeners {
                 listener.on_evict(&key, &value);
@@ -407,6 +440,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         assert!(!(*h).is_in_lru());
         debug_assert!(!(*h).is_in_cache());
         debug_assert!(!(*h).has_refs());
+        //减去计数
         self.usage.fetch_sub((*h).charge, Ordering::Relaxed);
         let (key, value) = (*h).take_kv();
         self.try_recycle_handle_object(h);
@@ -446,13 +480,17 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         };
 
         let ptr = Box::into_raw(handle);
+        //插入hash table，值存在返回上一次值
         let old = self.table.insert(hash, ptr);
         if !old.is_null() {
+            //引用为0在lru里删除掉
             if let Some(data) = self.try_remove_cache_handle(old) {
                 last_reference_list.push(data);
             }
         }
+      
         self.usage.fetch_add(charge, Ordering::Relaxed);
+        //println!("usage={:?} charge={:?}", self.usage, charge);
         (*ptr).add_ref();
         ptr
     }
@@ -466,21 +504,27 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         #[cfg(debug_assertions)]
         assert!(!(*h).is_in_lru());
         let last_reference = (*h).unref();
+        //println!("last_reference={:?} is_in_cache={:?}", last_reference, (*h).is_in_cache());
         // If the handle is still referenced by someone else, do nothing and return.
         if !last_reference {
             return None;
         }
 
+       
         // Keep the handle in lru list if it is still in the cache and the cache is not over-sized.
         if (*h).is_in_cache() {
+            //lru缓存依旧有空间，此时不用淘汰，否则开始淘汰
             if self.usage.load(Ordering::Relaxed) <= self.capacity {
+                //println!("lru_insert");
                 self.lru_insert(h);
                 return None;
             }
             // Remove the handle from table.
             for listener in &self.listeners {
+                //写入evict列表
                 listener.on_evict((*h).get_key(), (*h).get_value());
             }
+            //hash table 删除
             self.table.remove((*h).hash, (*h).get_key());
         }
 
@@ -489,6 +533,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         #[cfg(debug_assertions)]
         assert!(!(*h).is_in_lru());
 
+        //清理handler
         let (_key, value) = self.clear_handle(h);
         Some(value)
     }
@@ -498,6 +543,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         if !e.is_null() {
             // If the handle previously has not ref, it must exist in the lru. And therefore we are
             // safe to remove it from lru.
+            //外部引用为0 lru列表里删除
             if !(*e).has_refs() {
                 self.lru_remove(e);
             }
@@ -507,6 +553,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
     }
 
     /// Erase a key from the cache.
+    /// hash理解为bucket
     unsafe fn erase(&mut self, hash: u64, key: &K) -> Option<T> {
         let h = self.table.remove(hash, key);
         if !h.is_null() {
@@ -524,6 +571,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
     /// This method can only be called on the handle that just removed from the hash table.
     unsafe fn try_remove_cache_handle(&mut self, h: *mut LruHandle<K, T>) -> Option<T> {
         debug_assert!(!h.is_null());
+        //println!("(*h).has_refs()={:?} (*h).is_in_lru())={:?}", (*h).has_refs(), (*h).is_in_lru());
         if !(*h).has_refs() {
             // Since the handle is just removed from the hash table, it should either be in lru or
             // referenced externally. Since we have checked that it is not referenced externally, it
@@ -591,6 +639,7 @@ impl<K: LruKey, T: LruValue> LruCache<K, T> {
         let num_shards = 1 << num_shard_bits;
         let mut shards = Vec::with_capacity(num_shards);
         let per_shard = capacity / num_shards;
+        //println!("num_shards={:?} per_shard={:?}", num_shards, per_shard);
         let mut shard_usages = Vec::with_capacity(num_shards);
         let mut shard_lru_usages = Vec::with_capacity(num_shards);
         for _ in 0..num_shards {
@@ -832,12 +881,15 @@ mod tests {
             let mut hasher = DefaultHasher::new();
             sst.hash(&mut hasher);
             block_offset.hash(&mut hasher);
+            //利用sst和block_offset计算hash
             let h = hasher.finish();
             if let Some(block) = cache.lookup(h, &(sst, block_offset)) {
+                //命中
                 assert_eq!(block.value().offset, block_offset);
                 drop(block);
                 continue;
             }
+            //插入
             cache.insert(
                 (sst, block_offset),
                 h,
@@ -856,6 +908,7 @@ mod tests {
             let mut lru: *mut LruHandle<String, String> = cache.lru.as_mut();
             for k in keys {
                 lru = (*lru).next;
+                //println!("k={:?} lru={:?}", k, (*lru).kv);
                 assert!(
                     (*lru).is_same_key(&k.to_string()),
                     "compare failed: {} vs {}, get value: {:?}",
@@ -884,6 +937,7 @@ mod tests {
             let exist = !h.is_null();
             if exist {
                 assert!((*h).is_same_key(&key.to_string()));
+                //重新插入到队尾
                 cache.release(h);
             }
             exist
@@ -893,6 +947,7 @@ mod tests {
     fn insert(cache: &mut LruCacheShard<String, String>, key: &str, value: &str) {
         let mut free_list = vec![];
         unsafe {
+            //插入hash table，返回新handle
             let handle = cache.insert(
                 key.to_string(),
                 0,
@@ -900,13 +955,14 @@ mod tests {
                 value.to_string(),
                 &mut free_list,
             );
+            //插入lru
             cache.release(handle);
         }
         free_list.clear();
     }
 
     #[test]
-    fn test_basic_lru() {
+    fn test_basic_lru1() {
         let mut cache = create_cache(5);
         let keys = vec!["a", "b", "c", "d", "e"];
         for &k in &keys {
@@ -917,8 +973,30 @@ mod tests {
             insert(&mut cache, k, k);
         }
         validate_lru_list(&mut cache, vec!["d", "e", "x", "y", "z"]);
+        //'b'已经淘汰
         assert!(!lookup(&mut cache, "b"));
         assert!(lookup(&mut cache, "e"));
+        //命中一次cache移动到队尾
+        //validate_lru_list(&mut cache, vec!["d", "x", "y", "z", "e"]);
+    }
+
+    #[test]
+    fn test_basic_lru() {
+        let mut cache = create_cache(5);
+        let keys = vec!["a", "b", "c", "d", "e"];
+        for &k in &keys {
+            insert(&mut cache, k, k);
+        }
+        validate_lru_list(&mut cache, keys);
+        //capacity=5,新插入3条淘汰最早3条
+        for k in ["x", "y", "z"] {
+            insert(&mut cache, k, k);
+        }
+        validate_lru_list(&mut cache, vec!["d", "e", "x", "y", "z"]);
+        //'b'已经淘汰
+        assert!(!lookup(&mut cache, "b"));
+        assert!(lookup(&mut cache, "e"));
+        //命中一次cache移动到队尾
         validate_lru_list(&mut cache, vec!["d", "x", "y", "z", "e"]);
         assert!(lookup(&mut cache, "z"));
         validate_lru_list(&mut cache, vec!["d", "x", "y", "e", "z"]);
@@ -939,16 +1017,20 @@ mod tests {
     fn test_reference_and_usage() {
         let mut cache = create_cache(5);
         insert(&mut cache, "k1", "a");
+        //insert，设置的charge是value字节数，即canche.usage
         assert_eq!(cache.usage.load(Ordering::Relaxed), 1);
         insert(&mut cache, "k0", "aa");
         assert_eq!(cache.usage.load(Ordering::Relaxed), 3);
+        //k1已经存在，减去old长度+新长度，k1移到队尾
         insert(&mut cache, "k1", "aa");
         assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
+        //insert后usage=6大于capacity=5,开始释放空间k0空间
         insert(&mut cache, "k2", "aa");
         assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
         let mut free_list = vec![];
         validate_lru_list(&mut cache, vec!["k1", "k2"]);
         unsafe {
+            //"k1" 引用+1
             let h1 = cache.lookup(0, &"k1".to_string());
             assert!(!h1.is_null());
             let h2 = cache.lookup(0, &"k2".to_string());
@@ -957,14 +1039,20 @@ mod tests {
             let h3 = cache.insert("k3".to_string(), 0, 2, "bb".to_string(), &mut free_list);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 6);
             assert!(!h3.is_null());
+            //"k1" 引用在+1 
             let h4 = cache.lookup(0, &"k1".to_string());
             assert!(!h4.is_null());
 
+            //println!("***************************************");
+            //引用-1，但依旧大于0，不释放
             cache.release(h1);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 6);
+            //引用-1，引用等于0，开始释放
             cache.release(h4);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
+            //println!("***************************************");
 
+            //cache有多余空间，会重新插入
             cache.release(h3);
             cache.release(h2);
 
@@ -977,6 +1065,7 @@ mod tests {
         unsafe {
             let mut to_delete = vec![];
             let mut cache = create_cache(5);
+            //insert成功refs=+1
             let insert_handle = cache.insert(
                 "key".to_string(),
                 0,
@@ -984,10 +1073,16 @@ mod tests {
                 "old_value".to_string(),
                 &mut to_delete,
             );
+           
+
+            //lookup节点不为空refs+=1
             let old_entry = cache.lookup(0, &"key".to_string());
+           
             assert!(!old_entry.is_null());
             assert_eq!((*old_entry).get_value(), &"old_value".to_string());
             assert_eq!((*old_entry).refs, 2);
+ 
+            //refs-=1
             cache.release(insert_handle);
             assert_eq!((*old_entry).refs, 1);
             let insert_handle = cache.insert(
@@ -997,11 +1092,15 @@ mod tests {
                 "new_value".to_string(),
                 &mut to_delete,
             );
+            println!("2 (*old_entry).is_in_lru()={:?}", (*old_entry).is_in_lru());
+            //insert新节点过程会将老节点in_cache设置为false
             assert!(!(*old_entry).is_in_cache());
             let new_entry = cache.lookup(0, &"key".to_string());
+            println!("1 (*new_entry).is_in_lru()={:?}", (*new_entry).is_in_lru());
             assert!(!new_entry.is_null());
             assert_eq!((*new_entry).get_value(), &"new_value".to_string());
             assert_eq!((*new_entry).refs, 2);
+            //释放新节点
             cache.release(insert_handle);
             assert_eq!((*new_entry).refs, 1);
 
@@ -1009,6 +1108,7 @@ mod tests {
             assert_eq!((*old_entry).get_value(), &"old_value".to_string());
             assert_eq!((*old_entry).refs, 1);
 
+            //新节点释放，capacity空间足够，实际会放到lru列表，不会真正释放
             cache.release(new_entry);
             assert!((*new_entry).is_in_cache());
             #[cfg(debug_assertions)]
@@ -1020,8 +1120,10 @@ mod tests {
             assert_eq!((*old_entry).refs, 1);
 
             cache.release(old_entry);
+            //在new_entry插入时将old_entry从cache里删除掉了
             assert!(!(*old_entry).is_in_cache());
             assert!((*new_entry).is_in_cache());
+            //只有in_cache=true时，in_lru才有可能为true
             #[cfg(debug_assertions)]
             {
                 assert!(!(*old_entry).is_in_lru());
@@ -1043,7 +1145,9 @@ mod tests {
                 "old_value".to_string(),
                 &mut to_delete,
             );
+            //在release函数里-1后，refs等于0
             cache.release(insert_handle);
+            //从lru里删除，在refs=+1
             let old_entry = cache.lookup(0, &"key".to_string());
             assert!(!old_entry.is_null());
             assert_eq!((*old_entry).get_value(), &"old_value".to_string());
@@ -1056,7 +1160,9 @@ mod tests {
                 "new_value".to_string(),
                 &mut to_delete,
             );
+            //release时已经删除
             assert!(!(*old_entry).is_in_cache());
+            
             let new_entry = cache.lookup(0, &"key".to_string());
             assert!(!new_entry.is_null());
             assert_eq!((*new_entry).get_value(), &"new_value".to_string());
@@ -1065,6 +1171,7 @@ mod tests {
             assert_eq!((*new_entry).refs, 1);
 
             // The handle for new and old value are both referenced.
+            //usage在release函数-1，但上面逻辑都没执行到路径
             assert_eq!(2, cache.usage.load(Relaxed));
             assert_eq!(0, cache.lru_usage.load(Relaxed));
 
@@ -1079,6 +1186,7 @@ mod tests {
             assert_eq!((*new_entry_again).refs, 2);
 
             cache.release(new_entry);
+            //最后一个入lru，不会清理
             cache.release(new_entry_again);
 
             assert_eq!(1, cache.usage.load(Relaxed));
@@ -1099,6 +1207,7 @@ mod tests {
             LookupResult::Cached(_) => (),
             _ => panic!(),
         }
+        //没找到返回Miss,但key会写入write_request
         let ret1 = cache.lookup_for_request(0, "b".to_string());
         match ret1 {
             LookupResult::Miss => (),
@@ -1108,6 +1217,7 @@ mod tests {
         match ret2 {
             LookupResult::WaitPendingRequest(mut recv) => {
                 assert!(matches!(recv.try_recv(), Err(TryRecvError::Empty)));
+                //write_request里获取到key会发送value
                 cache.insert("b".to_string(), 0, 1, "v2".to_string());
                 let v = recv.try_recv().unwrap();
                 assert_eq!(v.value(), "v2");
@@ -1127,6 +1237,7 @@ mod tests {
         type T = String;
 
         fn on_evict(&self, key: &Self::K, value: &Self::T) {
+            //println!("*************on_evict********************");
             self.evicted.lock().insert(key.clone(), value.clone());
         }
 
@@ -1139,25 +1250,31 @@ mod tests {
     fn test_event_listener() {
         unsafe {
             let listener = Arc::new(TestLruCacheEventListener::default());
+            //capactiy=2
             let mut cache = create_cache_with_event_listeners(2, vec![listener.clone()]);
 
             // full-fill cache
             let h = cache.insert("k1".to_string(), 0, 1, "v1".to_string(), &mut vec![]);
+            //入lru
             cache.release(h);
             let h = cache.insert("k2".to_string(), 0, 1, "v2".to_string(), &mut vec![]);
+            //入lru
             cache.release(h);
+
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().is_empty());
 
-            // test evict
+            // test evict evict_from_lru函数将最旧数据发送到evicted队列
             let h = cache.insert("k3".to_string(), 0, 1, "v3".to_string(), &mut vec![]);
+            //k3节点放入on_evict列表，准备删除
             cache.release(h);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().remove("k1").is_some());
 
-            // test erase
+           
+            // test erase 发送到erase队列
             cache.erase(0, &"k2".to_string());
             assert_eq!(cache.usage.load(Ordering::Relaxed), 1);
             assert!(listener.erased.lock().remove("k2").is_some());
@@ -1171,7 +1288,7 @@ mod tests {
             assert!(listener.evicted.lock().is_empty());
 
             // test release after full
-            // 1. full-full cache but not release
+            // 1. full-full cache but not release，填充cache一直不释放(插入会在evict_from_lru函数删除队尾数据）
             let h1 = cache.insert("k5".to_string(), 0, 1, "v5".to_string(), &mut vec![]);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
@@ -1181,24 +1298,29 @@ mod tests {
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().remove("k4").is_some());
 
+
             // 2. insert one more entry after cache is full, cache will be oversized
+            //lru里面的数据在evict_from_lru函数删除完毕，队列是空的
             let h3 = cache.insert("k7".to_string(), 0, 1, "v7".to_string(), &mut vec![]);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 3);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().is_empty());
 
             // 3. release one entry, and it will be evicted immediately bucause cache is oversized
+            //usage>capaticy 不会入lru,
             cache.release(h1);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().remove("k5").is_some());
 
             // 4. release other entries, no entry will be evicted
+            //加入lru
             cache.release(h2);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().is_empty());
             cache.release(h3);
+             //加入lru
             assert_eq!(cache.usage.load(Ordering::Relaxed), 2);
             assert!(listener.erased.lock().is_empty());
             assert!(listener.evicted.lock().is_empty());

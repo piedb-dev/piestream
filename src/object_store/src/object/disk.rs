@@ -119,7 +119,9 @@ impl DiskObjectStore {
     }
 
     pub async fn get_read_file(&self, path: &str) -> ObjectResult<OpenReadFileHolder> {
+        //获取全路径
         let path = self.new_file_path(path)?;
+        //利用路径计算hash
         let hash = {
             let mut hasher = DefaultHasher::default();
             path.hash(&mut hasher);
@@ -292,7 +294,6 @@ mod tests {
         let metadata = store.metadata("test.obj").await.unwrap();
         assert_eq!(payload.len(), metadata.total_size);
 
-
         let mut path = PathBuf::from(test_root_path);
         path.push("test.obj");
         check_payload(&payload, path.to_str().unwrap());
@@ -304,6 +305,7 @@ mod tests {
         let test_root_path = test_dir.path().to_str().unwrap();
         let store = DiskObjectStore::new(test_root_path);
         let payload = gen_test_payload();
+        //多级存储路径
         store
             .upload("1/2/test.obj", Bytes::from(payload.clone()))
             .await
