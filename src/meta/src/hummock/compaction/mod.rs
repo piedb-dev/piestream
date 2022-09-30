@@ -95,6 +95,7 @@ impl CompactStatus {
         config: Arc<CompactionConfig>,
     ) -> CompactStatus {
         let mut level_handlers = vec![];
+        //创建max_level个handler
         for level in 0..=config.max_level {
             level_handlers.push(LevelHandler::new(level as u32));
         }
@@ -117,6 +118,7 @@ impl CompactStatus {
         // When we compact the files, we must make the result of compaction meet the following
         // conditions, for any user key, the epoch of it in the file existing in the lower
         // layer must be larger.
+        // 当我们压缩文件时，我们必须使压缩的结果满足以下条件，对于任何用户密钥，它在下层存在的文件中的epoch必须更大。
 
         let ret = if let Some(manual_compaction_option) = manual_compaction_option {
             self.manual_pick_compaction(levels, task_id, manual_compaction_option)?
@@ -266,7 +268,7 @@ impl Default for ManualCompactionOption {
         }
     }
 }
-
+//https://zhuanlan.zhihu.com/p/112574579
 pub trait CompactionPicker {
     fn pick_compaction(
         &self,

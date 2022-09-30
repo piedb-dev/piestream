@@ -43,10 +43,12 @@ impl LevelHandler {
         for (task_id, _, ssts) in &self.pending_tasks {
             if *task_id == target_task_id {
                 for sst in ssts {
+                    //删除任务对应的sst文件
                     self.compacting_files.remove(sst);
                 }
             }
         }
+        //去除掉任务
         self.pending_tasks
             .retain(|(task_id, _, _)| *task_id != target_task_id);
     }
@@ -64,14 +66,17 @@ impl LevelHandler {
             table_ids.push(sst.id);
         }
 
+        //pending_tasks列表中设置task_id对应的total_file_size,table_ids
         self.pending_tasks
             .push((task_id, total_file_size, table_ids));
     }
 
+    //获取pending文件总数
     pub fn get_pending_file_count(&self) -> usize {
         self.compacting_files.len()
     }
 
+    //获取pending文件总大小
     pub fn get_pending_file_size(&self) -> u64 {
         self.pending_tasks
             .iter()
@@ -79,6 +84,7 @@ impl LevelHandler {
             .sum::<u64>()
     }
 
+    //获取pending task_id列表
     pub fn pending_tasks_ids(&self) -> Vec<u64> {
         self.pending_tasks
             .iter()

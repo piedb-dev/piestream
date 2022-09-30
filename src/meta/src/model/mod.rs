@@ -170,6 +170,14 @@ pub trait ValTransaction: Sized {
 /// When `commit` is called, the change to `new_value` will be applied to the `orig_value_ref`
 /// When `abort` is called, the `VarTransaction` is dropped and the local memory value is
 /// untouched.
+/*
+    变量的事务封装器。
+    在第一次 `deref_mut` 调用中，原始值的副本将分配给 `new_value`
+    并且所有后续修改都将应用于`new_value`。
+    当调用 `commit` 时，对 `new_value` 的更改将应用​​于 `orig_value_ref`
+    当调用 `abort` 时，`VarTransaction` 被丢弃并且本地内存值是
+    原封不动。
+ */
 pub struct VarTransaction<'a, T> {
     orig_value_ref: &'a mut T,
     new_value: Option<T>,
@@ -284,7 +292,9 @@ impl<'a, K: Ord, V: Clone> BTreeMapEntryTransaction<'a, K, V> {
         key: K,
         default_val: V,
     ) -> BTreeMapEntryTransaction<'a, K, V> {
+        //优先使用tree_ref存在key值，没有在用default_val
         let init_value = tree_ref.get(&key).cloned().unwrap_or(default_val);
+        //构建BTreeMapEntryTransaction
         BTreeMapEntryTransaction {
             new_value: init_value,
             tree_ref,

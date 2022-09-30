@@ -25,6 +25,7 @@ use crate::hummock::compaction::overlap_strategy::OverlapStrategy;
 use crate::hummock::compaction::CompactionPicker;
 use crate::hummock::level_handler::LevelHandler;
 
+
 const MIN_COMPACTION_BYTES: u64 = 2 * 1024 * 1024; // 1MB
 
 pub struct TierCompactionPicker {
@@ -50,12 +51,14 @@ impl CompactionPicker for TierCompactionPicker {
         let mut idx = 0;
         while idx < levels[0].table_infos.len() {
             let table = &levels[0].table_infos[idx];
+            //pending状态
             if level_handlers[0].is_pending_compact(&table.id) {
                 idx += 1;
                 continue;
             }
             let mut compaction_bytes = table.file_size;
             let mut select_level_inputs = vec![table.clone()];
+            //合并小文件
             if table.file_size >= self.config.min_compaction_bytes {
                 // only merge small file until we support sub-level.
                 idx += 1;
@@ -63,16 +66,19 @@ impl CompactionPicker for TierCompactionPicker {
             }
 
             let mut next_offset = idx + 1;
+            //合并数据大小限制
             let max_compaction_bytes = std::cmp::min(
                 self.config.max_compaction_bytes,
                 self.config.max_bytes_for_level_base,
             );
 
+            //遍历后面文件，
             for other in &levels[0].table_infos[idx + 1..] {
                 if level_handlers[0].is_pending_compact(&other.id) {
                     break;
                 }
                 // no need to trigger a bigger compaction
+                //满足触发合并条件
                 if compaction_bytes >= max_compaction_bytes {
                     break;
                 }
@@ -83,6 +89,7 @@ impl CompactionPicker for TierCompactionPicker {
 
             // to make compaction tree balance, we do not need to merge a large file and a few small
             // files.
+            //输入列表文件数大于触发level0合并文件数，第一个文件大于总文件bytes的一半，满足上述条件将抛弃第一个文件
             while let Some(first) = select_level_inputs.first() {
                 if first.file_size * 2 > compaction_bytes
                     && select_level_inputs.len()
@@ -96,11 +103,12 @@ impl CompactionPicker for TierCompactionPicker {
                 }
             }
 
+            //文件数大少
             if select_level_inputs.len() < self.config.level0_tier_compact_file_number as usize {
                 idx = next_offset;
                 continue;
             }
-
+            //文件加入pengding列表
             level_handlers[0].add_pending_task(self.compact_task_id, &select_level_inputs);
 
             return Some(SearchResult {
@@ -151,6 +159,7 @@ impl TargetFilesInfo {
         }
     }
 
+    //计算新文件的大小
     fn calc_inc_compaction_size(&self, new_add_tables: &[SstableInfo]) -> u64 {
         new_add_tables
             .iter()
@@ -252,9 +261,11 @@ impl LevelCompactionPicker {
             return Some(vec![]);
         }
         // pick up files in L1 which are overlap with L0 to target level input.
+        //获取重叠文件列表
         let new_add_tables = self
             .overlap_strategy
             .check_base_level_overlap(select_tables, &level.table_infos);
+        //任意一个处于pending都返回none
         if new_add_tables
             .iter()
             .any(|table| level_handlers.is_pending_compact(&table.id))
@@ -271,23 +282,28 @@ impl LevelCompactionPicker {
         select_level_handler: &LevelHandler,
         target_level_handler: &LevelHandler,
     ) -> (Vec<SstableInfo>, Vec<SstableInfo>) {
+        //创建verlap_info对象，记录不参与table key范围
         let mut info = self.overlap_strategy.create_overlap_info();
         for idx in 0..select_level.table_infos.len() {
             let select_table = select_level.table_infos[idx].clone();
+            //pending不参与
             if select_level_handler.is_pending_compact(&select_table.id) {
                 info.update(&select_table);
                 continue;
             }
+            //select_level内部检查重叠
             if info.check_overlap(&select_table) {
                 info.update(&select_table);
                 continue;
             }
 
             let mut target_level_ssts = TargetFilesInfo::default();
+            //loop内部创建overlap_info对象,记录本次参与table key范围
             let mut select_info = self.overlap_strategy.create_overlap_info();
             let mut select_compaction_bytes = select_table.file_size;
             select_info.update(&select_table);
             let mut select_level_ssts = vec![select_table];
+            //获取同target_level之间重叠数据文件列表,需要排除已经pending状态文件
             match self.pick_target_level_overlap_files(
                 &select_level_ssts,
                 target_level,
@@ -295,6 +311,7 @@ impl LevelCompactionPicker {
             ) {
                 None => continue,
                 Some(tables) => {
+                    //重叠数据加入列表
                     target_level_ssts.add_tables(tables);
                 }
             }
@@ -307,10 +324,12 @@ impl LevelCompactionPicker {
                     break;
                 }
 
+                //重叠
                 if info.check_overlap(other) {
                     break;
                 }
 
+                println!("***************");
                 select_level_ssts.push(other.clone());
                 select_info.update(other);
                 if select_level.table_infos[0..idx]
@@ -410,6 +429,7 @@ pub mod tests {
     #[test]
     fn test_compact_l0_to_l1() {
         let picker = create_compaction_picker_for_test();
+        //两个级别
         let mut levels = vec![
             Level {
                 level_idx: 0,
@@ -432,6 +452,7 @@ pub mod tests {
                 total_file_size: 0,
             },
         ];
+        //两个handler
         let mut levels_handler = vec![LevelHandler::new(0), LevelHandler::new(1)];
         let ret = picker
             .pick_compaction(&levels, &mut levels_handler)

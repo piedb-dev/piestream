@@ -34,7 +34,8 @@ pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
         https://www.cnblogs.com/gremount/p/8830707.html
     */
     let res = (Epoch::MAX - epoch).to_be();
-    //println!("res={:?} EPOCH_LEN={:?}", res, EPOCH_LEN);
+    println!("user_key={:?} res={:?} EPOCH_LEN={:?}", user_key, res, EPOCH_LEN);
+    //增加EPOCH_LEN大小
     user_key.reserve(EPOCH_LEN);
     let buf = user_key.chunk_mut();
 
@@ -49,23 +50,24 @@ pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
         //写指针从当前位置移动EPOCH_LEN
         user_key.advance_mut(EPOCH_LEN);
     }
-
+    println!("user_key={:?} res={:?} EPOCH_LEN={:?}", user_key, res, EPOCH_LEN);
     user_key
 }
 
 /// Splits a full key into its user key part and epoch part.
 #[inline]
 pub fn split_key_epoch(full_key: &[u8]) -> (&[u8], &[u8]) {
+    //full_key=epoch+key
     let pos = full_key
         .len()
         .checked_sub(EPOCH_LEN)
         .unwrap_or_else(|| panic!("bad full key format: {:?}", full_key));
     /*
-        let a = vec![1, 2, 3, 5, 8];
+        let a = vec![1, 2, 3, 5, 6, 8];
         let b=a.as_slice();
         let c=b.len().checked_sub(2);
-        println!("c={:?} b.split_at(2)={:?}", c, b.split_at(2));
-        "c=Some(3) b.split_at(2)=([1, 2], [3, 5, 8])"
+        println!("c={:?} b.split_at(2)={:?}", c, b.split_at(c.unwrap()));
+        "c=Some(4) b.split_at(2)=([1, 2, 3, 5], [6, 8])"
     */
     full_key.split_at(pos)
 }

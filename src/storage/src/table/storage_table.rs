@@ -343,7 +343,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
         };
 
         println!("into ******************************serialized_pk={:?} SENTINEL_CELL_ID={:?}", serialized_pk, SENTINEL_CELL_ID);
-        ///查询多次，效率值得怀疑
+        //查询多次，效率值得怀疑
         let mut deserializer = CellBasedRowDeserializer::new(&*self.mapping);
         for column_id in self.column_ids() {
             let key = serialize_pk_and_column_id(&serialized_pk, column_id).map_err(err)?;
@@ -359,7 +359,7 @@ impl<S: StateStore, E: Encoding, const T: AccessType> StorageTableBase<S, E, T> 
 
         let result = deserializer.take();
         println!("result={:?} key_len={:?}", result, result.clone().unwrap().1.len());
-        ///then_some等于some(T),加了some
+        //then_some等于some(T),加了some
         Ok(result.and_then(|(vnode, _pk, row)| self.check_vnode_is_set(vnode).then_some(row)))
     }
 

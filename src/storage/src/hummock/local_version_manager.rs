@@ -131,6 +131,11 @@ impl BufferTracker {
 /// By acquiring a `ScopedLocalVersion`, the `SSTables` of this version is guaranteed to be valid
 /// during the lifetime of `ScopedLocalVersion`. Internally `LocalVersionManager` will pin/unpin the
 /// versions in storage service.
+/* 
+' LocalVersionManager '维护存储服务的hummock版本数据本地的一个副本。通过获取' ScopedLocalVersion '，
+保证该版本的' sstable '在' ScopedLocalVersion '的生命周期内有效。在内部' LocalVersionManager ' pin/unpin
+存储服务版本。
+*/
 pub struct LocalVersionManager {
     local_version: RwLock<LocalVersion>,
     worker_context: WorkerContext,
@@ -227,10 +232,12 @@ impl LocalVersionManager {
         }
 
         if let Some(conflict_detector) = self.write_conflict_detector.as_ref() {
+            //设置max_committed_epoch
             conflict_detector.set_watermark(newly_pinned_version.max_committed_epoch);
         }
 
         let mut new_version = old_version.clone();
+        //设置最新pinned_version
         new_version.set_pinned_version(newly_pinned_version);
         {
             let mut guard = RwLockUpgradableReadGuard::upgrade(old_version);
@@ -526,14 +533,17 @@ impl LocalVersionManager {
                     max_retry
                 ))));
             }
+            //条件满足退出
             if break_condition() {
                 break None;
             }
             match hummock_meta_client.pin_version(last_pinned).await {
+                //获取到新版本
                 Ok(version) => {
                     break Some(Ok(version));
                 }
                 Err(err) => {
+                    //重试机制
                     let retry_after = retry_backoff.next().unwrap_or(max_retry_interval);
                     tracing::warn!(
                         "Failed to pin version {:?}. Will retry after about {} milliseconds",
@@ -556,6 +566,7 @@ impl LocalVersionManager {
         min_execute_interval_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             min_execute_interval_tick.tick().await;
+            //获取到local_version_manager
             let local_version_manager = match local_version_manager_weak.upgrade() {
                 None => {
                     tracing::info!("Shutdown hummock pin worker");
@@ -564,12 +575,14 @@ impl LocalVersionManager {
                 Some(local_version_manager) => local_version_manager,
             };
 
+            //last hummock版本id
             let last_pinned = local_version_manager
                 .local_version
                 .read()
                 .pinned_version()
                 .id();
 
+            //获取pin_version版本
             match Self::pin_version_with_retry(
                 hummock_meta_client.clone(),
                 last_pinned,

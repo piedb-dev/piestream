@@ -96,9 +96,11 @@ impl Compaction {
         F: Future<Output = Result<Vec<HummockCompactionTaskId>>>,
     {
         if self.next_task_ids.is_empty() {
+            //为空重新生成一批id
             let new_ids = get_more_ids.await?;
             self.next_task_ids.extend(new_ids);
         }
+        //返回第一个
         self.next_task_ids
             .pop_front()
             .ok_or_else(|| Error::InternalError("cannot get compaction task id".to_string()))
@@ -131,7 +133,7 @@ macro_rules! commit_multi_var {
 }
 
 #[derive(Default)]
-struct Versioning {
+ struct Versioning {
     current_version_id: CurrentHummockVersionId,
     hummock_versions: BTreeMap<HummockVersionId, HummockVersion>,
     hummock_version_deltas: BTreeMap<HummockVersionId, HummockVersionDelta>,
@@ -180,12 +182,14 @@ where
         instance.cancel_unassigned_compaction_task().await?;
         // Release snapshots pinned by meta on restarting.
         instance.release_contexts([META_NODE_ID]).await?;
+        println!("hummock_versions.len={:?}", instance.versioning.write().await.hummock_versions.len());
         Ok(instance)
     }
 
     /// Load state from meta store.
     async fn load_meta_store_state(&self) -> Result<()> {
         let mut compaction_guard = self.compaction.write().await;
+        //从持久化里获取BTreeMap存储CompactionGroupId->CompactStatus 
         let compaction_statuses = CompactStatus::list(self.env.meta_store())
             .await?
             .into_iter()
@@ -197,13 +201,16 @@ where
             // Initialize compact status for each compaction group
             let mut compaction_statuses =
                 VarTransaction::new(&mut compaction_guard.compaction_statuses);
+            //compaction_group_manager初始化默认插入两种类型compaction
             for compaction_group in self.compaction_group_manager.compaction_groups().await {
+                //构建CompactStatus
                 let compact_status = CompactStatus::new(
                     compaction_group.group_id(),
                     Arc::new(compaction_group.compaction_config().clone()),
                 );
                 compaction_statuses.insert(compact_status.compaction_group_id(), compact_status);
             }
+            //持久化
             commit_multi_var!(self, None, compaction_statuses)?;
         }
         compaction_guard.compact_task_assignment =
@@ -241,12 +248,14 @@ where
             };
             // Initialize independent levels via corresponding compaction group' config.
             for compaction_group in self.compaction_group_manager.compaction_groups().await {
+                //默认第一个是LevelType::Overlapping
                 let mut levels = vec![Level {
                     level_idx: 0u32,
                     level_type: LevelType::Overlapping as i32,
                     table_infos: vec![],
                     total_file_size: 0,
                 }];
+                //都是 LevelType::Nonoverlapping类型
                 for l in 0..compaction_group.compaction_config().max_level {
                     levels.push(Level {
                         level_idx: (l + 1) as u32,
@@ -255,6 +264,8 @@ where
                         total_file_size: 0,
                     });
                 }
+                println!("levels={:?}",levels.len());
+                //插入level，每个group_id对应一个LevelType::Overlapping和max_level个LevelType::Nonoverlapping 
                 init_version
                     .levels
                     .insert(compaction_group.group_id(), Levels { levels });
@@ -264,7 +275,9 @@ where
             }
             let mut redo_state = init_version.clone();
             if version_ids.contains(&init_version.id) {
+                //存储到store
                 init_version.insert(self.env.meta_store()).await?;
+                //初始化时保存一条记录到hummock_versions
                 versioning_guard
                     .hummock_versions
                     .insert(init_version.id, init_version);
@@ -282,6 +295,7 @@ where
                             delete_sst_ids_set.extend(level_delta.removed_table_ids.iter().clone());
                         }
                         if !level_delta.inserted_table_infos.is_empty() {
+                            //级别
                             insert_sst_level = level_delta.level_idx;
                             insert_table_infos
                                 .extend(level_delta.inserted_table_infos.iter().cloned());
@@ -350,6 +364,7 @@ where
         info: MetaLeaderInfo,
     ) -> Result<()> {
         if let Some(context_id) = context_id {
+            //检查是否集群节点
             if context_id == META_NODE_ID {
                 // Using the preserved meta id is allowed.
             } else if self
@@ -362,6 +377,7 @@ where
                 return Err(Error::InvalidContext(context_id));
             }
         }
+        //加入检查是否相等项
         trx.check_equal(
             META_CF_NAME.to_owned(),
             META_LEADER_KEY.as_bytes().to_vec(),
@@ -376,6 +392,11 @@ where
     /// 1 Return the smallest already pinned version of `context_id` that is greater than
     /// `last_pinned`, if any.
     /// 2 Otherwise pin and return the current greatest version.
+    /*    
+    固定一个大于 `last_pinned` 的hummock版本。该pin属于`context_id`
+    并且当 `context_id` 无效时将被取消固定。
+    返回' context_id '的最小已固定版本，且大于“last_pinned”,如果有的话。否则pin并返回当前最大的版本。
+    */
     pub async fn pin_version(
         &self,
         context_id: HummockContextId,
@@ -393,9 +414,10 @@ where
                 version_id: vec![],
             },
         );
-
+        println!("hummock_versions.len={:?}",  hummock_versions.len());
         let mut already_pinned = false;
         let version_id = {
+            //partition_point函数说明http://www.manongjc.com/detail/31-revwlabxcpsionm.html
             let partition_point = context_pinned_version
                 .version_id
                 .iter()
@@ -403,19 +425,23 @@ where
                 .cloned()
                 .collect_vec()
                 .partition_point(|p| *p <= last_pinned);
+            //初始化时context_pinned_version.version_id.len()=0
             if partition_point < context_pinned_version.version_id.len() {
+                //已经在列表
                 already_pinned = true;
                 context_pinned_version.version_id[partition_point]
             } else {
                 current_version_id.id()
             }
         };
-
+       
         if !already_pinned {
+            //加入列表并提交存储
             context_pinned_version.pin_version(version_id);
             commit_multi_var!(self, Some(context_id), context_pinned_version)?;
         }
 
+        //println!("hummock_versions.get(&version_id)={:?}", hummock_versions.get(&version_id));
         let ret = Ok(hummock_versions.get(&version_id).unwrap().clone());
 
         #[cfg(test)]
@@ -433,7 +459,9 @@ where
         pinned_version_ids: impl AsRef<[HummockVersionId]>,
     ) -> Result<()> {
         let mut versioning_guard = self.versioning.write().await;
+        //事物变量
         let mut pinned_versions = VarTransaction::new(&mut versioning_guard.pinned_versions);
+        //事物变量构建具体的事物实体，通过key获取到versioning_guard.pinned_versions[context_id]对应的HummockPinnedVersion对象
         let mut context_pinned_version = match pinned_versions.new_entry_txn(context_id) {
             None => {
                 return Ok(());
@@ -458,6 +486,8 @@ where
     /// Assume that frontend will only pass the latest epoch value recorded by frontend to
     /// `last_pinned`. Meta will unpin snapshots which are pinned and in (`last_pinned`,
     /// `max_commited_epoch`).
+    /// 确保`max_commited_epoch` pinned 同时返回它
+    /// 假设frontend只赋值最新的epoch给`last_pinned`变量， Meta 将取消固定在 (`last_pinned`,`max_commited_epoch`) 中的快照。 
     pub async fn pin_snapshot(
         &self,
         context_id: HummockContextId,
@@ -469,6 +499,7 @@ where
         // visible in the snapshot.
         let version_id = versioning_guard.current_version_id.id();
 
+        //获取当前版本的max_committed_epoch
         let max_committed_epoch = versioning_guard
             .hummock_versions
             .get(&version_id)
@@ -485,6 +516,7 @@ where
         );
 
         // Unpin the snapshots pinned by meta but frontend doesn't know.
+        //获取unpin列表，pin在【last_pinned - max_committed_epoch】之间
         let to_unpin = context_pinned_snapshot
             .snapshot_id
             .iter()
@@ -492,19 +524,23 @@ where
             .cloned()
             .collect_vec();
         let mut snapshots_change = !to_unpin.is_empty();
+        //snapshot_id列表中删除
         for epoch in to_unpin {
             context_pinned_snapshot.unpin_snapshot(epoch);
         }
 
+        //max_committed_epoch不在snapshot_id列表则加入
         if !context_pinned_snapshot
             .snapshot_id
             .contains(&max_committed_epoch)
         {
             snapshots_change = true;
+            //max_committed_epoch加入snapshot_id列表
             context_pinned_snapshot.pin_snapshot(max_committed_epoch);
         }
 
         if snapshots_change {
+            //提交
             commit_multi_var!(self, Some(context_id), context_pinned_snapshot)?;
         }
 
@@ -527,6 +563,7 @@ where
         let mut versioning_guard = self.versioning.write().await;
         let mut pinned_snapshots = VarTransaction::new(&mut versioning_guard.pinned_snapshots);
 
+        //构建BTreeMapEntryTransaction事物变量
         let mut context_pinned_snapshot = match pinned_snapshots.new_entry_txn(context_id) {
             None => {
                 return Ok(());
@@ -534,8 +571,10 @@ where
             Some(context_pinned_snapshot) => context_pinned_snapshot,
         };
         for hummock_snapshot in hummock_snapshots.as_ref() {
+            //取消
             context_pinned_snapshot.unpin_snapshot(hummock_snapshot.epoch);
         }
+        //存储
         commit_multi_var!(self, Some(context_id), context_pinned_snapshot)?;
 
         #[cfg(test)]
@@ -569,7 +608,9 @@ where
             assert!(hummock_snapshot.epoch <= _max_committed_epoch);
         }
 
+        //事物变量
         let mut pinned_snapshots = VarTransaction::new(&mut versioning_guard.pinned_snapshots);
+        //构建事物
         let mut context_pinned_snapshot = match pinned_snapshots.new_entry_txn(context_id) {
             None => {
                 return Ok(());
@@ -577,6 +618,7 @@ where
             Some(context_pinned_snapshot) => context_pinned_snapshot,
         };
 
+        //获取小于hummock_snapshot.epoch列表
         let to_unpin = context_pinned_snapshot
             .snapshot_id
             .iter()
@@ -587,6 +629,7 @@ where
         // Unpin the snapshots pinned by meta but frontend doesn't know. Also equal to unpin all
         // epochs below specific watermark.
         for epoch in &to_unpin {
+            //从snapshot_id列表中删除
             context_pinned_snapshot.unpin_snapshot(*epoch);
         }
 
@@ -619,6 +662,7 @@ where
                     .generate_interval::<{ IdCategory::HummockCompactionTask }>(batch_size)
                     .await
                     .map(|id| {
+                        //以id为起始产生了batch_size
                         (id as HummockCompactionTaskId
                             ..(id + batch_size) as HummockCompactionTaskId)
                             .collect_vec()
@@ -626,6 +670,7 @@ where
                     .map_err(Error::from)
             })
             .await?;
+        //事物变量
         let mut compact_status = VarTransaction::new(
             compaction
                 .compaction_statuses
@@ -1142,9 +1187,11 @@ where
                     .compact_task
                     .as_ref()
                     .expect("compact_task shouldn't be None");
+                //获取到compact_status
                 let compact_status = compact_statuses
                     .get_mut(&task.compaction_group_id)
                     .ok_or(Error::InvalidCompactionGroup(task.compaction_group_id))?;
+                //上报异常任务
                 compact_status.report_compact_task(
                     assignment
                         .compact_task
@@ -1152,10 +1199,12 @@ where
                         .expect("compact_task shouldn't be None"),
                 );
             }
+            //清除context_id相关task
             compact_task_assignment.retain(|_, v| v.context_id != *context_id);
             pinned_versions.remove(context_id);
             pinned_snapshots.remove(context_id);
         }
+        //保存
         commit_multi_var!(
             self,
             None,
@@ -1313,10 +1362,12 @@ where
             )
         };
         let mem_state = get_state().await;
+        //从store里加载对象
         self.load_meta_store_state()
             .await
             .expect("Failed to load state from meta store");
         let loaded_state = get_state().await;
+        //验证所有对象是否都已经持久化成功
         assert_eq!(
             mem_state, loaded_state,
             "hummock in-mem state is inconsistent with meta store state",
@@ -1392,6 +1443,7 @@ where
             let compaction_guard = self.compaction.read().await;
             let versioning_guard = self.versioning.read().await;
             let mut active_context_ids = HashSet::new();
+            //活跃的worker_id
             active_context_ids.extend(
                 compaction_guard
                     .compact_task_assignment
@@ -1403,6 +1455,7 @@ where
             active_context_ids
         };
 
+        //验证是否在集群, invalid_context_ids验证不在集群列表
         let mut invalid_context_ids = vec![];
         for active_context_id in &active_context_ids {
             if !self.check_context(*active_context_id).await {
@@ -1410,8 +1463,9 @@ where
             }
         }
 
+        //释放资源
         self.release_contexts(&invalid_context_ids).await?;
-
+        //返回
         Ok(invalid_context_ids)
     }
 
@@ -1478,6 +1532,7 @@ where
         let mut compact_statuses = VarTransaction::new(&mut compaction.compaction_statuses);
         let mut cancelled_count = 0;
         for (_, compact_status) in compact_statuses.iter_mut() {
+            //compact_task_assignment已经不包含pending_task_id 就可以取消
             cancelled_count += compact_status.cancel_compaction_tasks_if(|pending_task_id| {
                 !compaction
                     .compact_task_assignment
@@ -1485,6 +1540,7 @@ where
             });
         }
         if cancelled_count > 0 {
+            //对象有变化需要重新提交
             commit_multi_var!(self, None, compact_statuses)?;
         }
         #[cfg(test)]

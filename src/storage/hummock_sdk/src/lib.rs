@@ -25,7 +25,7 @@ pub mod prost_key_range;
 pub type HummockSSTableId = u64;
 pub type HummockRefCount = u64;
 pub type HummockVersionId = u64;
-pub type HummockContextId = u32;
+pub type HummockContextId = u32; //computeid
 pub type HummockEpoch = u64;
 pub type HummockCompactionTaskId = u64;
 pub type CompactionGroupId = u64;

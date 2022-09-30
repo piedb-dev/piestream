@@ -54,13 +54,16 @@ pub trait HummockPinnedVersionExt {
 }
 
 impl HummockPinnedVersionExt for HummockPinnedVersion {
+    //HummockVersionId不在列表则加入列表
     fn pin_version(&mut self, version_id: HummockVersionId) {
         let found = self.version_id.iter().position(|&v| v == version_id);
         if found.is_none() {
+            //为空加入列表
             self.version_id.push(version_id);
         }
     }
 
+    //在version_id列表则删除
     fn unpin_version(&mut self, pinned_version_id: HummockVersionId) {
         let found = self.version_id.iter().position(|&v| v == pinned_version_id);
         if let Some(pos) = found {

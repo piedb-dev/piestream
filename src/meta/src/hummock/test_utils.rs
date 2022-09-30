@@ -229,12 +229,14 @@ pub async fn setup_compute_env(
             .await
             .unwrap(),
     );
+    //设置compaction各种参数
     let config = CompactionConfigBuilder::new()
         .level0_tigger_file_numer(2)
         .level0_tier_compact_file_number(1)
         .min_compaction_bytes(1)
         .max_bytes_for_level_base(1)
         .build();
+    //group管理
     let compaction_group_manager = Arc::new(
         CompactionGroupManager::new_with_config(env.clone(), config.clone())
             .await
@@ -254,6 +256,7 @@ pub async fn setup_compute_env(
         .await
         .unwrap(),
     );
+   
     let fake_host_address = HostAddress {
         host: "127.0.0.1".to_string(),
         port,

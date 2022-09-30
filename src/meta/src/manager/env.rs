@@ -189,6 +189,7 @@ impl MetaSrvEnv<MemStore> {
             lease_id: 0,
             node_address: "".to_string(),
         };
+        //租客信息
         let lease_info = MetaLeaseInfo {
             leader: Some(leader_info.clone()),
             lease_register_time: 0,

@@ -62,7 +62,7 @@ async fn test_hummock_pin_unpin() {
         let levels = hummock_version
             .get_compaction_group_levels(StaticCompactionGroupId::StateDefault.into());
         assert_eq!(version_id, hummock_version.id);
-        assert_eq!(7, levels.len());
+        assert_eq!(7, levels.len()); //1个LevelType::Overlapping +6个LevelType::NoOverlapping 
         assert_eq!(0, levels[0].table_infos.len());
         assert_eq!(0, levels[1].table_infos.len());
 
@@ -135,10 +135,12 @@ async fn test_unpin_snapshot_before() {
 
     // unpin nonexistent target will not return error
     for _ in 0..3 {
+        //context_id节点列表中删除小于epoch的HummockSnapshot
         hummock_manager
             .unpin_snapshot_before(context_id, HummockSnapshot { epoch })
             .await
             .unwrap();
+        //epoch=0不会有数据删除
         assert_eq!(
             pin_snapshots_sum(&HummockPinnedSnapshot::list(env.meta_store()).await.unwrap()),
             1

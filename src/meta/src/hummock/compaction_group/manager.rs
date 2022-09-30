@@ -250,8 +250,10 @@ impl CompactionGroupManagerInner {
         if !loaded_compaction_groups.is_empty() {
             self.compaction_groups = loaded_compaction_groups;
         } else {
+            //初始化插入记录
             let compaction_groups = &mut self.compaction_groups;
             let mut new_compaction_groups = VarTransaction::new(compaction_groups);
+            //默认插入两种类型compaction
             let static_compaction_groups = vec![
                 CompactionGroup::new(StaticCompactionGroupId::StateDefault.into(), config.clone()),
                 CompactionGroup::new(
@@ -263,9 +265,13 @@ impl CompactionGroupManagerInner {
                 new_compaction_groups
                     .insert(static_compaction_group.group_id(), static_compaction_group);
             }
+            //同步持久化
             let mut trx = Transaction::default();
+            //对象存储到trx
             new_compaction_groups.apply_to_txn(&mut trx)?;
+            //持久化
             meta_store.txn(trx).await?;
+            //新对象复制给老对象
             new_compaction_groups.commit();
         }
 

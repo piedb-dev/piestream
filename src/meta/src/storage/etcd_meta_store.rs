@@ -199,12 +199,15 @@ impl MetaStore for EtcdMetaStore {
         Ok(())
     }
 
+   
     async fn txn(&self, trx: Transaction) -> Result<()> {
         let (preconditions, operations) = trx.into_parts();
+         //从远端etcd服务获取值进行比较
         let when = preconditions
             .into_iter()
             .map(|cond| match cond {
                 super::Precondition::KeyExists { cf, key } => {
+                    //不等于空，即从ectc获取到了结果
                     Compare::value(encode_etcd_key(&cf, &key), CompareOp::NotEqual, vec![])
                 }
                 super::Precondition::KeyEqual { cf, key, value } => {
@@ -213,6 +216,7 @@ impl MetaStore for EtcdMetaStore {
             })
             .collect::<Vec<_>>();
 
+        //获取到Txnop列表
         let then = operations
             .into_iter()
             .map(|op| match op {
@@ -228,6 +232,7 @@ impl MetaStore for EtcdMetaStore {
             })
             .collect::<Vec<_>>();
 
+        //when条件都满足则更新then
         let etcd_txn = Txn::new().when(when).and_then(then);
         if !self.client.kv_client().txn(etcd_txn).await?.succeeded() {
             Err(Error::TransactionAbort())

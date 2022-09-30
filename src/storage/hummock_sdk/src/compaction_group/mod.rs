@@ -20,6 +20,7 @@ pub type StateTableId = u32;
 
 /// A compaction task's `StaticCompactionGroupId` indicates the compaction group that all its input
 /// SSTs belong to.
+/// 三种不同类型的压缩任务
 pub enum StaticCompactionGroupId {
     /// All shared buffer local compaction task goes to here. Meta service will never see this
     /// value. Note that currently we've restricted the compaction task's input by `via

@@ -59,12 +59,15 @@ pub trait LevelSelector: Sync + Send {
 
 #[derive(Default)]
 pub struct SelectContext {
+    //level_max_bytes可理解为压缩目标
     level_max_bytes: Vec<u64>,
 
     // All data will be placed in the last level. When the cluster is empty, the files in L0 will
     // be compact to `max_level`, and the `max_level` would be `base_level`. When the total
     // size of the files in  `base_level` reaches its capacity, we will place data in a higher
     // level, which equals to `base_level -= 1;`.
+    //开始所有数据放置到last level,当集群为空，L0层文件将用max_level来压缩，此时max_level将是base_level
+    //当"base_level"里文件总大小已经到达容量，我们会将数据放置到更高级别。等于base_level=1
     base_level: usize,
     score_levels: Vec<(u64, usize, usize)>,
 }
@@ -138,6 +141,7 @@ impl DynamicLevelSelector {
             }
         }
 
+        //重新设置
         ctx.level_max_bytes
             .resize(self.config.max_level as usize + 1, u64::MAX);
 
@@ -188,13 +192,16 @@ impl DynamicLevelSelector {
         levels: &[Level],
         handlers: &mut [LevelHandler],
     ) -> SelectContext {
+        //计算每个level目标level_max_bytes
         let mut ctx = self.calculate_level_base_size(levels);
 
         // The bottommost level can not be input level.
         for level in &levels[..self.config.max_level as usize] {
             let level_idx = level.level_idx as usize;
+            //空闲文件数
             let idle_file_count =
                 (level.table_infos.len() - handlers[level_idx].get_pending_file_count()) as u64;
+            //剩余空间
             let total_size = level.total_file_size - handlers[level_idx].get_pending_file_size();
             if total_size == 0 {
                 continue;
