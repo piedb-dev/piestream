@@ -70,7 +70,7 @@ dependencies = [
 [[package]]
 name = "apache-avro"
 version = "0.14.0"
-source = "git+https://github.com/piestreamlabs/avro?branch=master#024f422ebda0d33b153e2ceecd2c3d538f90af21"
+source = "git+https://github.com/risingwavelabs/avro?branch=master#024f422ebda0d33b153e2ceecd2c3d538f90af21"
 dependencies = [
  "byteorder",
  "bzip2",
@@ -1657,7 +1657,7 @@ dependencies = [
 [[package]]
 name = "darwin-libproc"
 version = "0.2.0"
-source = "git+https://github.com/piestreamlabs/darwin-libproc.git?rev=a502be24bd0971463f5bcbfe035a248d8ba503b7#a502be24bd0971463f5bcbfe035a248d8ba503b7"
+source = "git+https://github.com/risingwavelabs/darwin-libproc.git?rev=a502be24bd0971463f5bcbfe035a248d8ba503b7#a502be24bd0971463f5bcbfe035a248d8ba503b7"
 dependencies = [
  "darwin-libproc-sys",
  "libc",
@@ -1667,7 +1667,7 @@ dependencies = [
 [[package]]
 name = "darwin-libproc-sys"
 version = "0.2.0"
-source = "git+https://github.com/piestreamlabs/darwin-libproc.git?rev=a502be24bd0971463f5bcbfe035a248d8ba503b7#a502be24bd0971463f5bcbfe035a248d8ba503b7"
+source = "git+https://github.com/risingwavelabs/darwin-libproc.git?rev=a502be24bd0971463f5bcbfe035a248d8ba503b7#a502be24bd0971463f5bcbfe035a248d8ba503b7"
 
 [[package]]
 name = "dashmap"
@@ -2899,7 +2899,7 @@ dependencies = [
 [[package]]
 name = "lru"
 version = "0.7.6"
-source = "git+https://github.com/piestreamlabs/lru-rs.git?branch=evict_by_timestamp#b972b4e486311c0eb3e4e48a849003bcc440224d"
+source = "git+https://github.com/risingwavelabs/lru-rs?branch=evict_by_timestamp#b972b4e486311c0eb3e4e48a849003bcc440224d"
 dependencies = [
  "hashbrown",
 ]
@@ -3911,6 +3911,1068 @@ dependencies = [
 ]
 
 [[package]]
+name = "piestream_batch"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-recursion",
+ "async-stream",
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "criterion 0.3.6",
+ "either",
+ "farmhash",
+ "fixedbitset",
+ "futures",
+ "futures-async-stream",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "memcomparable",
+ "minitrace",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_common",
+ "piestream_connector",
+ "piestream_expr",
+ "piestream_hummock_sdk",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_source",
+ "piestream_storage",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "serde",
+ "serde-value",
+ "serde_json",
+ "smallvec",
+ "static_assertions",
+ "tempfile",
+ "thiserror",
+ "tikv-jemallocator",
+ "tokio-metrics",
+ "tokio-stream",
+ "tracing",
+ "tracing-futures",
+ "twox-hash",
+ "url",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_bench"
+version = "0.2.0-alpha"
+dependencies = [
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-smithy-http",
+ "bcc",
+ "bytes",
+ "bytesize",
+ "clap 3.2.17",
+ "futures",
+ "hdrhistogram",
+ "isahc",
+ "itertools",
+ "libc",
+ "madsim-tokio",
+ "minitrace",
+ "minitrace-jaeger",
+ "moka",
+ "nix",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "parking_lot 0.12.1",
+ "piestream_common",
+ "piestream_hummock_sdk",
+ "piestream_meta",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_storage",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_cmd"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap 3.2.17",
+ "global_stats_alloc",
+ "log",
+ "madsim-tokio",
+ "piestream_compaction_test",
+ "piestream_compactor",
+ "piestream_compute",
+ "piestream_ctl",
+ "piestream_frontend",
+ "piestream_meta",
+ "piestream_rt",
+ "stats_alloc",
+ "tikv-jemallocator",
+ "tracing",
+ "workspace-config",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_cmd_all"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap 3.2.17",
+ "global_stats_alloc",
+ "log",
+ "madsim-tokio",
+ "piestream_common",
+ "piestream_compactor",
+ "piestream_compute",
+ "piestream_ctl",
+ "piestream_frontend",
+ "piestream_meta",
+ "piestream_rt",
+ "risedev",
+ "stats_alloc",
+ "sync-point",
+ "tikv-jemallocator",
+ "tracing",
+ "workspace-config",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_common"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "auto_enums",
+ "bitflags",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "comfy-table",
+ "crc32fast",
+ "criterion 0.4.0",
+ "darwin-libproc",
+ "either",
+ "enum-as-inner",
+ "fixedbitset",
+ "futures",
+ "futures-async-stream",
+ "humantime",
+ "itertools",
+ "libc",
+ "lru 0.7.6",
+ "madsim-tokio",
+ "madsim-tonic",
+ "memcomparable",
+ "more-asserts",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "parse-display",
+ "paste",
+ "piestream_pb",
+ "pin-project",
+ "postgres-types",
+ "procfs",
+ "procinfo",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "smallvec",
+ "spin 0.9.4",
+ "strum",
+ "strum_macros",
+ "sysinfo",
+ "thiserror",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "twox-hash",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_common_service"
+version = "0.2.0-alpha"
+dependencies = [
+ "async-trait",
+ "hyper",
+ "madsim-tokio",
+ "madsim-tonic",
+ "piestream_common",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "prometheus",
+ "tower",
+ "tower-http",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_compaction_test"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap 3.2.17",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "parking_lot 0.12.1",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_hummock_sdk",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_storage",
+ "prometheus",
+ "serde",
+ "tokio-retry",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_compactor"
+version = "0.2.0-alpha"
+dependencies = [
+ "clap 3.2.17",
+ "madsim-tokio",
+ "madsim-tonic",
+ "parking_lot 0.12.1",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_hummock_sdk",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_storage",
+ "prometheus",
+ "serde",
+ "tokio-retry",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_compute"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "async_stack_trace",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "clap 3.2.17",
+ "crc32fast",
+ "dyn-clone",
+ "either",
+ "farmhash",
+ "futures",
+ "futures-async-stream",
+ "hyper",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "memcomparable",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_batch",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_connector",
+ "piestream_hummock_sdk",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_source",
+ "piestream_storage",
+ "piestream_stream",
+ "pprof",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "serde",
+ "serde-value",
+ "serde_json",
+ "smallvec",
+ "static_assertions",
+ "tempfile",
+ "thiserror",
+ "tokio-stream",
+ "tower",
+ "tower-http",
+ "tracing",
+ "twox-hash",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_connector"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-kinesis",
+ "aws-sdk-s3",
+ "aws-sdk-sqs",
+ "aws-smithy-http",
+ "aws-smithy-types",
+ "aws-types",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "either",
+ "enum-as-inner",
+ "farmhash",
+ "futures",
+ "futures-async-stream",
+ "futures-concurrency",
+ "globset",
+ "http",
+ "http-serde",
+ "humantime",
+ "hyper",
+ "itertools",
+ "madsim-rdkafka",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "memcomparable",
+ "mysql_async",
+ "num-traits",
+ "paste",
+ "piestream_common",
+ "piestream_pb",
+ "piestream_storage",
+ "prost",
+ "pulsar",
+ "rand 0.8.5",
+ "rust_decimal",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_with",
+ "smallvec",
+ "static_assertions",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
+ "tokio-retry",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "twox-hash",
+ "url",
+ "urlencoding",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_ctl"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "clap 3.2.17",
+ "comfy-table",
+ "futures",
+ "madsim-tokio",
+ "parking_lot 0.12.1",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_frontend",
+ "piestream_hummock_sdk",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_storage",
+ "regex",
+ "size",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_expr"
+version = "0.2.0-alpha"
+dependencies = [
+ "aho-corasick",
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "dyn-clone",
+ "either",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "md5",
+ "memcomparable",
+ "num-traits",
+ "parse-display",
+ "paste",
+ "piestream_common",
+ "piestream_pb",
+ "postgres-types",
+ "prost",
+ "regex",
+ "rust_decimal",
+ "serde",
+ "smallvec",
+ "speedate",
+ "thiserror",
+ "tokio-stream",
+ "toml",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_frontend"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "assert-impl",
+ "assert_matches",
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "clap 3.2.17",
+ "derivative",
+ "downcast-rs",
+ "dyn-clone",
+ "enum-as-inner",
+ "fixedbitset",
+ "futures",
+ "futures-async-stream",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "md5",
+ "num-integer",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "parse-display",
+ "paste",
+ "pgwire",
+ "piestream_batch",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_expr",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_source",
+ "piestream_sqlparser",
+ "piestream_storage",
+ "pin-project-lite",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha2",
+ "smallvec",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_hummock_sdk"
+version = "0.2.0-alpha"
+dependencies = [
+ "bytes",
+ "hex",
+ "itertools",
+ "madsim-tokio",
+ "num-derive",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "parse-display",
+ "piestream_common",
+ "piestream_pb",
+ "prost",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_hummock_test"
+version = "0.2.0-alpha"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fail",
+ "futures",
+ "itertools",
+ "madsim-tokio",
+ "parking_lot 0.12.1",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_compute",
+ "piestream_hummock_sdk",
+ "piestream_meta",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_storage",
+ "rand 0.8.5",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_meta"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "clap 3.2.17",
+ "crc32fast",
+ "derivative",
+ "either",
+ "fail",
+ "function_name",
+ "futures",
+ "hex",
+ "hyper",
+ "itertools",
+ "madsim-etcd-client",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "memcomparable",
+ "num-integer",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_connector",
+ "piestream_hummock_sdk",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_test_runner",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serial_test",
+ "smallvec",
+ "static_assertions",
+ "sync-point",
+ "tempfile",
+ "thiserror",
+ "tokio-retry",
+ "tokio-stream",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_object_store"
+version = "0.2.0-alpha"
+dependencies = [
+ "async-trait",
+ "async_stack_trace",
+ "aws-config",
+ "aws-endpoint",
+ "aws-sdk-s3",
+ "aws-smithy-http",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "crc32fast",
+ "fail",
+ "futures",
+ "hyper",
+ "itertools",
+ "madsim-tokio",
+ "piestream_common",
+ "prometheus",
+ "spin 0.9.4",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_pb"
+version = "0.2.0-alpha"
+dependencies = [
+ "bytes",
+ "madsim-tonic",
+ "madsim-tonic-build",
+ "pbjson",
+ "pbjson-build",
+ "prost",
+ "prost-helpers",
+ "prost-types",
+ "serde",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_planner_test"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "console",
+ "futures",
+ "itertools",
+ "libtest-mimic",
+ "madsim-tokio",
+ "piestream_frontend",
+ "piestream_sqlparser",
+ "serde",
+ "serde_with",
+ "serde_yaml 0.9.9",
+ "tempfile",
+ "walkdir",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_regress_test"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap 3.2.17",
+ "madsim-tokio",
+ "path-absolutize",
+ "similar",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_rpc_client"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "async_stack_trace",
+ "futures",
+ "madsim-tokio",
+ "madsim-tonic",
+ "moka",
+ "paste",
+ "piestream_common",
+ "piestream_hummock_sdk",
+ "piestream_pb",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio-retry",
+ "tokio-stream",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_rt"
+version = "0.2.0-alpha"
+dependencies = [
+ "async-trait",
+ "console",
+ "console-subscriber",
+ "futures",
+ "madsim-tokio",
+ "parking_lot 0.12.1",
+ "pprof",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_simulation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 3.2.17",
+ "futures",
+ "glob",
+ "madsim",
+ "madsim-etcd-client",
+ "madsim-rdkafka",
+ "madsim-tokio",
+ "openssl",
+ "piestream_compactor",
+ "piestream_compute",
+ "piestream_frontend",
+ "piestream_meta",
+ "piestream_sqlsmith",
+ "postgres-openssl",
+ "rand 0.8.5",
+ "sqllogictest",
+ "tempfile",
+ "tokio-postgres",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_simulation_scale"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap 3.2.17",
+ "futures",
+ "glob",
+ "itertools",
+ "madsim",
+ "madsim-tokio",
+ "piestream_compactor",
+ "piestream_compute",
+ "piestream_ctl",
+ "piestream_frontend",
+ "piestream_meta",
+ "piestream_pb",
+ "rand 0.8.5",
+ "sqllogictest",
+ "tempfile",
+ "tokio-postgres",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_source"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "apache-avro",
+ "assert_matches",
+ "async-stream",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "criterion 0.4.0",
+ "enum-as-inner",
+ "farmhash",
+ "futures",
+ "futures-async-stream",
+ "itertools",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "memcomparable",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_common",
+ "piestream_connector",
+ "piestream_expr",
+ "piestream_pb",
+ "piestream_storage",
+ "prometheus",
+ "prost",
+ "prost-reflect",
+ "rand 0.8.5",
+ "serde",
+ "serde-value",
+ "serde_derive",
+ "serde_json",
+ "simd-json",
+ "smallvec",
+ "static_assertions",
+ "tempfile",
+ "thiserror",
+ "tokio-stream",
+ "tracing",
+ "twox-hash",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_sqlparser"
+version = "0.2.0-alpha"
+dependencies = [
+ "itertools",
+ "matches",
+ "serde",
+ "serde_json",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_sqlparser_test_runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "piestream_sqlparser",
+ "serde",
+ "serde_yaml 0.8.26",
+ "tempfile",
+ "walkdir",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_sqlsmith"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap 3.2.17",
+ "futures",
+ "itertools",
+ "libtest-mimic",
+ "madsim-tokio",
+ "paste",
+ "piestream_common",
+ "piestream_expr",
+ "piestream_frontend",
+ "piestream_sqlparser",
+ "rand 0.8.5",
+ "tokio-postgres",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_storage"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "async_stack_trace",
+ "auto_enums",
+ "bitvec",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "criterion 0.3.6",
+ "crossbeam",
+ "dashmap",
+ "dyn-clone",
+ "either",
+ "enum-as-inner",
+ "fail",
+ "farmhash",
+ "fiemap",
+ "futures",
+ "futures-async-stream",
+ "hyper",
+ "itertools",
+ "libc",
+ "lz4",
+ "madsim-tokio",
+ "madsim-tonic",
+ "memcomparable",
+ "minitrace",
+ "minstant",
+ "moka",
+ "nix",
+ "num-integer",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_common",
+ "piestream_common_service",
+ "piestream_hummock_sdk",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_test_runner",
+ "piestream_tracing",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "regex",
+ "scopeguard",
+ "serde",
+ "smallvec",
+ "spin 0.9.4",
+ "sync-point",
+ "tempfile",
+ "thiserror",
+ "tokio-metrics",
+ "tokio-retry",
+ "tokio-stream",
+ "tracing",
+ "twox-hash",
+ "uuid",
+ "workspace-hack",
+ "zstd",
+]
+
+[[package]]
+name = "piestream_stream"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-stream",
+ "async-trait",
+ "async_stack_trace",
+ "auto_enums",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "dyn-clone",
+ "either",
+ "enum-as-inner",
+ "farmhash",
+ "fixedbitset",
+ "futures",
+ "futures-async-stream",
+ "global_stats_alloc",
+ "hyper",
+ "iter-chunks",
+ "itertools",
+ "local_stats_alloc",
+ "lru 0.7.6",
+ "madsim-tokio",
+ "madsim-tonic",
+ "maplit",
+ "memcomparable",
+ "minitrace",
+ "minstant",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "paste",
+ "piestream_common",
+ "piestream_connector",
+ "piestream_expr",
+ "piestream_hummock_sdk",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "piestream_source",
+ "piestream_storage",
+ "pin-project",
+ "prometheus",
+ "prost",
+ "rand 0.8.5",
+ "serde",
+ "serde-value",
+ "serde_json",
+ "smallvec",
+ "static_assertions",
+ "stats_alloc",
+ "thiserror",
+ "tikv-jemalloc-ctl",
+ "tokio-metrics",
+ "tokio-stream",
+ "tower",
+ "tracing",
+ "tracing-futures",
+ "twox-hash",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_sync_point_test"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "itertools",
+ "madsim-tokio",
+ "piestream_cmd_all",
+ "piestream_common",
+ "piestream_object_store",
+ "piestream_pb",
+ "piestream_rpc_client",
+ "serial_test",
+ "sync-point",
+]
+
+[[package]]
+name = "piestream_test_runner"
+version = "0.2.0-alpha"
+dependencies = [
+ "fail",
+ "workspace-hack",
+]
+
+[[package]]
+name = "piestream_tracing"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "futures",
+ "madsim-tokio",
+ "minitrace",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4581,1068 +5643,6 @@ dependencies = [
  "tempfile",
  "workspace-hack",
  "yaml-rust",
-]
-
-[[package]]
-name = "piestream_batch"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-recursion",
- "async-stream",
- "async-trait",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "criterion 0.3.6",
- "either",
- "farmhash",
- "fixedbitset",
- "futures",
- "futures-async-stream",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "memcomparable",
- "minitrace",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "piestream_common",
- "piestream_connector",
- "piestream_expr",
- "piestream_hummock_sdk",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_source",
- "piestream_storage",
- "serde",
- "serde-value",
- "serde_json",
- "smallvec",
- "static_assertions",
- "tempfile",
- "thiserror",
- "tikv-jemallocator",
- "tokio-metrics",
- "tokio-stream",
- "tracing",
- "tracing-futures",
- "twox-hash",
- "url",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_bench"
-version = "0.2.0-alpha"
-dependencies = [
- "async-trait",
- "aws-config",
- "aws-sdk-s3",
- "aws-smithy-http",
- "bcc",
- "bytes",
- "bytesize",
- "clap 3.2.17",
- "futures",
- "hdrhistogram",
- "isahc",
- "itertools",
- "libc",
- "madsim-tokio",
- "minitrace",
- "minitrace-jaeger",
- "moka",
- "nix",
- "opentelemetry",
- "opentelemetry-jaeger",
- "parking_lot 0.12.1",
- "prometheus",
- "rand 0.8.5",
- "piestream_common",
- "piestream_hummock_sdk",
- "piestream_meta",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_storage",
- "serde",
- "tokio-stream",
- "toml",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_cmd"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "clap 3.2.17",
- "global_stats_alloc",
- "log",
- "madsim-tokio",
- "piestream_compaction_test",
- "piestream_compactor",
- "piestream_compute",
- "piestream_ctl",
- "piestream_frontend",
- "piestream_meta",
- "piestream_rt",
- "stats_alloc",
- "tikv-jemallocator",
- "tracing",
- "workspace-config",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_cmd_all"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "clap 3.2.17",
- "global_stats_alloc",
- "log",
- "madsim-tokio",
- "risedev",
- "piestream_common",
- "piestream_compactor",
- "piestream_compute",
- "piestream_ctl",
- "piestream_frontend",
- "piestream_meta",
- "piestream_rt",
- "stats_alloc",
- "sync-point",
- "tikv-jemallocator",
- "tracing",
- "workspace-config",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_common"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "auto_enums",
- "bitflags",
- "byteorder",
- "bytes",
- "chrono",
- "comfy-table",
- "crc32fast",
- "criterion 0.4.0",
- "darwin-libproc",
- "either",
- "enum-as-inner",
- "fixedbitset",
- "futures",
- "futures-async-stream",
- "humantime",
- "itertools",
- "libc",
- "lru 0.7.6",
- "madsim-tokio",
- "madsim-tonic",
- "memcomparable",
- "more-asserts",
- "num-traits",
- "parking_lot 0.12.1",
- "parse-display",
- "paste",
- "pin-project",
- "postgres-types",
- "procfs",
- "procinfo",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "regex",
- "piestream_pb",
- "rust_decimal",
- "serde",
- "serde_derive",
- "serde_json",
- "smallvec",
- "spin 0.9.4",
- "strum",
- "strum_macros",
- "sysinfo",
- "thiserror",
- "tokio-stream",
- "toml",
- "tracing",
- "twox-hash",
- "url",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_common_service"
-version = "0.2.0-alpha"
-dependencies = [
- "async-trait",
- "hyper",
- "madsim-tokio",
- "madsim-tonic",
- "prometheus",
- "piestream_common",
- "piestream_pb",
- "piestream_rpc_client",
- "tower",
- "tower-http",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_compaction_test"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "bytes",
- "clap 3.2.17",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "parking_lot 0.12.1",
- "prometheus",
- "piestream_common",
- "piestream_common_service",
- "piestream_hummock_sdk",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_storage",
- "serde",
- "tokio-retry",
- "tokio-stream",
- "toml",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_compactor"
-version = "0.2.0-alpha"
-dependencies = [
- "clap 3.2.17",
- "madsim-tokio",
- "madsim-tonic",
- "parking_lot 0.12.1",
- "prometheus",
- "piestream_common",
- "piestream_common_service",
- "piestream_hummock_sdk",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_storage",
- "serde",
- "tokio-retry",
- "tokio-stream",
- "toml",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_compute"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "async_stack_trace",
- "byteorder",
- "bytes",
- "chrono",
- "clap 3.2.17",
- "crc32fast",
- "dyn-clone",
- "either",
- "farmhash",
- "futures",
- "futures-async-stream",
- "hyper",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "memcomparable",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "pprof",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "piestream_batch",
- "piestream_common",
- "piestream_common_service",
- "piestream_connector",
- "piestream_hummock_sdk",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_source",
- "piestream_storage",
- "piestream_stream",
- "serde",
- "serde-value",
- "serde_json",
- "smallvec",
- "static_assertions",
- "tempfile",
- "thiserror",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "twox-hash",
- "url",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_connector"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "aws-config",
- "aws-sdk-kinesis",
- "aws-sdk-s3",
- "aws-sdk-sqs",
- "aws-smithy-http",
- "aws-smithy-types",
- "aws-types",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "either",
- "enum-as-inner",
- "farmhash",
- "futures",
- "futures-async-stream",
- "futures-concurrency",
- "globset",
- "http",
- "http-serde",
- "humantime",
- "hyper",
- "itertools",
- "madsim-rdkafka",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "memcomparable",
- "mysql_async",
- "num-traits",
- "paste",
- "prost",
- "pulsar",
- "rand 0.8.5",
- "piestream_common",
- "piestream_pb",
- "piestream_storage",
- "rust_decimal",
- "serde",
- "serde_derive",
- "serde_json",
- "serde_with",
- "smallvec",
- "static_assertions",
- "strum",
- "strum_macros",
- "tempfile",
- "thiserror",
- "tokio-retry",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "twox-hash",
- "url",
- "urlencoding",
- "wiremock",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_ctl"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "bytes",
- "chrono",
- "clap 3.2.17",
- "comfy-table",
- "futures",
- "madsim-tokio",
- "parking_lot 0.12.1",
- "regex",
- "piestream_common",
- "piestream_common_service",
- "piestream_frontend",
- "piestream_hummock_sdk",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_storage",
- "size",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_expr"
-version = "0.2.0-alpha"
-dependencies = [
- "aho-corasick",
- "anyhow",
- "async-stream",
- "async-trait",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "dyn-clone",
- "either",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "md5",
- "memcomparable",
- "num-traits",
- "parse-display",
- "paste",
- "postgres-types",
- "prost",
- "regex",
- "piestream_common",
- "piestream_pb",
- "rust_decimal",
- "serde",
- "smallvec",
- "speedate",
- "thiserror",
- "tokio-stream",
- "toml",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_frontend"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "arc-swap",
- "assert-impl",
- "assert_matches",
- "async-trait",
- "byteorder",
- "bytes",
- "clap 3.2.17",
- "derivative",
- "downcast-rs",
- "dyn-clone",
- "enum-as-inner",
- "fixedbitset",
- "futures",
- "futures-async-stream",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "md5",
- "num-integer",
- "num-traits",
- "parking_lot 0.12.1",
- "parse-display",
- "paste",
- "pgwire",
- "pin-project-lite",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "piestream_batch",
- "piestream_common",
- "piestream_common_service",
- "piestream_expr",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_source",
- "piestream_sqlparser",
- "piestream_storage",
- "serde",
- "serde_derive",
- "serde_json",
- "sha2",
- "smallvec",
- "tempfile",
- "thiserror",
- "tracing",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_hummock_sdk"
-version = "0.2.0-alpha"
-dependencies = [
- "bytes",
- "hex",
- "itertools",
- "madsim-tokio",
- "num-derive",
- "num-traits",
- "parking_lot 0.12.1",
- "parse-display",
- "prost",
- "piestream_common",
- "piestream_pb",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_hummock_test"
-version = "0.2.0-alpha"
-dependencies = [
- "async-trait",
- "bytes",
- "fail",
- "futures",
- "itertools",
- "madsim-tokio",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "piestream_common",
- "piestream_common_service",
- "piestream_compute",
- "piestream_hummock_sdk",
- "piestream_meta",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_storage",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_meta"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-stream",
- "async-trait",
- "axum",
- "byteorder",
- "bytes",
- "chrono",
- "clap 3.2.17",
- "crc32fast",
- "derivative",
- "either",
- "fail",
- "function_name",
- "futures",
- "hex",
- "hyper",
- "itertools",
- "madsim-etcd-client",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "memcomparable",
- "num-integer",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "piestream_common",
- "piestream_common_service",
- "piestream_connector",
- "piestream_hummock_sdk",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_test_runner",
- "serde",
- "serde_derive",
- "serde_json",
- "serial_test",
- "smallvec",
- "static_assertions",
- "sync-point",
- "tempfile",
- "thiserror",
- "tokio-retry",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_object_store"
-version = "0.2.0-alpha"
-dependencies = [
- "async-trait",
- "async_stack_trace",
- "aws-config",
- "aws-endpoint",
- "aws-sdk-s3",
- "aws-smithy-http",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "crc32fast",
- "fail",
- "futures",
- "hyper",
- "itertools",
- "madsim-tokio",
- "prometheus",
- "piestream_common",
- "spin 0.9.4",
- "tempfile",
- "thiserror",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_pb"
-version = "0.2.0-alpha"
-dependencies = [
- "bytes",
- "madsim-tonic",
- "madsim-tonic-build",
- "pbjson",
- "pbjson-build",
- "prost",
- "prost-helpers",
- "prost-types",
- "serde",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_planner_test"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "console",
- "futures",
- "itertools",
- "libtest-mimic",
- "madsim-tokio",
- "piestream_frontend",
- "piestream_sqlparser",
- "serde",
- "serde_with",
- "serde_yaml 0.9.9",
- "tempfile",
- "walkdir",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_regress_test"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "clap 3.2.17",
- "madsim-tokio",
- "path-absolutize",
- "similar",
- "tempfile",
- "tracing",
- "tracing-subscriber",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_rpc_client"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "async_stack_trace",
- "futures",
- "madsim-tokio",
- "madsim-tonic",
- "moka",
- "paste",
- "rand 0.8.5",
- "piestream_common",
- "piestream_hummock_sdk",
- "piestream_pb",
- "thiserror",
- "tokio-retry",
- "tokio-stream",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_rt"
-version = "0.2.0-alpha"
-dependencies = [
- "async-trait",
- "console",
- "console-subscriber",
- "futures",
- "madsim-tokio",
- "parking_lot 0.12.1",
- "pprof",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_simulation"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 3.2.17",
- "futures",
- "glob",
- "madsim",
- "madsim-etcd-client",
- "madsim-rdkafka",
- "madsim-tokio",
- "openssl",
- "postgres-openssl",
- "rand 0.8.5",
- "piestream_compactor",
- "piestream_compute",
- "piestream_frontend",
- "piestream_meta",
- "piestream_sqlsmith",
- "sqllogictest",
- "tempfile",
- "tokio-postgres",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_simulation_scale"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "clap 3.2.17",
- "futures",
- "glob",
- "itertools",
- "madsim",
- "madsim-tokio",
- "rand 0.8.5",
- "piestream_compactor",
- "piestream_compute",
- "piestream_ctl",
- "piestream_frontend",
- "piestream_meta",
- "piestream_pb",
- "sqllogictest",
- "tempfile",
- "tokio-postgres",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_source"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "apache-avro",
- "assert_matches",
- "async-stream",
- "async-trait",
- "aws-config",
- "aws-sdk-s3",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "criterion 0.4.0",
- "enum-as-inner",
- "farmhash",
- "futures",
- "futures-async-stream",
- "itertools",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "memcomparable",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "prometheus",
- "prost",
- "prost-reflect",
- "rand 0.8.5",
- "piestream_common",
- "piestream_connector",
- "piestream_expr",
- "piestream_pb",
- "piestream_storage",
- "serde",
- "serde-value",
- "serde_derive",
- "serde_json",
- "simd-json",
- "smallvec",
- "static_assertions",
- "tempfile",
- "thiserror",
- "tokio-stream",
- "tracing",
- "twox-hash",
- "url",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_sqlparser"
-version = "0.2.0-alpha"
-dependencies = [
- "itertools",
- "matches",
- "serde",
- "serde_json",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_sqlparser_test_runner"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "itertools",
- "piestream_sqlparser",
- "serde",
- "serde_yaml 0.8.26",
- "tempfile",
- "walkdir",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_sqlsmith"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "chrono",
- "clap 3.2.17",
- "futures",
- "itertools",
- "libtest-mimic",
- "madsim-tokio",
- "paste",
- "rand 0.8.5",
- "piestream_common",
- "piestream_expr",
- "piestream_frontend",
- "piestream_sqlparser",
- "tokio-postgres",
- "tracing",
- "tracing-subscriber",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_storage"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "async_stack_trace",
- "auto_enums",
- "bitvec",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "criterion 0.3.6",
- "crossbeam",
- "dashmap",
- "dyn-clone",
- "either",
- "enum-as-inner",
- "fail",
- "farmhash",
- "fiemap",
- "futures",
- "futures-async-stream",
- "hyper",
- "itertools",
- "libc",
- "lz4",
- "madsim-tokio",
- "madsim-tonic",
- "memcomparable",
- "minitrace",
- "minstant",
- "moka",
- "nix",
- "num-integer",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "regex",
- "piestream_common",
- "piestream_common_service",
- "piestream_hummock_sdk",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_test_runner",
- "piestream_tracing",
- "scopeguard",
- "serde",
- "smallvec",
- "spin 0.9.4",
- "sync-point",
- "tempfile",
- "thiserror",
- "tokio-metrics",
- "tokio-retry",
- "tokio-stream",
- "tracing",
- "twox-hash",
- "uuid",
- "workspace-hack",
- "zstd",
-]
-
-[[package]]
-name = "piestream_stream"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-stream",
- "async-trait",
- "async_stack_trace",
- "auto_enums",
- "byteorder",
- "bytes",
- "chrono",
- "crc32fast",
- "dyn-clone",
- "either",
- "enum-as-inner",
- "farmhash",
- "fixedbitset",
- "futures",
- "futures-async-stream",
- "global_stats_alloc",
- "hyper",
- "iter-chunks",
- "itertools",
- "local_stats_alloc",
- "lru 0.7.6",
- "madsim-tokio",
- "madsim-tonic",
- "maplit",
- "memcomparable",
- "minitrace",
- "minstant",
- "num-traits",
- "parking_lot 0.12.1",
- "paste",
- "pin-project",
- "prometheus",
- "prost",
- "rand 0.8.5",
- "piestream_common",
- "piestream_connector",
- "piestream_expr",
- "piestream_hummock_sdk",
- "piestream_pb",
- "piestream_rpc_client",
- "piestream_source",
- "piestream_storage",
- "serde",
- "serde-value",
- "serde_json",
- "smallvec",
- "static_assertions",
- "stats_alloc",
- "thiserror",
- "tikv-jemalloc-ctl",
- "tokio-metrics",
- "tokio-stream",
- "tower",
- "tracing",
- "tracing-futures",
- "twox-hash",
- "url",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_sync_point_test"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "itertools",
- "madsim-tokio",
- "piestream_cmd_all",
- "piestream_common",
- "piestream_object_store",
- "piestream_pb",
- "piestream_rpc_client",
- "serial_test",
- "sync-point",
-]
-
-[[package]]
-name = "piestream_test_runner"
-version = "0.2.0-alpha"
-dependencies = [
- "fail",
- "workspace-hack",
-]
-
-[[package]]
-name = "piestream_tracing"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "futures",
- "madsim-tokio",
- "minitrace",
- "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6357,7 +6357,6 @@ dependencies = [
  "itertools",
  "madsim-tokio",
  "parking_lot 0.12.1",
- "rand 0.8.5",
  "piestream_common",
  "piestream_common_service",
  "piestream_hummock_sdk",
@@ -6365,6 +6364,7 @@ dependencies = [
  "piestream_pb",
  "piestream_rpc_client",
  "piestream_storage",
+ "rand 0.8.5",
  "serial_test",
  "sync-point",
 ]
