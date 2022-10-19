@@ -21,15 +21,13 @@ use axum::http::{Method, StatusCode};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, get_service};
 use axum::Router;
-use piestream_common::error::ErrorCode;
 use tower::ServiceBuilder;
 use tower_http::add_extension::AddExtensionLayer;
 use tower_http::cors::{self, CorsLayer};
 use tower_http::services::ServeDir;
 
-use crate::cluster::ClusterManagerRef;
+use crate::manager::{ClusterManagerRef, FragmentManagerRef};
 use crate::storage::MetaStore;
-use crate::stream::FragmentManagerRef;
 
 #[derive(Clone)]
 pub struct DashboardService<S: MetaStore> {
@@ -45,13 +43,15 @@ pub type Service<S> = Arc<DashboardService<S>>;
 
 mod handlers {
     use axum::Json;
-    use piestream_pb::catalog::Table;
+    use itertools::Itertools;
+    use piestream_pb::catalog::{Source, Table};
     use piestream_pb::common::WorkerNode;
-    use piestream_pb::meta::ActorLocation;
+    use piestream_pb::meta::{ActorLocation, TableFragments as ProstTableFragments};
     use piestream_pb::stream_plan::StreamActor;
     use serde_json::json;
 
     use super::*;
+    use crate::model::TableFragments;
 
     pub struct DashboardError(anyhow::Error);
     pub type Result<T> = std::result::Result<T, DashboardError>;
@@ -100,6 +100,15 @@ mod handlers {
         Ok(Json(materialized_views))
     }
 
+    pub async fn list_sources<S: MetaStore>(
+        Extension(srv): Extension<Service<S>>,
+    ) -> Result<Json<Vec<Source>>> {
+        use crate::model::MetadataModel;
+
+        let sources = Source::list(&*srv.meta_store).await.map_err(err)?;
+        Ok(Json(sources))
+    }
+
     pub async fn list_actors<S: MetaStore>(
         Extension(srv): Extension<Service<S>>,
     ) -> Result<Json<Vec<ActorLocation>>> {
@@ -135,6 +144,20 @@ mod handlers {
 
         Ok(Json(table_fragments))
     }
+
+    pub async fn list_fragments<S: MetaStore>(
+        Extension(srv): Extension<Service<S>>,
+    ) -> Result<Json<Vec<ProstTableFragments>>> {
+        use crate::model::MetadataModel;
+
+        let table_fragments = TableFragments::list(&*srv.meta_store)
+            .await
+            .map_err(err)?
+            .into_iter()
+            .map(|x| x.to_protobuf())
+            .collect_vec();
+        Ok(Json(table_fragments))
+    }
 }
 
 impl<S> DashboardService<S>
@@ -149,7 +172,9 @@ where
             .route("/clusters/:ty", get(list_clusters::<S>))
             .route("/actors", get(list_actors::<S>))
             .route("/fragments", get(list_table_fragments::<S>))
+            .route("/fragments2", get(list_fragments::<S>))
             .route("/materialized_views", get(list_materialized_views::<S>))
+            .route("/sources", get(list_sources::<S>))
             .layer(
                 ServiceBuilder::new()
                     .layer(AddExtensionLayer::new(srv.clone()))
@@ -192,7 +217,7 @@ where
         axum::Server::bind(&srv.dashboard_addr)
             .serve(app.into_make_service())
             .await
-            .map_err(|err| ErrorCode::MetaError(err.to_string()))?;
+            .map_err(|err| anyhow!(err))?;
         Ok(())
     }
 }

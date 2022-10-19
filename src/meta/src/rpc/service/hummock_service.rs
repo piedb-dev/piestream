@@ -13,20 +13,23 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::time::Duration;
 
-use piestream_common::catalog::TableId;
-use piestream_common::error::{tonic_err, ErrorCode};
+use itertools::Itertools;
+use piestream_common::catalog::{TableId, NON_RESERVED_PG_CATALOG_TABLE_ID};
 use piestream_pb::hummock::hummock_manager_service_server::HummockManagerService;
 use piestream_pb::hummock::*;
 use tonic::{Request, Response, Status};
 
 use crate::hummock::compaction::ManualCompactionOption;
 use crate::hummock::compaction_group::manager::CompactionGroupManagerRef;
-use crate::hummock::{CompactorManagerRef, HummockManagerRef, VacuumTrigger};
+use crate::hummock::{
+    CompactionResumeTrigger, CompactorManagerRef, HummockManagerRef, VacuumManagerRef,
+};
+use crate::manager::FragmentManagerRef;
 use crate::rpc::service::RwReceiverStream;
 use crate::storage::MetaStore;
-use crate::stream::FragmentManagerRef;
+use crate::MetaError;
 
 pub struct HummockServiceImpl<S>
 where
@@ -34,7 +37,7 @@ where
 {
     hummock_manager: HummockManagerRef<S>,
     compactor_manager: CompactorManagerRef,
-    vacuum_trigger: Arc<VacuumTrigger<S>>,
+    vacuum_manager: VacuumManagerRef<S>,
     compaction_group_manager: CompactionGroupManagerRef<S>,
     fragment_manager: FragmentManagerRef<S>,
 }
@@ -46,14 +49,14 @@ where
     pub fn new(
         hummock_manager: HummockManagerRef<S>,
         compactor_manager: CompactorManagerRef,
-        vacuum_trigger: Arc<VacuumTrigger<S>>,
+        vacuum_trigger: VacuumManagerRef<S>,
         compaction_group_manager: CompactionGroupManagerRef<S>,
         fragment_manager: FragmentManagerRef<S>,
     ) -> Self {
         HummockServiceImpl {
             hummock_manager,
             compactor_manager,
-            vacuum_trigger,
+            vacuum_manager: vacuum_trigger,
             compaction_group_manager,
             fragment_manager,
         }
@@ -67,37 +70,87 @@ where
 {
     type SubscribeCompactTasksStream = RwReceiverStream<SubscribeCompactTasksResponse>;
 
-    async fn pin_version(
+    async fn unpin_version_before(
         &self,
-        request: Request<PinVersionRequest>,
-    ) -> Result<Response<PinVersionResponse>, Status> {
+        request: Request<UnpinVersionBeforeRequest>,
+    ) -> Result<Response<UnpinVersionBeforeResponse>, Status> {
         let req = request.into_inner();
-        let result = self
-            .hummock_manager
-            .pin_version(req.context_id, req.last_pinned)
-            .await;
-        match result {
-            Ok(pinned_version) => Ok(Response::new(PinVersionResponse {
-                status: None,
-                pinned_version: Some(pinned_version),
-            })),
-            Err(e) => Err(tonic_err(e)),
-        }
+        self.hummock_manager
+            .unpin_version_before(req.context_id, req.unpin_version_before)
+            .await?;
+        Ok(Response::new(UnpinVersionBeforeResponse { status: None }))
     }
 
-    async fn unpin_version(
+    async fn get_current_version(
         &self,
-        request: Request<UnpinVersionRequest>,
-    ) -> Result<Response<UnpinVersionResponse>, Status> {
+        _request: Request<GetCurrentVersionRequest>,
+    ) -> Result<Response<GetCurrentVersionResponse>, Status> {
+        let current_version = self.hummock_manager.get_current_version().await;
+        Ok(Response::new(GetCurrentVersionResponse {
+            status: None,
+            current_version: Some(current_version),
+        }))
+    }
+
+    async fn reset_current_version(
+        &self,
+        _request: Request<ResetCurrentVersionRequest>,
+    ) -> Result<Response<ResetCurrentVersionResponse>, Status> {
+        let old_version = self.hummock_manager.reset_current_version().await?;
+        Ok(Response::new(ResetCurrentVersionResponse {
+            old_version: Some(old_version),
+        }))
+    }
+
+    async fn replay_version_delta(
+        &self,
+        request: Request<ReplayVersionDeltaRequest>,
+    ) -> Result<Response<ReplayVersionDeltaResponse>, Status> {
         let req = request.into_inner();
-        let result = self
+        let (version, compaction_groups) = self
             .hummock_manager
-            .unpin_version(req.context_id, req.pinned_version_ids)
-            .await;
-        match result {
-            Ok(_) => Ok(Response::new(UnpinVersionResponse { status: None })),
-            Err(e) => Err(tonic_err(e)),
-        }
+            .replay_version_delta(req.version_delta_id)
+            .await?;
+        Ok(Response::new(ReplayVersionDeltaResponse {
+            version: Some(version),
+            modified_compaction_groups: compaction_groups,
+        }))
+    }
+
+    async fn trigger_compaction_deterministic(
+        &self,
+        request: Request<TriggerCompactionDeterministicRequest>,
+    ) -> Result<Response<TriggerCompactionDeterministicResponse>, Status> {
+        let req = request.into_inner();
+        self.hummock_manager
+            .trigger_compaction_deterministic(req.version_id, req.compaction_groups)
+            .await?;
+        Ok(Response::new(TriggerCompactionDeterministicResponse {}))
+    }
+
+    async fn disable_commit_epoch(
+        &self,
+        _request: Request<DisableCommitEpochRequest>,
+    ) -> Result<Response<DisableCommitEpochResponse>, Status> {
+        let version = self.hummock_manager.disable_commit_epoch().await;
+        Ok(Response::new(DisableCommitEpochResponse {
+            current_version: Some(version),
+        }))
+    }
+
+    async fn list_version_deltas(
+        &self,
+        request: Request<ListVersionDeltasRequest>,
+    ) -> Result<Response<ListVersionDeltasResponse>, Status> {
+        let req = request.into_inner();
+        let version_deltas = self
+            .hummock_manager
+            .list_version_deltas(req.start_id, req.num_limit)
+            .await?;
+        let resp = ListVersionDeltasResponse {
+            version_deltas: Some(version_deltas),
+        };
+        Ok(Response::new(resp))
     }
 
     async fn report_compaction_tasks(
@@ -109,19 +162,30 @@ where
             None => Ok(Response::new(ReportCompactionTasksResponse {
                 status: None,
             })),
-            Some(compact_task) => {
-                let result = self
-                    .hummock_manager
-                    .report_compact_task(&compact_task)
-                    .await;
-                match result {
-                    Ok(_) => Ok(Response::new(ReportCompactionTasksResponse {
-                        status: None,
-                    })),
-                    Err(e) => Err(tonic_err(e)),
-                }
+            Some(mut compact_task) => {
+                self.hummock_manager
+                    .report_compact_task(req.context_id, &mut compact_task)
+                    .await?;
+                Ok(Response::new(ReportCompactionTasksResponse {
+                    status: None,
+                }))
             }
         }
+    }
+
+    async fn pin_specific_snapshot(
+        &self,
+        request: Request<PinSpecificSnapshotRequest>,
+    ) -> Result<Response<PinSnapshotResponse>, Status> {
+        let req = request.into_inner();
+        let hummock_snapshot = self
+            .hummock_manager
+            .pin_specific_snapshot(req.context_id, req.epoch)
+            .await?;
+        Ok(Response::new(PinSnapshotResponse {
+            status: None,
+            snapshot: Some(hummock_snapshot),
+        }))
     }
 
     async fn pin_snapshot(
@@ -129,17 +193,11 @@ where
         request: Request<PinSnapshotRequest>,
     ) -> Result<Response<PinSnapshotResponse>, Status> {
         let req = request.into_inner();
-        let result = self
-            .hummock_manager
-            .pin_snapshot(req.context_id, req.last_pinned)
-            .await;
-        match result {
-            Ok(hummock_snapshot) => Ok(Response::new(PinSnapshotResponse {
-                status: None,
-                snapshot: Some(hummock_snapshot),
-            })),
-            Err(e) => Err(tonic_err(e)),
-        }
+        let hummock_snapshot = self.hummock_manager.pin_snapshot(req.context_id).await?;
+        Ok(Response::new(PinSnapshotResponse {
+            status: None,
+            snapshot: Some(hummock_snapshot),
+        }))
     }
 
     async fn unpin_snapshot(
@@ -147,13 +205,7 @@ where
         request: Request<UnpinSnapshotRequest>,
     ) -> Result<Response<UnpinSnapshotResponse>, Status> {
         let req = request.into_inner();
-        if let Err(e) = self
-            .hummock_manager
-            .unpin_snapshot(req.context_id, req.snapshots)
-            .await
-        {
-            return Err(tonic_err(e));
-        }
+        self.hummock_manager.unpin_snapshot(req.context_id).await?;
         Ok(Response::new(UnpinSnapshotResponse { status: None }))
     }
 
@@ -162,45 +214,75 @@ where
         request: Request<UnpinSnapshotBeforeRequest>,
     ) -> Result<Response<UnpinSnapshotBeforeResponse>, Status> {
         let req = request.into_inner();
-        if let Err(e) = self
-            .hummock_manager
+        self.hummock_manager
             .unpin_snapshot_before(req.context_id, req.min_snapshot.unwrap())
-            .await
-        {
-            return Err(tonic_err(e));
-        }
+            .await?;
         Ok(Response::new(UnpinSnapshotBeforeResponse { status: None }))
     }
 
-    async fn get_new_table_id(
+    async fn get_new_sst_ids(
         &self,
-        _request: Request<GetNewTableIdRequest>,
-    ) -> Result<Response<GetNewTableIdResponse>, Status> {
-        let result = self.hummock_manager.get_new_table_id().await;
-        match result {
-            Ok(table_id) => Ok(Response::new(GetNewTableIdResponse {
-                status: None,
-                table_id,
-            })),
-            Err(e) => Err(tonic_err(e)),
-        }
+        request: Request<GetNewSstIdsRequest>,
+    ) -> Result<Response<GetNewSstIdsResponse>, Status> {
+        let sst_id_range = self
+            .hummock_manager
+            .get_new_sst_ids(request.into_inner().number)
+            .await?;
+        Ok(Response::new(GetNewSstIdsResponse {
+            status: None,
+            start_id: sst_id_range.start_id,
+            end_id: sst_id_range.end_id,
+        }))
     }
 
     async fn subscribe_compact_tasks(
         &self,
         request: Request<SubscribeCompactTasksRequest>,
     ) -> Result<Response<Self::SubscribeCompactTasksStream>, Status> {
-        let context_id = request.into_inner().context_id;
+        let req = request.into_inner();
+        let context_id = req.context_id;
         // check_context and add_compactor as a whole is not atomic, but compactor_manager will
         // remove invalid compactor eventually.
         if !self.hummock_manager.check_context(context_id).await {
-            return Err(tonic_err(ErrorCode::MetaError(format!(
-                "invalid hummock context {}",
-                context_id
-            ))));
+            return Err(Status::new(
+                tonic::Code::Internal,
+                format!("invalid hummock context {}", context_id),
+            ));
         }
-        let rx = self.compactor_manager.add_compactor(context_id);
+        let rx = self
+            .compactor_manager
+            .add_compactor(context_id, req.max_concurrent_task_number);
+        // Trigger compaction on all compaction groups.
+        for cg_id in self
+            .hummock_manager
+            .compaction_group_manager()
+            .compaction_group_ids()
+            .await
+        {
+            if let Err(e) = self.hummock_manager.try_send_compaction_request(cg_id) {
+                tracing::warn!(
+                    "Failed to schedule compaction for compaction group {}. {}",
+                    cg_id,
+                    e
+                );
+            }
+        }
+        self.hummock_manager
+            .try_resume_compaction(CompactionResumeTrigger::CompactorAddition { context_id });
         Ok(Response::new(RwReceiverStream::new(rx)))
+    }
+
+    // TODO: convert this into a stream.
+    async fn report_compaction_task_progress(
+        &self,
+        request: Request<ReportCompactionTaskProgressRequest>,
+    ) -> Result<Response<ReportCompactionTaskProgressResponse>, Status> {
+        let req = request.into_inner();
+        self.compactor_manager
+            .update_task_heartbeats(req.context_id, &req.progress);
+        Ok(Response::new(ReportCompactionTaskProgressResponse {
+            status: None,
+        }))
     }
 
     async fn report_vacuum_task(
@@ -208,11 +290,9 @@ where
         request: Request<ReportVacuumTaskRequest>,
     ) -> Result<Response<ReportVacuumTaskResponse>, Status> {
         if let Some(vacuum_task) = request.into_inner().vacuum_task {
-            self.vacuum_trigger
-                .report_vacuum_task(vacuum_task)
-                .await
-                .map_err(tonic_err)?;
+            self.vacuum_manager.report_vacuum_task(vacuum_task).await?;
         }
+        sync_point::sync_point!("AFTER_REPORT_VACUUM");
         Ok(Response::new(ReportVacuumTaskResponse { status: None }))
     }
 
@@ -241,6 +321,7 @@ where
         let compaction_group_id = request.compaction_group_id;
         let mut option = ManualCompactionOption {
             level: request.level as usize,
+            sst_ids: request.sst_ids,
             ..Default::default()
         };
 
@@ -259,15 +340,22 @@ where
         }
 
         // get internal_table_id by fragment_manager
-        let table_id = TableId::new(request.table_id);
-        if let Ok(table_frgament) = self
-            .fragment_manager
-            .select_table_fragments_by_table_id(&table_id)
-            .await
-        {
-            option.internal_table_id = HashSet::from_iter(table_frgament.internal_table_ids());
+        if request.table_id >= NON_RESERVED_PG_CATALOG_TABLE_ID as u32 {
+            // We need to make sure to use the correct table_id to filter sst
+            let table_id = TableId::new(request.table_id);
+            if let Ok(table_fragment) = self
+                .fragment_manager
+                .select_table_fragments_by_table_id(&table_id)
+                .await
+            {
+                option.internal_table_id = HashSet::from_iter(table_fragment.all_table_ids());
+            }
         }
-        option.internal_table_id.insert(request.table_id); // need to handle outter table_id (mv)
+
+        assert!(option
+            .internal_table_id
+            .iter()
+            .all(|table_id| *table_id >= (NON_RESERVED_PG_CATALOG_TABLE_ID as u32)),);
 
         tracing::info!(
             "Try trigger_manual_compaction compaction_group_id {} option {:?}",
@@ -275,39 +363,143 @@ where
             &option
         );
 
-        let result_state = match self
-            .hummock_manager
+        self.hummock_manager
             .trigger_manual_compaction(compaction_group_id, option)
-            .await
-        {
-            Ok(_) => None,
+            .await?;
 
-            Err(error) => {
-                return Err(tonic_err(error));
-            }
-        };
-
-        let resp = TriggerManualCompactionResponse {
-            status: result_state,
-        };
-        Ok(Response::new(resp))
+        Ok(Response::new(TriggerManualCompactionResponse {
+            status: None,
+        }))
     }
 
-    async fn list_sstable_id_infos(
+    async fn get_epoch(
         &self,
-        request: Request<ListSstableIdInfosRequest>,
-    ) -> Result<Response<ListSstableIdInfosResponse>, Status> {
-        let version_id = request.into_inner().version_id;
-        let result = self
+        _request: Request<GetEpochRequest>,
+    ) -> Result<Response<GetEpochResponse>, Status> {
+        let hummock_snapshot = self.hummock_manager.get_last_epoch()?;
+        Ok(Response::new(GetEpochResponse {
+            status: None,
+            snapshot: Some(hummock_snapshot),
+        }))
+    }
+
+    async fn report_full_scan_task(
+        &self,
+        request: Request<ReportFullScanTaskRequest>,
+    ) -> Result<Response<ReportFullScanTaskResponse>, Status> {
+        let vacuum_manager = self.vacuum_manager.clone();
+        // The following operation takes some time, so we do it in dedicated task and responds the
+        // RPC immediately.
+        tokio::spawn(async move {
+            match vacuum_manager
+                .complete_full_gc(request.into_inner().sst_ids)
+                .await
+            {
+                Ok(number) => {
+                    tracing::info!("Full GC results {} SSTs to delete", number);
+                }
+                Err(e) => {
+                    tracing::warn!("Full GC SST failed: {:#?}", e);
+                }
+            }
+        });
+        Ok(Response::new(ReportFullScanTaskResponse { status: None }))
+    }
+
+    async fn trigger_full_gc(
+        &self,
+        request: Request<TriggerFullGcRequest>,
+    ) -> Result<Response<TriggerFullGcResponse>, Status> {
+        self.vacuum_manager
+            .start_full_gc(Duration::from_secs(
+                request.into_inner().sst_retention_time_sec,
+            ))
+            .await
+            .map_err(MetaError::from)?;
+        Ok(Response::new(TriggerFullGcResponse { status: None }))
+    }
+
+    async fn rise_ctl_get_pinned_versions_summary(
+        &self,
+        _request: Request<RiseCtlGetPinnedVersionsSummaryRequest>,
+    ) -> Result<Response<RiseCtlGetPinnedVersionsSummaryResponse>, Status> {
+        let pinned_versions = self.hummock_manager.list_pinned_version().await;
+        let workers = self
             .hummock_manager
-            .list_sstable_id_infos(Some(version_id))
+            .list_workers(&pinned_versions.iter().map(|v| v.context_id).collect_vec())
             .await;
-        match result {
-            Ok(sstable_id_infos) => Ok(Response::new(ListSstableIdInfosResponse {
-                status: None,
-                sstable_id_infos,
-            })),
-            Err(e) => Err(tonic_err(e)),
-        }
+        Ok(Response::new(RiseCtlGetPinnedVersionsSummaryResponse {
+            summary: Some(PinnedVersionsSummary {
+                pinned_versions,
+                workers,
+            }),
+        }))
+    }
+
+    async fn rise_ctl_get_pinned_snapshots_summary(
+        &self,
+        _request: Request<RiseCtlGetPinnedSnapshotsSummaryRequest>,
+    ) -> Result<Response<RiseCtlGetPinnedSnapshotsSummaryResponse>, Status> {
+        let pinned_snapshots = self.hummock_manager.list_pinned_snapshot().await;
+        let workers = self
+            .hummock_manager
+            .list_workers(&pinned_snapshots.iter().map(|p| p.context_id).collect_vec())
+            .await;
+        Ok(Response::new(RiseCtlGetPinnedSnapshotsSummaryResponse {
+            summary: Some(PinnedSnapshotsSummary {
+                pinned_snapshots,
+                workers,
+            }),
+        }))
+    }
+
+    async fn get_assigned_compact_task_num(
+        &self,
+        _request: Request<GetAssignedCompactTaskNumRequest>,
+    ) -> Result<Response<GetAssignedCompactTaskNumResponse>, Status> {
+        let num_tasks = self.hummock_manager.get_assigned_compact_task_num().await;
+        Ok(Response::new(GetAssignedCompactTaskNumResponse {
+            num_tasks: num_tasks as u32,
+        }))
+    }
+
+    async fn rise_ctl_list_compaction_group(
+        &self,
+        _request: Request<RiseCtlListCompactionGroupRequest>,
+    ) -> Result<Response<RiseCtlListCompactionGroupResponse>, Status> {
+        let compaction_groups = self
+            .compaction_group_manager
+            .compaction_groups()
+            .await
+            .iter()
+            .map(|cg| cg.into())
+            .collect_vec();
+        Ok(Response::new(RiseCtlListCompactionGroupResponse {
+            status: None,
+            compaction_groups,
+        }))
+    }
+
+    async fn rise_ctl_update_compaction_config(
+        &self,
+        request: Request<RiseCtlUpdateCompactionConfigRequest>,
+    ) -> Result<Response<RiseCtlUpdateCompactionConfigResponse>, Status> {
+        let RiseCtlUpdateCompactionConfigRequest {
+            compaction_group_ids,
+            configs,
+        } = request.into_inner();
+        self.compaction_group_manager
+            .update_compaction_config(
+                compaction_group_ids.as_slice(),
+                configs
+                    .into_iter()
+                    .map(|c| c.mutable_config.unwrap())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )
+            .await?;
+        Ok(Response::new(RiseCtlUpdateCompactionConfigResponse {
+            status: None,
+        }))
     }
 }

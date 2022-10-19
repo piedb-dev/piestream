@@ -14,11 +14,14 @@
 
 mod aggregator;
 mod approx_count_distinct;
+mod array_agg;
 mod count_star;
+mod filter;
 mod functions;
 mod general_agg;
 mod general_distinct_agg;
 mod general_sorted_grouper;
+mod string_agg;
 
 pub use aggregator::{AggStateFactory, BoxedAggState};
 pub use general_sorted_grouper::{create_sorted_grouper, BoxedSortedGrouper, EqGroups};

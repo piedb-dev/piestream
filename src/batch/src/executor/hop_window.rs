@@ -14,24 +14,26 @@
 
 use std::num::NonZeroUsize;
 
+use anyhow::anyhow;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use num_traits::CheckedSub;
 use piestream_common::array::column::Column;
 use piestream_common::array::{DataChunk, Vis};
 use piestream_common::catalog::{Field, Schema};
-use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::error::{Result, RwError};
 use piestream_common::types::{DataType, IntervalUnit, ScalarImpl};
 use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
 use piestream_expr::expr::{Expression, InputRefExpression, LiteralExpression};
+use piestream_expr::ExprError;
 use piestream_pb::batch_plan::plan_node::NodeBody;
 use piestream_pb::expr::expr_node;
 
+use crate::error::BatchError;
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
 };
 use crate::task::BatchTaskContext;
-
 pub struct HopWindowExecutor {
     child: BoxedExecutor,
     identity: String,
@@ -45,13 +47,11 @@ pub struct HopWindowExecutor {
 #[async_trait::async_trait]
 impl BoxedExecutorBuilder for HopWindowExecutor {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
-        mut inputs: Vec<BoxedExecutor>,
+        source: &ExecutorBuilder<'_, C>,
+        inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
-        ensure!(
-            inputs.len() == 1,
-            "HopWindowExecutor should have only one child!"
-        );
+        let [child]: [_; 1] = inputs.try_into().unwrap();
+
         let hop_window_node = try_match_expand!(
             source.plan_node().get_node_body().unwrap(),
             NodeBody::HopWindow
@@ -66,15 +66,16 @@ impl BoxedExecutorBuilder for HopWindowExecutor {
             .map(|x| x as usize)
             .collect_vec();
 
-        let child = inputs.remove(0);
+        let time_col_data_type = child.schema().fields()[time_col].data_type();
+        let output_type = DataType::window_of(&time_col_data_type).unwrap();
         let original_schema: Schema = child
             .schema()
             .clone()
             .into_fields()
             .into_iter()
             .chain([
-                Field::with_name(DataType::Timestamp, "window_start"),
-                Field::with_name(DataType::Timestamp, "window_end"),
+                Field::with_name(output_type.clone(), "window_start"),
+                Field::with_name(output_type, "window_end"),
             ])
             .collect();
         let output_indices_schema: Schema = output_indices
@@ -143,15 +144,17 @@ impl HopWindowExecutor {
         let units = window_size
             .exact_div(&window_slide)
             .and_then(|x| NonZeroUsize::new(usize::try_from(x).ok()?))
-            .ok_or_else(|| {
-                RwError::from(ErrorCode::InternalError(format!(
+            .ok_or_else(|| ExprError::InvalidParam {
+                name: "window",
+                reason: format!(
                     "window_size {} cannot be divided by window_slide {}",
                     window_size, window_slide
-                )))
+                ),
             })?
             .get();
 
         let time_col_data_type = child.schema().fields()[time_col_idx].data_type();
+        let output_type = DataType::window_of(&time_col_data_type).unwrap();
         let time_col_ref = InputRefExpression::new(time_col_data_type, self.time_col_idx).boxed();
 
         let window_slide_expr =
@@ -162,7 +165,7 @@ impl HopWindowExecutor {
         // tumble_start(`time_col` - (`window_size` - `window_slide`), `window_slide`).
         // Let's pre calculate (`window_size` - `window_slide`).
         let window_size_sub_slide = window_size.checked_sub(&window_slide).ok_or_else(|| {
-            RwError::from(ErrorCode::InternalError(format!(
+            BatchError::Internal(anyhow!(format!(
                 "window_size {} cannot be subtracted by window_slide {}",
                 window_size, window_slide
             )))
@@ -174,22 +177,22 @@ impl HopWindowExecutor {
         .boxed();
         let hop_expr = new_binary_expr(
             expr_node::Type::TumbleStart,
-            piestream_common::types::DataType::Timestamp,
+            output_type.clone(),
             new_binary_expr(
                 expr_node::Type::Subtract,
-                DataType::Timestamp,
+                output_type.clone(),
                 time_col_ref,
                 window_size_sub_slide_expr,
-            ),
+            )?,
             window_slide_expr,
-        );
+        )?;
 
         let mut window_start_exprs = Vec::with_capacity(units);
         let mut window_end_exprs = Vec::with_capacity(units);
 
         for i in 0..units {
             let window_start_offset = window_slide.checked_mul_int(i).ok_or_else(|| {
-                RwError::from(ErrorCode::InternalError(format!(
+                BatchError::Internal(anyhow!(format!(
                     "window_slide {} cannot be multiplied by {}",
                     window_slide, i
                 )))
@@ -200,7 +203,7 @@ impl HopWindowExecutor {
             )
             .boxed();
             let window_end_offset = window_slide.checked_mul_int(i + units).ok_or_else(|| {
-                RwError::from(ErrorCode::InternalError(format!(
+                BatchError::Internal(anyhow!(format!(
                     "window_slide {} cannot be multiplied by {}",
                     window_slide, i
                 )))
@@ -212,29 +215,23 @@ impl HopWindowExecutor {
             .boxed();
             let window_start_expr = new_binary_expr(
                 expr_node::Type::Add,
-                DataType::Timestamp,
-                InputRefExpression::new(DataType::Timestamp, 0).boxed(),
+                output_type.clone(),
+                InputRefExpression::new(output_type.clone(), 0).boxed(),
                 window_start_offset_expr,
-            );
+            )?;
             window_start_exprs.push(window_start_expr);
             let window_end_expr = new_binary_expr(
                 expr_node::Type::Add,
-                DataType::Timestamp,
-                InputRefExpression::new(DataType::Timestamp, 0).boxed(),
+                output_type.clone(),
+                InputRefExpression::new(output_type.clone(), 0).boxed(),
                 window_end_offset_expr,
-            );
+            )?;
             window_end_exprs.push(window_end_expr);
         }
         let window_start_col_index = child.schema().len();
         let window_end_col_index = child.schema().len() + 1;
         let contains_window_start = output_indices.contains(&window_start_col_index);
         let contains_window_end = output_indices.contains(&window_end_col_index);
-        if !contains_window_start && !contains_window_end {
-            // make sure that either window_start or window_end is in output indices.
-            return Err(RwError::from(ErrorCode::InternalError(
-                "neither window_start or window_end is in output_indices".to_string(),
-            )));
-        }
         #[for_await]
         for data_chunk in child.execute() {
             let data_chunk = data_chunk?;

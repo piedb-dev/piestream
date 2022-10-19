@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use piestream_common::catalog::{ColumnDesc, Field, Schema, TableId};
-use piestream_common::util::sort_util::{OrderPair, OrderType};
-use piestream_pb::stream_plan::lookup_node::ArrangementTableId;
+use std::sync::Arc;
+
+use piestream_common::catalog::{ColumnDesc, Field, Schema};
+use piestream_common::util::sort_util::OrderPair;
+use piestream_storage::table::streaming_table::state_table::StateTable;
 
 use super::*;
 use crate::executor::{LookupExecutor, LookupExecutorParams};
@@ -23,27 +25,21 @@ pub struct LookupExecutorBuilder;
 
 impl ExecutorBuilder for LookupExecutorBuilder {
     fn new_boxed_executor(
-        mut params: ExecutorParams,
+        params: ExecutorParams,
         node: &StreamNode,
         store: impl StateStore,
-        _stream: &mut LocalStreamManagerCore,
-    ) -> Result<BoxedExecutor> {
+        stream_manager: &mut LocalStreamManagerCore,
+    ) -> StreamResult<BoxedExecutor> {
         let lookup = try_match_expand!(node.get_node_body().unwrap(), NodeBody::Lookup)?;
 
-        let arrangement = params.input.remove(1);
-        let stream = params.input.remove(0);
+        let [stream, arrangement]: [_; 2] = params.input.try_into().unwrap();
 
         let arrangement_order_rules = lookup
-            .arrange_key
+            .get_arrangement_table_info()?
+            .arrange_key_orders
             .iter()
-            // TODO: allow descending order
-            .map(|x| OrderPair::new(*x as usize, OrderType::Ascending))
+            .map(OrderPair::from_prost)
             .collect();
-
-        let arrangement_table_id = match lookup.arrangement_table_id.as_ref().unwrap() {
-            ArrangementTableId::IndexId(x) => *x,
-            ArrangementTableId::TableId(x) => *x,
-        };
 
         let arrangement_col_descs = lookup
             .get_arrangement_table_info()?
@@ -51,13 +47,16 @@ impl ExecutorBuilder for LookupExecutorBuilder {
             .iter()
             .map(ColumnDesc::from)
             .collect();
+        let state_table = StateTable::from_table_catalog(
+            lookup.arrangement_table.as_ref().unwrap(),
+            store,
+            params.vnode_bitmap.map(Arc::new),
+        );
 
         Ok(Box::new(LookupExecutor::new(LookupExecutorParams {
             schema: Schema::new(node.fields.iter().map(Field::from).collect()),
             arrangement,
             stream,
-            arrangement_store: store,
-            arrangement_table_id: TableId::from(arrangement_table_id),
             arrangement_col_descs,
             arrangement_order_rules,
             pk_indices: params.pk_indices,
@@ -65,6 +64,13 @@ impl ExecutorBuilder for LookupExecutorBuilder {
             stream_join_key_indices: lookup.stream_key.iter().map(|x| *x as usize).collect(),
             arrange_join_key_indices: lookup.arrange_key.iter().map(|x| *x as usize).collect(),
             column_mapping: lookup.column_mapping.iter().map(|x| *x as usize).collect(),
+            state_table,
+            lru_manager: stream_manager.context.lru_manager.clone(),
+            cache_size: stream_manager
+                .config
+                .developer
+                .unsafe_stream_join_cache_size,
+            chunk_size: params.env.config().developer.stream_chunk_size,
         })))
     }
 }

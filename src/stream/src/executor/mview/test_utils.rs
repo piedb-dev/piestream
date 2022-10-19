@@ -15,12 +15,13 @@
 use piestream_common::array::Row;
 use piestream_common::catalog::{ColumnDesc, TableId};
 use piestream_common::types::DataType;
+use piestream_common::util::epoch::EpochPair;
 use piestream_common::util::sort_util::OrderType;
 use piestream_storage::memory::MemoryStateStore;
-use piestream_storage::table::state_table::StateTable;
-use piestream_storage::table::storage_table::{StorageTable, READ_ONLY};
+use piestream_storage::table::batch_table::storage_table::StorageTable;
+use piestream_storage::table::streaming_table::state_table::StateTable;
 
-pub async fn gen_basic_table(row_count: usize) -> StorageTable<MemoryStateStore, READ_ONLY> {
+pub async fn gen_basic_table(row_count: usize) -> StorageTable<MemoryStateStore> {
     let state_store = MemoryStateStore::new();
 
     let order_types = vec![OrderType::Ascending, OrderType::Descending];
@@ -31,28 +32,33 @@ pub async fn gen_basic_table(row_count: usize) -> StorageTable<MemoryStateStore,
         ColumnDesc::unnamed(column_ids[2], DataType::Int32),
     ];
     let pk_indices = vec![0_usize, 1_usize];
-    let mut state = StateTable::new(
-        state_store,
+    let mut state = StateTable::new_without_distribution(
+        state_store.clone(),
         TableId::from(0x42),
         column_descs.clone(),
         order_types,
-        None,
         pk_indices,
     );
-    let table = state.storage_table().clone();
-    let epoch: u64 = 0;
+    let table = StorageTable::for_test(
+        state_store.clone(),
+        TableId::from(0x42),
+        column_descs.clone(),
+        vec![OrderType::Ascending],
+        vec![0],
+    );
+    let epoch = EpochPair::new_test_epoch(1);
+    state.init_epoch(epoch);
+    epoch.inc();
 
     for idx in 0..row_count {
         let idx = idx as i32;
-        state
-            .insert(Row(vec![
-                Some(idx.into()),
-                Some(idx.into()),
-                Some(idx.into()),
-            ]))
-            .unwrap();
+        state.insert(Row(vec![
+            Some(idx.into()),
+            Some(idx.into()),
+            Some(idx.into()),
+        ]));
     }
-    state.commit(epoch).await.unwrap();
+    state.commit_for_test(epoch).await.unwrap();
 
-    table.into()
+    table
 }

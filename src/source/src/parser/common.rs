@@ -12,86 +12,195 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use num_traits::FromPrimitive;
-use piestream_common::error::ErrorCode::{self, InternalError};
-use piestream_common::error::{Result, RwError};
-use piestream_common::types::{DataType, Decimal, ScalarImpl, ScalarRef};
-use piestream_expr::vector_op::cast::{str_to_date, str_to_timestamp};
+use piestream_common::array::{ListValue, StructValue};
+use piestream_common::types::{DataType, Datum, Decimal, ScalarImpl};
+use piestream_expr::vector_op::cast::{
+    str_to_date, str_to_time, str_to_timestamp, str_to_timestampz,
+};
 use serde_json::Value;
+#[cfg(any(
+    target_feature = "sse4.2",
+    target_feature = "avx2",
+    target_feature = "neon",
+    target_feature = "simd128"
+))]
+use simd_json::{value::StaticNode, BorrowedValue, ValueAccess};
 
-use crate::SourceColumnDesc;
-
-macro_rules! make_ScalarImpl {
-    ($x:expr, $y:expr) => {
-        match $x {
-            Some(v) => return Ok($y(v)),
-            None => return Err(RwError::from(InternalError("json parse error".to_string()))),
-        }
+macro_rules! ensure_float {
+    ($v:ident, $t:ty) => {
+        $v.as_f64()
+            .ok_or_else(|| anyhow!(concat!("expect ", stringify!($t), ", but found {}"), $v))?
     };
 }
 
-pub(crate) fn json_parse_value(
-    column: &SourceColumnDesc,
-    value: Option<&Value>,
-) -> Result<ScalarImpl> {
-    match column.data_type {
-        DataType::Boolean => {
-            make_ScalarImpl!(value.and_then(|v| v.as_bool()), |x| ScalarImpl::Bool(
-                x as bool
-            ))
+macro_rules! simd_json_ensure_float {
+    ($v:ident, $t:ty) => {
+        $v.cast_f64()
+            .ok_or_else(|| anyhow!(concat!("expect ", stringify!($t), ", but found {}"), $v))?
+    };
+}
+
+macro_rules! ensure_int {
+    ($v:ident, $t:ty) => {
+        $v.as_i64()
+            .ok_or_else(|| anyhow!(concat!("expect ", stringify!($t), ", but found {}"), $v))?
+    };
+}
+
+macro_rules! ensure_str {
+    ($v:ident, $t:literal) => {
+        $v.as_str()
+            .ok_or_else(|| anyhow!(concat!("expect ", $t, ", but found {}"), $v))?
+    };
+}
+
+fn do_parse_json_value(dtype: &DataType, v: &Value) -> Result<ScalarImpl> {
+    let v = match dtype {
+        DataType::Boolean => v.as_bool().ok_or_else(|| anyhow!("expect bool"))?.into(),
+        DataType::Int16 => ScalarImpl::Int16(
+            ensure_int!(v, i16)
+                .try_into()
+                .map_err(|e| anyhow!("expect i16: {}", e))?,
+        ),
+        DataType::Int32 => ScalarImpl::Int32(
+            ensure_int!(v, i32)
+                .try_into()
+                .map_err(|e| anyhow!("expect i32: {}", e))?,
+        ),
+        DataType::Int64 => ensure_int!(v, i64).into(),
+        DataType::Float32 => ScalarImpl::Float32((ensure_float!(v, f32) as f32).into()),
+        DataType::Float64 => ScalarImpl::Float64((ensure_float!(v, f64)).into()),
+        // FIXME: decimal should have more precision than f64
+        DataType::Decimal => Decimal::from_f64(ensure_float!(v, Decimal))
+            .ok_or_else(|| anyhow!("expect decimal"))?
+            .into(),
+        DataType::Varchar => ensure_str!(v, "varchar").to_string().into(),
+        DataType::Date => str_to_date(ensure_str!(v, "date"))?.into(),
+        DataType::Time => str_to_time(ensure_str!(v, "time"))?.into(),
+        DataType::Timestamp => str_to_timestamp(ensure_str!(v, "timestamp"))?.into(),
+        DataType::Timestampz => str_to_timestampz(ensure_str!(v, "timestampz"))?.into(),
+        DataType::Struct(struct_type_info) => {
+            let fields = struct_type_info
+                .field_names
+                .iter()
+                .zip_eq(struct_type_info.fields.iter())
+                .map(|field| json_parse_value(field.1, v.get(field.0)))
+                .collect::<Result<Vec<Datum>>>()?;
+            ScalarImpl::Struct(StructValue::new(fields))
         }
-        DataType::Int16 => {
-            make_ScalarImpl!(value.and_then(|v| v.as_i64()), |x| ScalarImpl::Int16(
-                x as i16
-            ))
+        DataType::List {
+            datatype: item_type,
+        } => {
+            if let Value::Array(values) = v {
+                let values = values
+                    .iter()
+                    .map(|v| json_parse_value(item_type, Some(v)))
+                    .collect::<Result<Vec<Datum>>>()?;
+                ScalarImpl::List(ListValue::new(values))
+            } else {
+                let err_msg = format!(
+                    "json parse error.type incompatible, dtype {:?}, value {:?}",
+                    dtype, v
+                );
+                return Err(anyhow!(err_msg));
+            }
         }
-        DataType::Int32 => {
-            make_ScalarImpl!(value.and_then(|v| v.as_i64()), |x| ScalarImpl::Int32(
-                x as i32
-            ))
+        DataType::Interval => unimplemented!(),
+    };
+    Ok(v)
+}
+
+#[inline]
+pub(crate) fn json_parse_value(dtype: &DataType, value: Option<&Value>) -> Result<Datum> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => Ok(Some(do_parse_json_value(dtype, v).map_err(|e| {
+            anyhow!("failed to parse type '{}' from json: {}", dtype, e)
+        })?)),
+    }
+}
+
+#[cfg(any(
+    target_feature = "sse4.2",
+    target_feature = "avx2",
+    target_feature = "neon",
+    target_feature = "simd128"
+))]
+fn do_parse_simd_json_value(dtype: &DataType, v: &BorrowedValue<'_>) -> Result<ScalarImpl> {
+    let v = match dtype {
+        DataType::Boolean => v.as_bool().ok_or_else(|| anyhow!("expect bool"))?.into(),
+        DataType::Int16 => ScalarImpl::Int16(
+            ensure_int!(v, i16)
+                .try_into()
+                .map_err(|e| anyhow!("expect i16: {}", e))?,
+        ),
+        DataType::Int32 => ScalarImpl::Int32(
+            ensure_int!(v, i32)
+                .try_into()
+                .map_err(|e| anyhow!("expect i32: {}", e))?,
+        ),
+        DataType::Int64 => ensure_int!(v, i64).into(),
+        DataType::Float32 => ScalarImpl::Float32((simd_json_ensure_float!(v, f32) as f32).into()),
+        DataType::Float64 => ScalarImpl::Float64((simd_json_ensure_float!(v, f64)).into()),
+        // FIXME: decimal should have more precision than f64
+        DataType::Decimal => Decimal::from_f64(simd_json_ensure_float!(v, Decimal))
+            .ok_or_else(|| anyhow!("expect decimal"))?
+            .into(),
+        DataType::Varchar => ensure_str!(v, "varchar").to_string().into(),
+        DataType::Date => str_to_date(ensure_str!(v, "date"))?.into(),
+        DataType::Time => str_to_time(ensure_str!(v, "time"))?.into(),
+        DataType::Timestamp => str_to_timestamp(ensure_str!(v, "timestamp"))?.into(),
+        DataType::Timestampz => str_to_timestampz(ensure_str!(v, "timestampz"))?.into(),
+        DataType::Struct(struct_type_info) => {
+            let fields = struct_type_info
+                .field_names
+                .iter()
+                .zip_eq(struct_type_info.fields.iter())
+                .map(|field| simd_json_parse_value(field.1, v.get(field.0.as_str())))
+                .collect::<Result<Vec<Datum>>>()?;
+            ScalarImpl::Struct(StructValue::new(fields))
         }
-        DataType::Int64 => {
-            make_ScalarImpl!(value.and_then(|v| v.as_i64()), |x| ScalarImpl::Int64(
-                x as i64
-            ))
+        DataType::List {
+            datatype: item_type,
+        } => {
+            if let BorrowedValue::Array(values) = v {
+                let values = values
+                    .iter()
+                    .map(|v| simd_json_parse_value(item_type, Some(v)))
+                    .collect::<Result<Vec<Datum>>>()?;
+                ScalarImpl::List(ListValue::new(values))
+            } else {
+                let err_msg = format!(
+                    "json parse error.type incompatible, dtype {:?}, value {:?}",
+                    dtype, v
+                );
+                return Err(anyhow!(err_msg));
+            }
         }
-        DataType::Float32 => {
-            make_ScalarImpl!(value.and_then(|v| v.as_f64()), |v| ScalarImpl::Float32(
-                (v as f32).into()
-            ))
-        }
-        DataType::Float64 => {
-            make_ScalarImpl!(
-                value.and_then(|v| v.as_f64()),
-                |v: f64| ScalarImpl::Float64(v.into())
-            )
-        }
-        DataType::Decimal => match value.and_then(|v| v.as_f64()) {
-            Some(v) => match Decimal::from_f64(v) {
-                Some(v) => Ok(ScalarImpl::Decimal(v)),
-                None => Err(RwError::from(InternalError(
-                    "decimal parse error".to_string(),
-                ))),
-            },
-            None => Err(RwError::from(InternalError("json parse error".to_string()))),
-        },
-        DataType::Varchar => {
-            make_ScalarImpl!(value.and_then(|v| v.as_str()), |v: &str| ScalarImpl::Utf8(
-                v.to_owned_scalar()
-            ))
-        }
-        DataType::Date => match value.and_then(|v| v.as_str()) {
-            None => Err(RwError::from(InternalError("parse error".to_string()))),
-            Some(date_str) => Ok(ScalarImpl::NaiveDate(str_to_date(date_str)?)),
-        },
-        DataType::Timestamp => match value.and_then(|v| v.as_str()) {
-            None => Err(RwError::from(InternalError("parse error".to_string()))),
-            Some(date_str) => Ok(ScalarImpl::NaiveDateTime(str_to_timestamp(date_str)?)),
-        },
-        _ => Err(ErrorCode::NotImplemented(
-            "unsupported type for json_parse_value".to_string(),
-            None.into(),
-        )
-        .into()),
+        DataType::Interval => unimplemented!(),
+    };
+    Ok(v)
+}
+
+#[cfg(any(
+    target_feature = "sse4.2",
+    target_feature = "avx2",
+    target_feature = "neon",
+    target_feature = "simd128"
+))]
+#[inline]
+pub(crate) fn simd_json_parse_value(
+    // column: &ColumnDesc,
+    dtype: &DataType,
+    value: Option<&BorrowedValue<'_>>,
+) -> Result<Datum> {
+    match value {
+        None | Some(BorrowedValue::Static(StaticNode::Null)) => Ok(None),
+        Some(v) => Ok(Some(do_parse_simd_json_value(dtype, v).map_err(|e| {
+            anyhow!("failed to parse type '{}' from json: {}", dtype, e)
+        })?)),
     }
 }

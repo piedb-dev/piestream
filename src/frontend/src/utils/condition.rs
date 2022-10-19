@@ -13,16 +13,21 @@
 // limitations under the License.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt;
+use std::fmt::{self, Debug, Display};
 use std::ops::Bound;
+use std::rc::Rc;
+use std::sync::LazyLock;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
+use piestream_common::catalog::{Schema, TableDesc};
+use piestream_common::error::Result;
+use piestream_common::util::scan_range::{is_full_range, ScanRange};
 
-use super::ScanRange;
 use crate::expr::{
     factorization_expr, fold_boolean_constant, push_down_not, to_conjunctions,
-    try_get_bool_constant, ExprImpl, ExprRewriter, ExprType, ExprVisitor, InputRef,
+    try_get_bool_constant, ExprDisplay, ExprImpl, ExprMutator, ExprRewriter, ExprType, ExprVisitor,
+    InputRef,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -78,6 +83,11 @@ impl Condition {
 
     pub fn always_true(&self) -> bool {
         self.conjunctions.is_empty()
+    }
+
+    pub fn always_false(&self) -> bool {
+        static FALSE: LazyLock<ExprImpl> = LazyLock::new(|| ExprImpl::literal_bool(false));
+        !self.conjunctions.is_empty() && self.conjunctions.iter().all(|e| *e == *FALSE)
     }
 
     /// Convert condition to an expression. If always true, return `None`.
@@ -188,7 +198,7 @@ impl Condition {
         self,
         left_col_num: usize,
         right_col_num: usize,
-    ) -> (Vec<(InputRef, InputRef)>, Self) {
+    ) -> (Vec<(InputRef, InputRef, bool)>, Self) {
         let left_bit_map = FixedBitSet::from_iter(0..left_col_num);
         let right_bit_map = FixedBitSet::from_iter(left_col_num..left_col_num + right_col_num);
 
@@ -198,7 +208,9 @@ impl Condition {
             if input_bits.is_disjoint(&left_bit_map) || input_bits.is_disjoint(&right_bit_map) {
                 others.push(expr)
             } else if let Some(columns) = expr.as_eq_cond() {
-                eq_keys.push(columns);
+                eq_keys.push((columns.0, columns.1, false));
+            } else if let Some(columns) = expr.as_is_not_distinct_from_cond() {
+                eq_keys.push((columns.0, columns.1, true));
             } else {
                 others.push(expr)
             }
@@ -218,23 +230,107 @@ impl Condition {
     pub fn split_disjoint(self, columns: &FixedBitSet) -> (Self, Self) {
         self.group_by::<_, 2>(|expr| {
             let input_bits = expr.collect_input_refs(columns.len());
-            if input_bits.is_disjoint(columns) {
-                1
-            } else {
-                0
-            }
+            input_bits.is_disjoint(columns) as usize
         })
         .into_iter()
         .next_tuple()
         .unwrap()
     }
 
+    /// Generate range scans from each arm of `OR` clause and merge them.
+    /// Currently, only support equal type range scans.
+    /// Keep in mind that range scans can not overlap, otherwise duplicate rows will occur.
+    fn disjunctions_to_scan_ranges(
+        table_desc: Rc<TableDesc>,
+        max_split_range_gap: u64,
+        disjunctions: Vec<ExprImpl>,
+    ) -> Result<Option<(Vec<ScanRange>, Self)>> {
+        let disjunctions_result: Result<Vec<(Vec<ScanRange>, Self)>> = disjunctions
+            .into_iter()
+            .map(|x| {
+                Condition {
+                    conjunctions: to_conjunctions(x),
+                }
+                .split_to_scan_ranges(table_desc.clone(), max_split_range_gap)
+            })
+            .collect();
+
+        // If any arm of `OR` clause fails, bail out.
+        let disjunctions_result = disjunctions_result?;
+
+        // If all arms of `OR` clause scan ranges are simply equal condition type, merge all
+        // of them.
+        let all_equal = disjunctions_result
+            .iter()
+            .all(|(scan_ranges, other_condition)| {
+                other_condition.always_true()
+                    && scan_ranges
+                        .iter()
+                        .all(|x| !x.eq_conds.is_empty() && is_full_range(&x.range))
+            });
+
+        if all_equal {
+            // Think about the case (a = 1) or (a = 1 and b = 2).
+            // We should only keep the large one range scan a = 1, because a = 1 overlaps with
+            // (a = 1 and b = 2).
+            let scan_ranges = disjunctions_result
+                .into_iter()
+                .flat_map(|(scan_ranges, _)| scan_ranges)
+                // sort, large one first
+                .sorted_by(|a, b| a.eq_conds.len().cmp(&b.eq_conds.len()))
+                .collect_vec();
+            // Make sure each range never overlaps with others, that's what scan range mean.
+            let mut non_overlap_scan_ranges: Vec<ScanRange> = vec![];
+            for s1 in &scan_ranges {
+                let overlap = non_overlap_scan_ranges.iter().any(|s2| {
+                    #[allow(clippy::disallowed_methods)]
+                    s1.eq_conds
+                        .iter()
+                        .zip(s2.eq_conds.iter())
+                        .all(|(a, b)| a == b)
+                });
+                // If overlap happens, keep the large one and large one always in
+                // `non_overlap_scan_ranges`.
+                // Otherwise, put s1 into `non_overlap_scan_ranges`.
+                if !overlap {
+                    non_overlap_scan_ranges.push(s1.clone());
+                }
+            }
+
+            Ok(Some((non_overlap_scan_ranges, Condition::true_cond())))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// See also [`ScanRange`](piestream_pb::batch_plan::ScanRange).
-    pub fn split_to_scan_range(
+    pub fn split_to_scan_ranges(
         self,
-        order_column_ids: &[usize],
-        num_cols: usize,
-    ) -> (ScanRange, Self) {
+        table_desc: Rc<TableDesc>,
+        max_split_range_gap: u64,
+    ) -> Result<(Vec<ScanRange>, Self)> {
+        fn false_cond() -> (Vec<ScanRange>, Condition) {
+            (vec![], Condition::false_cond())
+        }
+
+        // It's an OR.
+        if self.conjunctions.len() == 1 {
+            if let Some(disjunctions) = self.conjunctions[0].as_or_disjunctions() {
+                if let Some((scan_ranges, other_condition)) = Self::disjunctions_to_scan_ranges(
+                    table_desc,
+                    max_split_range_gap,
+                    disjunctions,
+                )? {
+                    return Ok((scan_ranges, other_condition));
+                } else {
+                    return Ok((vec![], self));
+                }
+            }
+        }
+
+        let order_column_ids = &table_desc.order_column_indices();
+        let num_cols = table_desc.columns.len();
+
         let mut col_idx_to_pk_idx = vec![None; num_cols];
         order_column_ids
             .iter()
@@ -265,51 +361,89 @@ impl Condition {
             let group = std::mem::take(&mut groups[i]);
             if group.is_empty() {
                 groups.push(other_conds);
-                return (
-                    scan_range,
+                return Ok((
+                    if scan_range.is_full_table_scan() {
+                        vec![]
+                    } else {
+                        vec![scan_range]
+                    },
                     Self {
                         conjunctions: groups[i + 1..].concat(),
                     },
-                );
+                ));
             }
             let mut lb = vec![];
             let mut ub = vec![];
-            let mut eq_cond = None;
-            for expr in group {
-                if let Some((input_ref, lit)) = expr.as_eq_const() {
+            // values in eq_cond are OR'ed
+            let mut eq_conds = vec![];
+
+            // analyze exprs in the group. scan_range is not updated
+            for expr in group.clone() {
+                if let Some((input_ref, const_expr)) = expr.as_eq_const() &&
+                    let Ok(const_expr) = const_expr.cast_implicit(input_ref.data_type) {
                     assert_eq!(input_ref.index, order_column_ids[i]);
-                    if lit.is_null() {
-                        // Always false
-                        return (ScanRange::full_table_scan(), Self::false_cond());
+                    let Some(value) = const_expr.eval_row_const()? else {
+                        // column = NULL
+                        return Ok(false_cond());
+                    };
+                    if !eq_conds.is_empty() && eq_conds.into_iter().all(|l| if let Some(l) = l {
+                        l != value
+                    } else {
+                        true
+                    }) {
+                        return Ok(false_cond());
                     }
-                    let lit = lit.eval_as(input_ref.data_type);
-                    if let Some(l) = eq_cond && l != lit {
-                        // Always false
-                        return (
-                            ScanRange::full_table_scan(),
-                            Self::false_cond(),
-                        );
-                    }
-                    eq_cond = Some(lit);
-                } else if let Some((input_ref, op, lit)) = expr.as_comparison_const() {
+                    eq_conds = vec![Some(value)];
+                } else if let Some(input_ref) = expr.as_is_null() {
                     assert_eq!(input_ref.index, order_column_ids[i]);
-                    if lit.is_null() {
-                        // Always false
-                        return (ScanRange::full_table_scan(), Self::false_cond());
+                    if !eq_conds.is_empty() && eq_conds.into_iter().all(|l| l.is_some()) {
+                        return Ok(false_cond());
                     }
-                    let lit = lit.eval_as(input_ref.data_type);
+                    eq_conds = vec![None];
+                } else if let Some((input_ref, in_const_list)) = expr.as_in_const_list() {
+                    assert_eq!(input_ref.index, order_column_ids[i]);
+                    let mut scalars = HashSet::new();
+                    for const_expr in in_const_list {
+                        // The cast should succeed, because otherwise the input_ref is casted
+                        // and thus `as_in_const_list` returns None.
+                        let const_expr = const_expr.cast_implicit(input_ref.data_type.clone()).unwrap();
+                        let value = const_expr.eval_row_const()?;
+                        let Some(value) = value else {
+                            continue;
+                        };
+                        scalars.insert(Some(value));
+                    }
+                    if scalars.is_empty() {
+                        // There're only NULLs in the in-list
+                        return Ok(false_cond());
+                    }
+                    if !eq_conds.is_empty() {
+                        scalars = scalars.intersection(&HashSet::from_iter(eq_conds)).cloned().collect();
+                        if scalars.is_empty() {
+                            return Ok(false_cond());
+                        }
+                    }
+                    // Sort to ensure a deterministic result for planner test.
+                    eq_conds = scalars.into_iter().sorted().collect();
+                } else if let Some((input_ref, op, const_expr)) = expr.as_comparison_const() &&
+                    let Ok(const_expr) = const_expr.cast_implicit(input_ref.data_type) {
+                    assert_eq!(input_ref.index, order_column_ids[i]);
+                    let Some(value) = const_expr.eval_row_const()? else {
+                        // column compare with NULL
+                        return Ok(false_cond());
+                    };
                     match op {
                         ExprType::LessThan => {
-                            ub.push((Bound::Excluded(lit), expr));
+                            ub.push((Bound::Excluded(value), expr));
                         }
                         ExprType::LessThanOrEqual => {
-                            ub.push((Bound::Included(lit), expr));
+                            ub.push((Bound::Included(value), expr));
                         }
                         ExprType::GreaterThan => {
-                            lb.push((Bound::Excluded(lit), expr));
+                            lb.push((Bound::Excluded(value), expr));
                         }
                         ExprType::GreaterThanOrEqual => {
-                            lb.push((Bound::Included(lit), expr));
+                            lb.push((Bound::Included(value), expr));
                         }
                         _ => unreachable!(),
                     }
@@ -318,18 +452,19 @@ impl Condition {
                 }
             }
 
-            match eq_cond {
-                Some(lit) => {
-                    scan_range.eq_conds.push(lit);
-                    // TODO: simplify bounds
+            // update scan_range
+            match eq_conds.len() {
+                1 => {
+                    scan_range.eq_conds.extend(eq_conds.into_iter());
+                    // TODO: simplify bounds: it's either true or false according to whether lit is
+                    // included
                     other_conds.extend(lb.into_iter().chain(ub.into_iter()).map(|(_, expr)| expr));
                 }
-                None => {
+                0 => {
                     if lb.len() > 1 || ub.len() > 1 {
-                        // TODO: simplify bounds
+                        // TODO: simplify bounds: it can be merged into a single lb & ub.
                         other_conds
                             .extend(lb.into_iter().chain(ub.into_iter()).map(|(_, expr)| expr));
-                        break;
                     } else if !lb.is_empty() || !ub.is_empty() {
                         scan_range.range = (
                             lb.first()
@@ -340,16 +475,51 @@ impl Condition {
                                 .unwrap_or(Bound::Unbounded),
                         )
                     }
+                    other_conds.extend(groups[i + 1..].iter().flatten().cloned());
+                    break;
+                }
+                _ => {
+                    // currently we will split IN list to multiple scan ranges immediately
+                    // i.e., a = 1 AND b in (1,2) is handled
+                    // TODO:
+                    // a in (1,2) AND b = 1
+                    // a in (1,2) AND b in (1,2)
+                    // a in (1,2) AND b > 1
+                    other_conds.extend(lb.into_iter().chain(ub.into_iter()).map(|(_, expr)| expr));
+                    other_conds.extend(groups[i + 1..].iter().flatten().cloned());
+                    let scan_ranges = eq_conds
+                        .into_iter()
+                        .map(|lit| {
+                            let mut scan_range = scan_range.clone();
+                            scan_range.eq_conds.push(lit);
+                            scan_range
+                        })
+                        .collect();
+                    return Ok((
+                        scan_ranges,
+                        Self {
+                            conjunctions: other_conds,
+                        },
+                    ));
                 }
             }
         }
 
-        (
-            scan_range,
+        Ok((
+            if scan_range.is_full_table_scan() {
+                vec![]
+            } else if table_desc.columns[order_column_ids[0]].data_type.is_int() {
+                match scan_range.split_small_range(max_split_range_gap) {
+                    Some(scan_ranges) => scan_ranges,
+                    None => vec![scan_range],
+                }
+            } else {
+                vec![scan_range]
+            },
             Self {
                 conjunctions: other_conds,
             },
-        )
+        ))
     }
 
     /// Split the condition expressions into `N` groups.
@@ -389,10 +559,18 @@ impl Condition {
         }
     }
 
-    pub fn visit_expr(&self, visitor: &mut impl ExprVisitor) {
+    pub fn visit_expr<R: Default, V: ExprVisitor<R> + ?Sized>(&self, visitor: &mut V) -> R {
         self.conjunctions
             .iter()
-            .for_each(|expr| visitor.visit_expr(expr))
+            .map(|expr| visitor.visit_expr(expr))
+            .reduce(V::merge)
+            .unwrap_or_default()
+    }
+
+    pub fn visit_expr_mut(&mut self, mutator: &mut (impl ExprMutator + ?Sized)) {
+        self.conjunctions
+            .iter_mut()
+            .for_each(|expr| mutator.visit_expr(expr))
     }
 
     /// Simplify conditions
@@ -443,6 +621,42 @@ impl Condition {
             }
         }
         Self { conjunctions: res }
+    }
+}
+
+pub struct ConditionDisplay<'a> {
+    pub condition: &'a Condition,
+    pub input_schema: &'a Schema,
+}
+
+impl ConditionDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.condition.always_true() {
+            write!(f, "true")
+        } else {
+            self.condition
+                .conjunctions
+                .iter()
+                .format_with(" AND ", |expr, f| {
+                    f(&ExprDisplay {
+                        expr,
+                        input_schema: self.input_schema,
+                    })
+                })
+                .fmt(f)
+        }
+    }
+}
+
+impl fmt::Display for ConditionDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt(f)
+    }
+}
+
+impl fmt::Debug for ConditionDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt(f)
     }
 }
 

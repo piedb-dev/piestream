@@ -17,30 +17,12 @@ use std::sync::Arc;
 
 use piestream_common::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayRef, DataChunk, Row};
 use piestream_common::for_all_variants;
-use piestream_common::types::{DataType, Datum, Scalar, ScalarImpl};
+use piestream_common::types::{literal_type_match, DataType, Datum, Scalar, ScalarImpl};
 use piestream_pb::expr::expr_node::{RexNode, Type};
 use piestream_pb::expr::ExprNode;
 
 use crate::expr::Expression;
 use crate::{bail, ensure, ExprError, Result};
-
-macro_rules! array_impl_literal_append {
-    ([$arr_builder: ident, $literal: ident, $cardinality: ident], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
-        match ($arr_builder, $literal) {
-            $(
-                (ArrayBuilderImpl::$variant_name(inner), Some(ScalarImpl::$variant_name(v))) => {
-                    append_literal_to_arr(inner, Some(v.as_scalar_ref()), $cardinality)?;
-                }
-                (ArrayBuilderImpl::$variant_name(inner), None) => {
-                    append_literal_to_arr(inner, None, $cardinality)?;
-                }
-            )*
-            (_, _) => $crate::bail!(
-                "Do not support values in insert values executor".to_string()
-            ),
-        }
-    };
-}
 
 #[derive(Debug)]
 pub struct LiteralExpression {
@@ -58,8 +40,28 @@ impl Expression for LiteralExpression {
         let capacity = input.capacity();
         let builder = &mut array_builder;
         let literal = &self.literal;
-        for_all_variants! {array_impl_literal_append, builder, literal, capacity}
-        array_builder.finish().map(Arc::new).map_err(Into::into)
+
+        macro_rules! array_impl_literal_append {
+            ($( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+                match (builder, literal) {
+                    $(
+                        (ArrayBuilderImpl::$variant_name(inner), Some(ScalarImpl::$variant_name(v))) => {
+                            append_literal_to_arr(inner, Some(v.as_scalar_ref()), capacity)?;
+                        }
+                        (ArrayBuilderImpl::$variant_name(inner), None) => {
+                            append_literal_to_arr(inner, None, capacity)?;
+                        }
+                    )*
+                    (_, _) => $crate::bail!(
+                        "Do not support values in insert values executor".to_string()
+                    ),
+                }
+            };
+        }
+
+        for_all_variants! { array_impl_literal_append }
+
+        Ok(Arc::new(array_builder.finish()))
     }
 
     fn eval_row(&self, _input: &Row) -> Result<Datum> {
@@ -76,34 +78,9 @@ where
     A1: ArrayBuilder,
 {
     for _ in 0..cardinality {
-        a.append(v)?
+        a.append(v)
     }
     Ok(())
-}
-
-fn literal_type_match(return_type: &DataType, literal: Option<&ScalarImpl>) -> bool {
-    match literal {
-        Some(datum) => {
-            matches!(
-                (return_type, datum),
-                (DataType::Boolean, ScalarImpl::Bool(_))
-                    | (DataType::Int16, ScalarImpl::Int16(_))
-                    | (DataType::Int32, ScalarImpl::Int32(_))
-                    | (DataType::Int64, ScalarImpl::Int64(_))
-                    | (DataType::Float32, ScalarImpl::Float32(_))
-                    | (DataType::Float64, ScalarImpl::Float64(_))
-                    | (DataType::Date, ScalarImpl::Int32(_))
-                    | (DataType::Varchar, ScalarImpl::Utf8(_))
-                    | (DataType::Date, ScalarImpl::NaiveDate(_))
-                    | (DataType::Time, ScalarImpl::NaiveTime(_))
-                    | (DataType::Timestamp, ScalarImpl::NaiveDateTime(_))
-                    | (DataType::Decimal, ScalarImpl::Decimal(_))
-                    | (DataType::Interval, ScalarImpl::Interval(_))
-                    | (DataType::Struct { .. }, ScalarImpl::Struct(_))
-            )
-        }
-        None => true,
-    }
 }
 
 impl LiteralExpression {
@@ -124,7 +101,7 @@ impl<'a> TryFrom<&'a ExprNode> for LiteralExpression {
     type Error = ExprError;
 
     fn try_from(prost: &'a ExprNode) -> Result<Self> {
-        ensure!(prost.expr_type == Type::ConstantValue as i32);
+        ensure!(prost.get_expr_type().unwrap() == Type::ConstantValue);
         let ret_type = DataType::from(prost.get_return_type().unwrap());
         if prost.rex_node.is_none() {
             return Ok(Self {
@@ -135,7 +112,7 @@ impl<'a> TryFrom<&'a ExprNode> for LiteralExpression {
 
         if let RexNode::Constant(prost_value) = prost.get_rex_node().unwrap() {
             // TODO: We need to unify these
-            let value = ScalarImpl::bytes_to_scalar(
+            let value = ScalarImpl::from_proto_bytes(
                 prost_value.get_body(),
                 prost.get_return_type().unwrap(),
             )?;

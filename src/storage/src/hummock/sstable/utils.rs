@@ -58,7 +58,7 @@ pub fn bytes_diff<'a, 'b>(base: &'a [u8], target: &'b [u8]) -> &'b [u8] {
 pub fn xxhash64_checksum(data: &[u8]) -> u64 {
     let mut hasher = twox_hash::XxHash64::with_seed(0);
     hasher.write(data);
-    hasher.finish() as u64
+    hasher.finish()
 }
 
 /// Verifies the checksum of the data equals the given checksum with xxhash64.
@@ -81,12 +81,12 @@ pub fn put_length_prefixed_slice(buf: &mut Vec<u8>, slice: &[u8]) {
 
 pub fn get_length_prefixed_slice(buf: &mut &[u8]) -> Vec<u8> {
     let len = buf.get_u32_le() as usize;
-    let v = (&buf[..len]).to_vec();
+    let v = buf[..len].to_vec();
     buf.advance(len);
     v
 }
 
-#[derive(Deserialize, Clone, Copy, Debug)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompressionAlgorithm {
     None,
     Lz4,

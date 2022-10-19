@@ -11,23 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::collections::HashMap;
 
-use itertools::Itertools;
 use piestream_pb::catalog::source::Info;
-use piestream_pb::catalog::Source as ProstSource;
-use piestream_pb::stream_plan::source_node::SourceType;
+use piestream_pb::catalog::{Source as ProstSource, StreamSourceInfo, TableSourceInfo};
 
 use super::column_catalog::ColumnCatalog;
-use super::{ColumnId, SourceId, TABLE_SOURCE_PK_COLID};
-
-#[expect(non_snake_case, non_upper_case_globals)]
-pub mod WithOptions {
-    pub const AppenOnly: &str = "appendonly";
-    pub const Connector: &str = "connector";
-}
+use super::{ColumnId, SourceId};
+use crate::WithOptions;
 
 pub const KAFKA_CONNECTOR: &str = "kafka";
+
+#[derive(Clone, Debug)]
+pub enum SourceCatalogInfo {
+    StreamSource(StreamSourceInfo),
+    TableSource(TableSourceInfo),
+}
 
 /// this struct `SourceCatalog` is used in frontend and compared with `ProstSource` it only maintain
 /// information which will be used during optimization.
@@ -37,31 +35,18 @@ pub struct SourceCatalog {
     pub name: String,
     pub columns: Vec<ColumnCatalog>,
     pub pk_col_ids: Vec<ColumnId>,
-    pub source_type: SourceType,
     pub append_only: bool,
-    pub owner: String,
+    pub owner: u32,
+    pub info: SourceCatalogInfo,
 }
 
 impl SourceCatalog {
-    /// Extract `field_descs` from `column_desc` and add in source catalog.
-    pub fn flatten(mut self) -> Self {
-        let mut catalogs = vec![];
-        for col in &self.columns {
-            // Extract `field_descs` and return `column_catalogs`.
-            catalogs.append(
-                &mut col
-                    .column_desc
-                    .flatten()
-                    .into_iter()
-                    .map(|c| ColumnCatalog {
-                        column_desc: c,
-                        is_hidden: col.is_hidden,
-                    })
-                    .collect_vec(),
-            )
-        }
-        self.columns = catalogs.clone();
-        self
+    pub fn is_table(&self) -> bool {
+        matches!(self.info, SourceCatalogInfo::TableSource(_))
+    }
+
+    pub fn is_stream(&self) -> bool {
+        matches!(self.info, SourceCatalogInfo::StreamSource(_))
     }
 }
 
@@ -69,53 +54,44 @@ impl From<&ProstSource> for SourceCatalog {
     fn from(prost: &ProstSource) -> Self {
         let id = prost.id;
         let name = prost.name.clone();
-        let (source_type, prost_columns, pk_col_ids, with_options) = match &prost.info {
+        let (prost_columns, pk_col_ids, with_options, info) = match &prost.info {
             Some(Info::StreamSource(source)) => (
-                SourceType::Source,
                 source.columns.clone(),
                 source
                     .pk_column_ids
-                    .iter()
-                    .map(|id| ColumnId::new(*id))
+                    .clone()
+                    .into_iter()
+                    .map(Into::into)
                     .collect(),
-                source.properties.clone(),
+                WithOptions::new(source.properties.clone()),
+                SourceCatalogInfo::StreamSource(source.clone()),
             ),
             Some(Info::TableSource(source)) => (
-                SourceType::Table,
                 source.columns.clone(),
-                vec![TABLE_SOURCE_PK_COLID],
-                source.properties.clone(),
+                source
+                    .pk_column_ids
+                    .clone()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                WithOptions::new(source.properties.clone()),
+                SourceCatalogInfo::TableSource(source.clone()),
             ),
             None => unreachable!(),
         };
         let columns = prost_columns.into_iter().map(ColumnCatalog::from).collect();
 
-        let append_only = check_append_only(&with_options);
-        let owner: String = prost.owner.clone();
+        let append_only = with_options.append_only();
+        let owner = prost.owner;
 
         Self {
             id,
             name,
             columns,
             pk_col_ids,
-            source_type,
             append_only,
             owner,
+            info,
         }
     }
-}
-
-fn check_append_only(with_options: &HashMap<String, String>) -> bool {
-    if let Some(val) = with_options.get(WithOptions::AppenOnly) {
-        if val.to_lowercase() == "true" {
-            return true;
-        }
-    }
-    if let Some(val) = with_options.get(WithOptions::Connector) {
-        // Kafka source is append-only
-        if val.to_lowercase() == KAFKA_CONNECTOR {
-            return true;
-        }
-    }
-    false
 }

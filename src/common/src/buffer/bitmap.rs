@@ -40,8 +40,6 @@ use itertools::Itertools;
 use piestream_pb::common::buffer::CompressionType;
 use piestream_pb::common::Buffer as ProstBuffer;
 
-use crate::array::error::ArrayError;
-use crate::array::ArrayResult;
 use crate::util::bit_util;
 
 #[derive(Default, Debug)]
@@ -91,6 +89,14 @@ impl BitmapBuilder {
         }
     }
 
+    pub fn is_set(&self, n: usize) -> bool {
+        assert!(n < self.len);
+
+        let byte = self.data.get(n / 8).unwrap_or(&self.head);
+        let mask = 1 << (n % 8);
+        *byte & mask != 0
+    }
+
     pub fn append(&mut self, bit_set: bool) -> &mut Self {
         self.head |= (bit_set as u8) << (self.len % 8);
         self.num_high_bits += bit_set as usize;
@@ -100,6 +106,20 @@ impl BitmapBuilder {
             self.head = 0;
         }
         self
+    }
+
+    pub fn pop(&mut self) -> Option<()> {
+        if self.len == 0 {
+            return None;
+        }
+        let mut rem = self.len % 8;
+        if rem == 0 {
+            self.head = self.data.pop().unwrap();
+            rem = 8;
+        }
+        self.head &= !(1 << (rem - 1));
+        self.len -= 1;
+        Some(())
     }
 
     pub fn append_bitmap(&mut self, other: &Bitmap) -> &mut Self {
@@ -177,7 +197,6 @@ impl Bitmap {
         }
     }
 
-    #[cfg(test)]
     pub fn from_bytes(buf: Bytes) -> Self {
         let num_bits = buf.len() << 3;
         Self::from_bytes_with_num_bits(buf, num_bits)
@@ -185,13 +204,7 @@ impl Bitmap {
 
     /// Return the next set bit index on or after `bit_idx`.
     pub fn next_set_bit(&self, bit_idx: usize) -> Option<usize> {
-        for idx in bit_idx..self.len() {
-            // Since `self.len()` guards the range, we can safely call unsafe function here.
-            if unsafe { self.is_set_unchecked(idx) } {
-                return Some(idx);
-            }
-        }
-        None
+        (bit_idx..self.len()).find(|&idx| unsafe { self.is_set_unchecked(idx) })
     }
 
     pub fn num_high_bits(&self) -> usize {
@@ -199,13 +212,7 @@ impl Bitmap {
     }
 
     fn num_bytes(num_bits: usize) -> usize {
-        let num_bytes = num_bits / 8 + if num_bits % 8 > 0 { 1 } else { 0 };
-        let r = num_bytes % 64;
-        if r == 0 {
-            num_bytes
-        } else {
-            num_bytes + 64 - r
-        }
+        num_bits / 8 + usize::from(num_bits % 8 > 0)
     }
 
     /// Returns the number of valid bits in the bitmap,
@@ -227,9 +234,14 @@ impl Bitmap {
         bit_util::get_bit_raw(self.bits.as_ptr(), idx)
     }
 
-    pub fn is_set(&self, idx: usize) -> ArrayResult<bool> {
-        ensure!(idx < self.len());
-        Ok(unsafe { self.is_set_unchecked(idx) })
+    pub fn is_set(&self, idx: usize) -> bool {
+        assert!(idx < self.len());
+        unsafe { self.is_set_unchecked(idx) }
+    }
+
+    /// Check if the bitmap is all set to 1.
+    pub fn is_all_set(&self) -> bool {
+        self.num_high_bits == self.len()
     }
 
     pub fn iter(&self) -> BitmapIter<'_> {
@@ -328,15 +340,13 @@ impl Bitmap {
     }
 }
 
-impl TryFrom<&ProstBuffer> for Bitmap {
-    type Error = ArrayError;
-
-    fn try_from(buf: &ProstBuffer) -> ArrayResult<Bitmap> {
+impl From<&ProstBuffer> for Bitmap {
+    fn from(buf: &ProstBuffer) -> Self {
         let last_byte_num_bits = u8::from_be_bytes(buf.body[..1].try_into().unwrap());
         let bits = Bytes::copy_from_slice(&buf.body[1..]); // TODO: avoid this allocation
         let num_bits = (bits.len() << 3) - ((8 - last_byte_num_bits) % 8) as usize;
 
-        Ok(Self::from_bytes_with_num_bits(bits, num_bits))
+        Self::from_bytes_with_num_bits(bits, num_bits)
     }
 }
 
@@ -384,23 +394,16 @@ mod tests {
     fn test_bitmap_builder() {
         let bitmap1 = {
             let mut builder = BitmapBuilder::default();
-            builder
-                .append(false)
-                .append(true)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false)
-                .append(true);
+            let bits = [
+                false, true, true, false, true, false, true, false, true, false, true, true, false,
+                true, false, true,
+            ];
+            for bit in bits {
+                builder.append(bit);
+            }
+            for (idx, bit) in bits.iter().enumerate() {
+                assert_eq!(builder.is_set(idx), *bit);
+            }
             builder.finish()
         };
         let byte1 = 0b0101_0110_u8;
@@ -414,20 +417,31 @@ mod tests {
 
         let bitmap2 = {
             let mut builder = BitmapBuilder::default();
-            builder
-                .append(false)
-                .append(true)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false)
-                .append(true)
-                .append(false);
+            let bits = [false, true, true, false, true, false, true, false];
+            for bit in bits {
+                builder.append(bit);
+            }
+            for (idx, bit) in bits.iter().enumerate() {
+                assert_eq!(builder.is_set(idx), *bit);
+            }
             builder.finish()
         };
         let byte1 = 0b0101_0110_u8;
         let expected = Bitmap::from_bytes(Bytes::copy_from_slice(&[byte1]));
         assert_eq!(bitmap2, expected);
+    }
+
+    #[test]
+    fn test_bitmap_all_high() {
+        let num_bits = 3;
+        let bitmap = Bitmap::all_high_bits(num_bits);
+        assert_eq!(bitmap.len(), num_bits);
+        assert!(bitmap.is_all_set());
+        for i in 0..num_bits {
+            assert!(bitmap.is_set(i));
+        }
+        // Test to and from protobuf is OK.
+        assert_eq!(bitmap, Bitmap::from(&bitmap.to_protobuf()));
     }
 
     #[test]
@@ -453,18 +467,18 @@ mod tests {
     #[test]
     fn test_bitmap_is_set() {
         let bitmap = Bitmap::from_bytes(Bytes::from_static(&[0b01001010]));
-        assert!(!bitmap.is_set(0).unwrap());
-        assert!(bitmap.is_set(1).unwrap());
-        assert!(!bitmap.is_set(2).unwrap());
-        assert!(bitmap.is_set(3).unwrap());
-        assert!(!bitmap.is_set(4).unwrap());
-        assert!(!bitmap.is_set(5).unwrap());
-        assert!(bitmap.is_set(6).unwrap());
-        assert!(!bitmap.is_set(7).unwrap());
+        assert!(!bitmap.is_set(0));
+        assert!(bitmap.is_set(1));
+        assert!(!bitmap.is_set(2));
+        assert!(bitmap.is_set(3));
+        assert!(!bitmap.is_set(4));
+        assert!(!bitmap.is_set(5));
+        assert!(bitmap.is_set(6));
+        assert!(!bitmap.is_set(7));
     }
 
     #[test]
-    fn test_bitmap_iter() -> ArrayResult<()> {
+    fn test_bitmap_iter() {
         {
             let bitmap = Bitmap::from_bytes(Bytes::from_static(&[0b01001010]));
             let mut booleans = vec![];
@@ -479,7 +493,6 @@ mod tests {
                 assert!(b);
             }
         }
-        Ok(())
     }
 
     #[test]
@@ -557,5 +570,34 @@ mod tests {
 
         let b = b.finish();
         assert_eq!(b.bits.to_vec(), &[0b0000_0001, 0b0000_0110]);
+    }
+
+    #[test]
+    fn test_bitmap_pop() {
+        let mut b = BitmapBuilder::zeroed(7);
+
+        {
+            b.append(true);
+            assert!(b.is_set(b.len() - 1));
+            b.pop();
+            assert!(!b.is_set(b.len() - 1));
+        }
+
+        {
+            b.append(false);
+            assert!(!b.is_set(b.len() - 1));
+            b.pop();
+            assert!(!b.is_set(b.len() - 1));
+        }
+
+        {
+            b.append(true);
+            b.append(false);
+            assert!(!b.is_set(b.len() - 1));
+            b.pop();
+            assert!(b.is_set(b.len() - 1));
+            b.pop();
+            assert!(!b.is_set(b.len() - 1));
+        }
     }
 }

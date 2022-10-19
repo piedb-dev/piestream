@@ -20,8 +20,9 @@ use crate::catalog::pg_catalog::PgCatalogColumnsDef;
 /// schemas: each namespace can have a separate collection of relations, types, etc. without name
 /// conflicts. Ref: [`https://www.postgresql.org/docs/current/catalog-pg-namespace.html`]
 pub const PG_NAMESPACE_TABLE_NAME: &str = "pg_namespace";
-pub const PG_NAMESPACE_COLUMNS: &[PgCatalogColumnsDef] = &[
+pub const PG_NAMESPACE_COLUMNS: &[PgCatalogColumnsDef<'_>] = &[
     (DataType::Int32, "oid"),
     (DataType::Varchar, "nspname"),
-    (DataType::Varchar, "nspowner"), // TODO: using user id instead and support acl.
+    (DataType::Int32, "nspowner"),
+    (DataType::Varchar, "nspacl"),
 ];

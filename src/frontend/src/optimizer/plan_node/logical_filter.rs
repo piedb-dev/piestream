@@ -16,15 +16,15 @@ use std::fmt;
 
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
+use piestream_common::error::Result;
 
 use super::{
-    ColPrunable, CollectInputRef, LogicalProject, PlanBase, PlanRef, PlanTreeNodeUnary,
+    generic, ColPrunable, CollectInputRef, LogicalProject, PlanBase, PlanRef, PlanTreeNodeUnary,
     PredicatePushdown, ToBatch, ToStream,
 };
 use crate::expr::{assert_input_ref, ExprImpl};
 use crate::optimizer::plan_node::{BatchFilter, StreamFilter};
-use crate::piestream_common::error::Result;
-use crate::utils::{ColIndexMapping, Condition};
+use crate::utils::{ColIndexMapping, Condition, ConditionDisplay};
 
 /// `LogicalFilter` iterates over its input and returns elements for which `predicate` evaluates to
 /// true, filtering out the others.
@@ -33,8 +33,7 @@ use crate::utils::{ColIndexMapping, Condition};
 #[derive(Debug, Clone)]
 pub struct LogicalFilter {
     pub base: PlanBase,
-    predicate: Condition,
-    input: PlanRef,
+    core: generic::Filter<PlanRef>,
 }
 
 impl LogicalFilter {
@@ -44,12 +43,22 @@ impl LogicalFilter {
             assert_input_ref!(cond, input.schema().fields().len());
         }
         let schema = input.schema().clone();
-        let pk_indices = input.pk_indices().to_vec();
-        let base = PlanBase::new_logical(ctx, schema, pk_indices);
+        let pk_indices = input.logical_pk().to_vec();
+        let mut functional_dependency = input.functional_dependency().clone();
+        for i in &predicate.conjunctions {
+            if let Some((col, _)) = i.as_eq_const() {
+                functional_dependency.add_constant_columns(&[col.index()])
+            } else if let Some((left, right)) = i.as_eq_cond() {
+                functional_dependency
+                    .add_functional_dependency_by_column_indices(&[left.index()], &[right.index()]);
+                functional_dependency
+                    .add_functional_dependency_by_column_indices(&[right.index()], &[left.index()]);
+            }
+        }
+        let base = PlanBase::new_logical(ctx, schema, pk_indices, functional_dependency);
         LogicalFilter {
             base,
-            predicate,
-            input,
+            core: generic::Filter { predicate, input },
         }
     }
 
@@ -70,17 +79,31 @@ impl LogicalFilter {
 
     /// Get the predicate of the logical join.
     pub fn predicate(&self) -> &Condition {
-        &self.predicate
+        &self.core.predicate
+    }
+
+    pub(super) fn fmt_with_name(&self, f: &mut fmt::Formatter<'_>, name: &str) -> fmt::Result {
+        let input = self.input();
+        let input_schema = input.schema();
+        write!(
+            f,
+            "{} {{ predicate: {} }}",
+            name,
+            ConditionDisplay {
+                condition: self.predicate(),
+                input_schema
+            }
+        )
     }
 }
 
 impl PlanTreeNodeUnary for LogicalFilter {
     fn input(&self) -> PlanRef {
-        self.input.clone()
+        self.core.input.clone()
     }
 
     fn clone_with_input(&self, input: PlanRef) -> Self {
-        Self::new(input, self.predicate.clone())
+        Self::new(input, self.predicate().clone())
     }
 
     #[must_use]
@@ -97,8 +120,8 @@ impl PlanTreeNodeUnary for LogicalFilter {
 impl_plan_tree_node_for_unary! {LogicalFilter}
 
 impl fmt::Display for LogicalFilter {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "LogicalFilter {{ predicate: {} }}", self.predicate)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with_name(f, "LogicalFilter")
     }
 }
 
@@ -107,10 +130,10 @@ impl ColPrunable for LogicalFilter {
         let required_cols_bitset = FixedBitSet::from_iter(required_cols.iter().copied());
 
         let mut visitor = CollectInputRef::with_capacity(self.input().schema().len());
-        self.predicate.visit_expr(&mut visitor);
+        self.predicate().visit_expr(&mut visitor);
         let predicate_required_cols: FixedBitSet = visitor.into();
 
-        let mut predicate = self.predicate.clone();
+        let mut predicate = self.predicate().clone();
         let input_required_cols = {
             let mut tmp = predicate_required_cols;
             tmp.union_with(&required_cols_bitset);
@@ -122,7 +145,7 @@ impl ColPrunable for LogicalFilter {
         );
         predicate = predicate.rewrite_expr(&mut mapping);
 
-        let filter = LogicalFilter::new(self.input.prune_col(&input_required_cols), predicate);
+        let filter = LogicalFilter::new(self.input().prune_col(&input_required_cols), predicate);
         if input_required_cols == required_cols {
             filter.into()
         } else {
@@ -145,8 +168,8 @@ impl ColPrunable for LogicalFilter {
 
 impl PredicatePushdown for LogicalFilter {
     fn predicate_pushdown(&self, predicate: Condition) -> PlanRef {
-        self.input
-            .predicate_pushdown(predicate.and(self.predicate.clone()))
+        let predicate = predicate.and(self.predicate().clone());
+        self.input().predicate_pushdown(predicate)
     }
 }
 
@@ -166,7 +189,7 @@ impl ToStream for LogicalFilter {
     }
 
     fn logical_rewrite_for_stream(&self) -> Result<(PlanRef, ColIndexMapping)> {
-        let (input, input_col_change) = self.input.logical_rewrite_for_stream()?;
+        let (input, input_col_change) = self.input().logical_rewrite_for_stream()?;
         let (filter, out_col_change) = self.rewrite_with_input(input, input_col_change);
         Ok((filter.into(), out_col_change))
     }
@@ -175,13 +198,16 @@ impl ToStream for LogicalFilter {
 #[cfg(test)]
 mod tests {
 
+    use std::collections::HashSet;
+
     use piestream_common::catalog::{Field, Schema};
-    use piestream_common::types::DataType;
+    use piestream_common::types::{DataType, ScalarImpl};
     use piestream_pb::expr::expr_node::Type;
 
     use super::*;
     use crate::expr::{assert_eq_input_ref, FunctionCall, InputRef, Literal};
     use crate::optimizer::plan_node::LogicalValues;
+    use crate::optimizer::property::FunctionalDependency;
     use crate::session::OptimizerContext;
 
     #[tokio::test]
@@ -239,7 +265,7 @@ mod tests {
         assert_eq!(filter.schema().fields()[1], fields[2]);
         assert_eq!(filter.id().0, 3);
 
-        let expr: ExprImpl = filter.predicate.clone().into();
+        let expr: ExprImpl = filter.predicate().clone().into();
         let call = expr.as_function_call().unwrap();
         assert_eq_input_ref!(&call.inputs()[0], 0);
         let values = filter.input();
@@ -304,7 +330,7 @@ mod tests {
         assert_eq!(filter.schema().fields()[0], fields[0]);
         assert_eq!(filter.schema().fields()[1], fields[1]);
 
-        let expr: ExprImpl = filter.predicate.clone().into();
+        let expr: ExprImpl = filter.predicate().clone().into();
         let call = expr.as_function_call().unwrap();
         assert_eq_input_ref!(&call.inputs()[0], 1);
         let values = filter.input();
@@ -362,7 +388,7 @@ mod tests {
         assert_eq!(filter.schema().fields().len(), 2);
         assert_eq!(filter.schema().fields()[0], fields[1]);
         assert_eq!(filter.schema().fields()[1], fields[2]);
-        let expr: ExprImpl = filter.predicate.clone().into();
+        let expr: ExprImpl = filter.predicate().clone().into();
         let call = expr.as_function_call().unwrap();
         assert_eq_input_ref!(&call.inputs()[0], 0);
 
@@ -371,5 +397,75 @@ mod tests {
         assert_eq!(values.schema().fields().len(), 2);
         assert_eq!(values.schema().fields()[0], fields[1]);
         assert_eq!(values.schema().fields()[1], fields[2]);
+    }
+
+    #[tokio::test]
+    async fn fd_derivation_filter() {
+        // input: [v1, v2, v3, v4]
+        // FD: v4 --> { v2, v3 }
+        // Condition: v1 = 0 AND v2 = v3
+        // output: [v1, v2, v3, v4],
+        // FD: v4 --> { v2, v3 }, {} --> v1, v2 --> v3, v3 --> v2
+        let ctx = OptimizerContext::mock().await;
+        let fields: Vec<Field> = vec![
+            Field::with_name(DataType::Int32, "v1"),
+            Field::with_name(DataType::Int32, "v2"),
+            Field::with_name(DataType::Int32, "v3"),
+            Field::with_name(DataType::Int32, "v4"),
+        ];
+        let mut values = LogicalValues::new(vec![], Schema { fields }, ctx);
+        // 3 --> 1, 2
+        values
+            .base
+            .functional_dependency
+            .add_functional_dependency_by_column_indices(&[3], &[1, 2]);
+        // v1 = 0 AND v2 = v3
+        let predicate = ExprImpl::FunctionCall(Box::new(
+            FunctionCall::new(
+                Type::And,
+                vec![
+                    ExprImpl::FunctionCall(Box::new(
+                        FunctionCall::new(
+                            Type::Equal,
+                            vec![
+                                ExprImpl::InputRef(Box::new(InputRef::new(0, DataType::Int32))),
+                                ExprImpl::Literal(Box::new(Literal::new(
+                                    Some(ScalarImpl::Int32(1)),
+                                    DataType::Int32,
+                                ))),
+                            ],
+                        )
+                        .unwrap(),
+                    )),
+                    ExprImpl::FunctionCall(Box::new(
+                        FunctionCall::new(
+                            Type::Equal,
+                            vec![
+                                ExprImpl::InputRef(Box::new(InputRef::new(1, DataType::Int32))),
+                                ExprImpl::InputRef(Box::new(InputRef::new(2, DataType::Int32))),
+                            ],
+                        )
+                        .unwrap(),
+                    )),
+                ],
+            )
+            .unwrap(),
+        ));
+        let filter = LogicalFilter::create_with_expr(values.into(), predicate);
+        let fd_set: HashSet<_> = filter
+            .functional_dependency()
+            .as_dependencies()
+            .iter()
+            .cloned()
+            .collect();
+        let expected_fd_set: HashSet<_> = [
+            FunctionalDependency::with_indices(4, &[3], &[1, 2]),
+            FunctionalDependency::with_indices(4, &[], &[0]),
+            FunctionalDependency::with_indices(4, &[1], &[2]),
+            FunctionalDependency::with_indices(4, &[2], &[1]),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(fd_set, expected_fd_set);
     }
 }

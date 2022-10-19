@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use madsim::collections::BTreeSet;
-use piestream_common::array::{Op, Row, StreamChunk};
-use piestream_common::collection::evictable::EvictableHashMap;
+use std::collections::BTreeSet;
 
-use crate::executor::JOIN_CACHE_SIZE;
+use piestream_common::array::{Op, Row, StreamChunk};
+
+use crate::cache::{EvictableHashMap, ExecutorCache, LruManagerRef};
 
 /// A cache for lookup's arrangement side.
 pub struct LookupCache {
-    data: EvictableHashMap<Row, BTreeSet<Row>>,
+    data: ExecutorCache<Row, BTreeSet<Row>>,
 }
 
 impl LookupCache {
@@ -55,12 +55,20 @@ impl LookupCache {
 
     /// Flush the cache and evict the items.
     pub fn flush(&mut self) {
-        self.data.evict_to_target_cap();
+        self.data.evict();
     }
 
-    pub fn new() -> Self {
-        Self {
-            data: EvictableHashMap::new(JOIN_CACHE_SIZE),
-        }
+    /// Update the current epoch.
+    pub fn update_epoch(&mut self, epoch: u64) {
+        self.data.update_epoch(epoch);
+    }
+
+    pub fn new(lru_manager: Option<LruManagerRef>, cache_size: usize) -> Self {
+        let cache = if let Some(lru_manager) = lru_manager {
+            ExecutorCache::Managed(lru_manager.create_cache())
+        } else {
+            ExecutorCache::Local(EvictableHashMap::new(cache_size))
+        };
+        Self { data: cache }
     }
 }

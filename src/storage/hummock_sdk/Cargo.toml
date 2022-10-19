@@ -1,14 +1,28 @@
 [package]
 name = "piestream_hummock_sdk"
-version = "0.1.10"
+version = "0.2.0-alpha"
 edition = "2021"
 
 [dependencies]
 bytes = "1"
 hex = "0.4"
-log = "0.4"
-madsim = "=0.2.0-alpha.3"
-prost = "0.10"
+itertools = "0.10"
+num-derive = "0.3"
+num-traits = "0.2"
+parking_lot = "0.12"
+parse-display = "0.6"
+prost = "0.11"
+piestream_common = { path = "../../common" }
 piestream_pb = { path = "../../prost" }
-tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = ["rt", "rt-multi-thread", "sync", "macros", "time", "signal"] }
-workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+tokio = { version = "0.2", package = "madsim-tokio", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "time",
+    "signal",
+] }
+tracing = "0.1"
+
+[target.'cfg(not(madsim))'.dependencies]
+workspace-hack = { version = "0.2.0-alpha", path = "../../workspace-hack" }

@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
-
-use piestream_common::types::DataType;
-use piestream_expr::expr::AggKind;
-
+use super::agg_common::build_agg_call_from_prost;
 use super::*;
-use crate::executor::aggregation::{AggArgs, AggCall};
+use crate::executor::aggregation::AggCall;
 use crate::executor::LocalSimpleAggExecutor;
 
 pub struct LocalSimpleAggExecutorBuilder;
 
 impl ExecutorBuilder for LocalSimpleAggExecutorBuilder {
     fn new_boxed_executor(
-        mut params: ExecutorParams,
+        params: ExecutorParams,
         node: &StreamNode,
         _store: impl StateStore,
         _stream: &mut LocalStreamManagerCore,
-    ) -> Result<BoxedExecutor> {
+    ) -> StreamResult<BoxedExecutor> {
         let node = try_match_expand!(node.get_node_body().unwrap(), NodeBody::LocalSimpleAgg)?;
+        let [input]: [_; 1] = params.input.try_into().unwrap();
         let agg_calls: Vec<AggCall> = node
             .get_agg_calls()
             .iter()
@@ -38,36 +35,12 @@ impl ExecutorBuilder for LocalSimpleAggExecutorBuilder {
             .try_collect()?;
 
         Ok(LocalSimpleAggExecutor::new(
-            params.input.remove(0),
+            params.actor_context,
+            input,
             agg_calls,
             params.pk_indices,
             params.executor_id,
         )?
         .boxed())
     }
-}
-
-pub fn build_agg_call_from_prost(
-    append_only: bool,
-    agg_call_proto: &piestream_pb::expr::AggCall,
-) -> Result<AggCall> {
-    let args = match &agg_call_proto.get_args()[..] {
-        [] => AggArgs::None,
-        [arg] => AggArgs::Unary(
-            DataType::from(arg.get_type()?),
-            arg.get_input()?.column_idx as usize,
-        ),
-        _ => {
-            return Err(RwError::from(ErrorCode::NotImplemented(
-                "multiple aggregation args".to_string(),
-                None.into(),
-            )))
-        }
-    };
-    Ok(AggCall {
-        kind: AggKind::try_from(agg_call_proto.get_type()?)?,
-        args,
-        return_type: DataType::from(agg_call_proto.get_return_type()?),
-        append_only,
-    })
 }

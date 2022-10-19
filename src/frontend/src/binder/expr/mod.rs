@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::zip_eq;
+use itertools::{zip_eq, Itertools};
 use piestream_common::catalog::{ColumnDesc, ColumnId};
 use piestream_common::error::{ErrorCode, Result};
 use piestream_common::types::DataType;
 use piestream_sqlparser::ast::{
-    BinaryOperator, DataType as AstDataType, DateTimeField, Expr, Query, StructField,
+    BinaryOperator, DataType as AstDataType, Expr, Function, ObjectName, Query, StructField,
     TrimWhereField, UnaryOperator,
 };
 
@@ -27,6 +27,7 @@ use crate::expr::{Expr as _, ExprImpl, ExprType, FunctionCall, SubqueryKind};
 mod binary_op;
 mod column;
 mod function;
+mod order_by;
 mod subquery;
 mod value;
 
@@ -41,7 +42,20 @@ impl Binder {
             }
             Expr::Row(exprs) => self.bind_row(exprs),
             // input ref
-            Expr::Identifier(ident) => self.bind_column(&[ident]),
+            Expr::Identifier(ident) => {
+                if ["session_user", "current_schema"]
+                    .iter()
+                    .any(|e| ident.real_value().as_str() == *e)
+                {
+                    // Rewrite a system variable to a function call, e.g. `SELECT current_schema;`
+                    // will be rewritten to `SELECT current_schema();`.
+                    // NOTE: Here we don't 100% follow the behavior of Postgres, as it doesn't
+                    // allow `session_user()` while we do.
+                    self.bind_function(Function::no_arg(ObjectName(vec![ident])))
+                } else {
+                    self.bind_column(&[ident])
+                }
+            }
             Expr::CompoundIdentifier(idents) => self.bind_column(&idents),
             Expr::FieldIdentifier(field_expr, idents) => {
                 self.bind_single_field_column(*field_expr, &idents)
@@ -51,7 +65,7 @@ impl Binder {
             Expr::BinaryOp { left, op, right } => self.bind_binary_op(*left, op, *right),
             Expr::Nested(expr) => self.bind_expr(*expr),
             Expr::Array(exprs) => self.bind_array(exprs),
-            Expr::ArrayIndex { obj, indexs } => self.bind_array_index(*obj, indexs),
+            Expr::ArrayIndex { obj, index } => self.bind_array_index(*obj, *index),
             Expr::Function(f) => self.bind_function(f),
             // subquery
             Expr::Subquery(q) => self.bind_subquery_expr(*q, SubqueryKind::Scalar),
@@ -69,8 +83,8 @@ impl Binder {
             Expr::IsNotTrue(expr) => self.bind_is_operator(ExprType::IsNotTrue, *expr),
             Expr::IsFalse(expr) => self.bind_is_operator(ExprType::IsFalse, *expr),
             Expr::IsNotFalse(expr) => self.bind_is_operator(ExprType::IsNotFalse, *expr),
-            Expr::IsDistinctFrom(left, right) => self.bind_distinct_from(false, *left, *right),
-            Expr::IsNotDistinctFrom(left, right) => self.bind_distinct_from(true, *left, *right),
+            Expr::IsDistinctFrom(left, right) => self.bind_distinct_from(*left, *right),
+            Expr::IsNotDistinctFrom(left, right) => self.bind_not_distinct_from(*left, *right),
             Expr::Case {
                 operand,
                 conditions,
@@ -97,6 +111,12 @@ impl Binder {
                 substring_from,
                 substring_for,
             } => self.bind_substring(*expr, substring_from, substring_for),
+            Expr::Overlay {
+                expr,
+                new_substring,
+                start,
+                count,
+            } => self.bind_overlay(*expr, *new_substring, *start, count),
             _ => Err(ErrorCode::NotImplemented(
                 format!("unsupported expression {:?}", expr),
                 112.into(),
@@ -105,12 +125,12 @@ impl Binder {
         }
     }
 
-    pub(super) fn bind_extract(&mut self, field: DateTimeField, expr: Expr) -> Result<ExprImpl> {
+    pub(super) fn bind_extract(&mut self, field: String, expr: Expr) -> Result<ExprImpl> {
         let arg = self.bind_expr(expr)?;
         let arg_type = arg.return_type();
         Ok(FunctionCall::new(
             ExprType::Extract,
-            vec![self.bind_string(field.to_string())?.into(), arg],
+            vec![self.bind_string(field.clone())?.into(), arg],
         )
         .map_err(|_| {
             ErrorCode::NotImplemented(
@@ -247,6 +267,24 @@ impl Binder {
         FunctionCall::new(ExprType::Substr, args).map(|f| f.into())
     }
 
+    fn bind_overlay(
+        &mut self,
+        expr: Expr,
+        new_substring: Expr,
+        start: Expr,
+        count: Option<Box<Expr>>,
+    ) -> Result<ExprImpl> {
+        let mut args = vec![
+            self.bind_expr(expr)?,
+            self.bind_expr(new_substring)?,
+            self.bind_expr(start)?,
+        ];
+        if let Some(count) = count {
+            args.push(self.bind_expr(*count)?);
+        }
+        FunctionCall::new(ExprType::Overlay, args).map(|f| f.into())
+    }
+
     /// Bind `expr (not) between low and high`
     pub(super) fn bind_between(
         &mut self,
@@ -322,27 +360,39 @@ impl Binder {
         Ok(FunctionCall::new(func_type, vec![expr])?.into())
     }
 
-    pub(super) fn bind_distinct_from(
-        &mut self,
-        negated: bool,
-        left: Expr,
-        right: Expr,
-    ) -> Result<ExprImpl> {
+    pub(super) fn bind_distinct_from(&mut self, left: Expr, right: Expr) -> Result<ExprImpl> {
         let left = self.bind_expr(left)?;
         let right = self.bind_expr(right)?;
-
         let func_call = FunctionCall::new(ExprType::IsDistinctFrom, vec![left, right]);
+        Ok(func_call?.into())
+    }
 
-        if negated {
-            Ok(FunctionCall::new(ExprType::Not, vec![func_call?.into()])?.into())
-        } else {
-            Ok(func_call?.into())
-        }
+    pub(super) fn bind_not_distinct_from(&mut self, left: Expr, right: Expr) -> Result<ExprImpl> {
+        let left = self.bind_expr(left)?;
+        let right = self.bind_expr(right)?;
+        let func_call = FunctionCall::new(ExprType::IsNotDistinctFrom, vec![left, right]);
+        Ok(func_call?.into())
     }
 
     pub(super) fn bind_cast(&mut self, expr: Expr, data_type: AstDataType) -> Result<ExprImpl> {
-        self.bind_expr(expr)?
-            .cast_explicit(bind_data_type(&data_type)?)
+        let lhs = if matches!(&expr, Expr::Array(elements) if elements.is_empty())
+            && matches!(&data_type, AstDataType::Array(_))
+        {
+            // The subexpr `array[]` is invalid and cannot bind by itself without a parent cast.
+            // So we handle `array[]::T[]`/`cast(array[] as T[])` as a whole here.
+            FunctionCall::new_unchecked(
+                ExprType::Array,
+                vec![],
+                // Treat `array[]` as `varchar[]` temporarily before applying cast.
+                DataType::List {
+                    datatype: Box::new(DataType::Varchar),
+                },
+            )
+            .into()
+        } else {
+            self.bind_expr(expr)?
+        };
+        lhs.cast_explicit(bind_data_type(&data_type)?)
     }
 }
 
@@ -355,7 +405,7 @@ pub fn bind_struct_field(column_def: &StructField) -> Result<ColumnDesc> {
                     data_type: bind_data_type(&f.data_type)?,
                     // Literals don't have `column_id`.
                     column_id: ColumnId::new(0),
-                    name: f.name.value.clone(),
+                    name: f.name.real_value(),
                     field_descs: vec![],
                     type_name: "".to_string(),
                 })
@@ -367,13 +417,19 @@ pub fn bind_struct_field(column_def: &StructField) -> Result<ColumnDesc> {
     Ok(ColumnDesc {
         data_type: bind_data_type(&column_def.data_type)?,
         column_id: ColumnId::new(0),
-        name: column_def.name.value.clone(),
+        name: column_def.name.real_value(),
         field_descs,
         type_name: "".to_string(),
     })
 }
 
 pub fn bind_data_type(data_type: &AstDataType) -> Result<DataType> {
+    let new_err = || {
+        ErrorCode::NotImplemented(
+            format!("unsupported data type: {:}", data_type),
+            None.into(),
+        )
+    };
     let data_type = match data_type {
         AstDataType::Boolean => DataType::Boolean,
         AstDataType::SmallInt(None) => DataType::Int16,
@@ -382,7 +438,7 @@ pub fn bind_data_type(data_type: &AstDataType) -> Result<DataType> {
         AstDataType::Real | AstDataType::Float(Some(1..=24)) => DataType::Float32,
         AstDataType::Double | AstDataType::Float(Some(25..=53) | None) => DataType::Float64,
         AstDataType::Decimal(None, None) => DataType::Decimal,
-        AstDataType::Varchar(_) | AstDataType::String => DataType::Varchar,
+        AstDataType::Varchar | AstDataType::String | AstDataType::Text => DataType::Varchar,
         AstDataType::Date => DataType::Date,
         AstDataType::Time(false) => DataType::Time,
         AstDataType::Timestamp(false) => DataType::Timestamp,
@@ -398,20 +454,27 @@ pub fn bind_data_type(data_type: &AstDataType) -> Result<DataType> {
             )
             .into())
         }
-        AstDataType::Struct(types) => DataType::Struct {
-            fields: types
+        AstDataType::Struct(types) => DataType::new_struct(
+            types
                 .iter()
                 .map(|f| bind_data_type(&f.data_type))
-                .collect::<Result<Vec<_>>>()?
-                .into(),
-        },
-        _ => {
-            return Err(ErrorCode::NotImplemented(
-                format!("unsupported data type: {:?}", data_type),
-                None.into(),
-            )
-            .into())
+                .collect::<Result<Vec<_>>>()?,
+            types.iter().map(|f| f.name.real_value()).collect_vec(),
+        ),
+        AstDataType::Custom(qualified_type_name) if qualified_type_name.0.len() == 1 => {
+            // In PostgreSQL, these are not keywords but pre-defined names that could be extended by
+            // `CREATE TYPE`.
+            match qualified_type_name.0[0].real_value().as_str() {
+                "int2" => DataType::Int16,
+                "int4" => DataType::Int32,
+                "int8" => DataType::Int64,
+                "float4" => DataType::Float32,
+                "float8" => DataType::Float64,
+                "timestamptz" => DataType::Timestampz,
+                _ => return Err(new_err().into()),
+            }
         }
+        _ => return Err(new_err().into()),
     };
     Ok(data_type)
 }

@@ -22,12 +22,15 @@ use piestream_common::array::{DataChunk, StreamChunk, Vis};
 use piestream_common::types::{DataType, IntervalUnit, ScalarImpl};
 use piestream_expr::expr::expr_binary_nonnull::new_binary_expr;
 use piestream_expr::expr::{Expression, InputRefExpression, LiteralExpression};
+use piestream_expr::ExprError;
 use piestream_pb::expr::expr_node;
 
 use super::error::StreamExecutorError;
-use super::{BoxedExecutor, Executor, ExecutorInfo, Message};
+use super::{ActorContextRef, BoxedExecutor, Executor, ExecutorInfo, Message};
+use crate::common::InfallibleExpression;
 
 pub struct HopWindowExecutor {
+    ctx: ActorContextRef,
     pub input: BoxedExecutor,
     pub info: ExecutorInfo,
 
@@ -39,6 +42,7 @@ pub struct HopWindowExecutor {
 
 impl HopWindowExecutor {
     pub fn new(
+        ctx: ActorContextRef,
         input: BoxedExecutor,
         info: ExecutorInfo,
         time_col_idx: usize,
@@ -47,6 +51,7 @@ impl HopWindowExecutor {
         output_indices: Vec<usize>,
     ) -> Self {
         HopWindowExecutor {
+            ctx,
             input,
             info,
             time_col_idx,
@@ -66,7 +71,7 @@ impl Executor for HopWindowExecutor {
         &self.info.schema
     }
 
-    fn pk_indices(&self) -> super::PkIndicesRef {
+    fn pk_indices(&self) -> super::PkIndicesRef<'_> {
         &self.info.pk_indices
     }
 
@@ -79,25 +84,29 @@ impl HopWindowExecutor {
     #[try_stream(ok = Message, error = StreamExecutorError)]
     async fn execute_inner(self: Box<Self>) {
         let Self {
+            ctx,
             input,
             time_col_idx,
             window_slide,
             window_size,
             output_indices,
+            info,
             ..
         } = *self;
         let units = window_size
             .exact_div(&window_slide)
             .and_then(|x| NonZeroUsize::new(usize::try_from(x).ok()?))
-            .ok_or_else(|| {
-                StreamExecutorError::invalid_argument(format!(
+            .ok_or_else(|| ExprError::InvalidParam {
+                name: "window",
+                reason: format!(
                     "window_size {} cannot be divided by window_slide {}",
                     window_size, window_slide
-                ))
+                ),
             })?
             .get();
 
         let time_col_data_type = input.schema().fields()[time_col_idx].data_type();
+        let output_type = DataType::window_of(&time_col_data_type).unwrap();
         let time_col_ref = InputRefExpression::new(time_col_data_type, self.time_col_idx).boxed();
 
         let window_slide_expr =
@@ -107,12 +116,16 @@ impl HopWindowExecutor {
         // The first window_start of hop window should be:
         // tumble_start(`time_col` - (`window_size` - `window_slide`), `window_slide`).
         // Let's pre calculate (`window_size` - `window_slide`).
-        let window_size_sub_slide = window_size.checked_sub(&window_slide).ok_or_else(|| {
-            StreamExecutorError::invalid_argument(format!(
-                "window_size {} cannot be subtracted by window_slide {}",
-                window_size, window_slide
-            ))
-        })?;
+        let window_size_sub_slide =
+            window_size
+                .checked_sub(&window_slide)
+                .ok_or_else(|| ExprError::InvalidParam {
+                    name: "window",
+                    reason: format!(
+                        "window_size {} cannot be subtracted by window_slide {}",
+                        window_size, window_slide
+                    ),
+                })?;
         let window_size_sub_slide_expr = LiteralExpression::new(
             DataType::Interval,
             Some(ScalarImpl::Interval(window_size_sub_slide)),
@@ -121,35 +134,43 @@ impl HopWindowExecutor {
 
         let hop_start = new_binary_expr(
             expr_node::Type::TumbleStart,
-            piestream_common::types::DataType::Timestamp,
+            output_type.clone(),
             new_binary_expr(
                 expr_node::Type::Subtract,
-                DataType::Timestamp,
+                output_type.clone(),
                 time_col_ref,
                 window_size_sub_slide_expr,
-            ),
+            )?,
             window_slide_expr,
-        );
+        )?;
         let mut window_start_exprs = Vec::with_capacity(units);
         let mut window_end_exprs = Vec::with_capacity(units);
         for i in 0..units {
-            let window_start_offset = window_slide.checked_mul_int(i).ok_or_else(|| {
-                StreamExecutorError::invalid_argument(format!(
-                    "window_slide {} cannot be multiplied by {}",
-                    window_slide, i
-                ))
-            })?;
+            let window_start_offset =
+                window_slide
+                    .checked_mul_int(i)
+                    .ok_or_else(|| ExprError::InvalidParam {
+                        name: "window",
+                        reason: format!(
+                            "window_slide {} cannot be multiplied by {}",
+                            window_slide, i
+                        ),
+                    })?;
             let window_start_offset_expr = LiteralExpression::new(
                 DataType::Interval,
                 Some(ScalarImpl::Interval(window_start_offset)),
             )
             .boxed();
-            let window_end_offset = window_slide.checked_mul_int(i + units).ok_or_else(|| {
-                StreamExecutorError::invalid_argument(format!(
-                    "window_slide {} cannot be multiplied by {}",
-                    window_slide, i
-                ))
-            })?;
+            let window_end_offset =
+                window_slide
+                    .checked_mul_int(i + units)
+                    .ok_or_else(|| ExprError::InvalidParam {
+                        name: "window",
+                        reason: format!(
+                            "window_slide {} cannot be multiplied by {}",
+                            window_slide, i
+                        ),
+                    })?;
             let window_end_offset_expr = LiteralExpression::new(
                 DataType::Interval,
                 Some(ScalarImpl::Interval(window_end_offset)),
@@ -157,17 +178,17 @@ impl HopWindowExecutor {
             .boxed();
             let window_start_expr = new_binary_expr(
                 expr_node::Type::Add,
-                DataType::Timestamp,
-                InputRefExpression::new(DataType::Timestamp, 0).boxed(),
+                output_type.clone(),
+                InputRefExpression::new(output_type.clone(), 0).boxed(),
                 window_start_offset_expr,
-            );
+            )?;
             window_start_exprs.push(window_start_expr);
             let window_end_expr = new_binary_expr(
                 expr_node::Type::Add,
-                DataType::Timestamp,
-                InputRefExpression::new(DataType::Timestamp, 0).boxed(),
+                output_type.clone(),
+                InputRefExpression::new(output_type.clone(), 0).boxed(),
                 window_end_offset_expr,
-            );
+            )?;
             window_end_exprs.push(window_end_expr);
         }
         let window_start_col_index = input.schema().len();
@@ -177,9 +198,10 @@ impl HopWindowExecutor {
             let msg = msg?;
             if let Message::Chunk(chunk) = msg {
                 // TODO: compact may be not necessary here.
-                let chunk = chunk.compact()?;
+                let chunk = chunk.compact();
                 let (data_chunk, ops) = chunk.into_parts();
-                let hop_start = hop_start.eval(&data_chunk)?;
+                let hop_start = hop_start
+                    .eval_infallible(&data_chunk, |err| ctx.on_compute_error(err, &info.identity));
                 let len = hop_start.len();
                 let hop_start_chunk = DataChunk::new(vec![Column::new(hop_start)], len);
                 let (origin_cols, vis) = data_chunk.into_parts();
@@ -187,12 +209,20 @@ impl HopWindowExecutor {
                 assert!(matches!(vis, Vis::Compact(_)));
                 for i in 0..units {
                     let window_start_col = if output_indices.contains(&window_start_col_index) {
-                        Some(window_start_exprs[i].eval(&hop_start_chunk)?)
+                        Some(
+                            window_start_exprs[i].eval_infallible(&hop_start_chunk, |err| {
+                                ctx.on_compute_error(err, &info.identity)
+                            }),
+                        )
                     } else {
                         None
                     };
                     let window_end_col = if output_indices.contains(&window_end_col_index) {
-                        Some(window_end_exprs[i].eval(&hop_start_chunk)?)
+                        Some(
+                            window_end_exprs[i].eval_infallible(&hop_start_chunk, |err| {
+                                ctx.on_compute_error(err, &info.identity)
+                            }),
+                        )
                     } else {
                         None
                     };
@@ -229,7 +259,7 @@ mod tests {
     use piestream_common::types::{DataType, IntervalUnit};
 
     use crate::executor::test_utils::MockSource;
-    use crate::executor::{Executor, ExecutorInfo, StreamChunk};
+    use crate::executor::{ActorContext, Executor, ExecutorInfo, StreamChunk};
 
     #[tokio::test]
     async fn test_execute() {
@@ -259,6 +289,7 @@ mod tests {
         let window_size = IntervalUnit::from_minutes(30);
         let default_indices: Vec<_> = (0..5).collect();
         let executor = super::HopWindowExecutor::new(
+            ActorContext::create(123),
             input,
             ExecutorInfo {
                 // TODO: the schema is incorrect, but it seems useless here.
@@ -338,6 +369,7 @@ mod tests {
         let window_slide = IntervalUnit::from_minutes(15);
         let window_size = IntervalUnit::from_minutes(30);
         let executor = super::HopWindowExecutor::new(
+            ActorContext::create(123),
             input,
             ExecutorInfo {
                 // TODO: the schema is incorrect, but it seems useless here.

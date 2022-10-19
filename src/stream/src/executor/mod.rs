@@ -12,42 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use async_stack_trace::StackTrace;
 use enum_as_inner::EnumAsInner;
-use error::StreamExecutorResult;
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 use itertools::Itertools;
-use madsim::collections::{HashMap, HashSet};
+use minitrace::prelude::*;
 use piestream_common::array::column::Column;
-use piestream_common::array::{ArrayImpl, ArrayRef, DataChunk, StreamChunk};
+use piestream_common::array::StreamChunk;
 use piestream_common::buffer::Bitmap;
 use piestream_common::catalog::Schema;
-use piestream_common::error::{Result, ToRwResult};
 use piestream_common::types::DataType;
-use piestream_connector::{ConnectorState, SplitImpl};
-use piestream_pb::common::ActorInfo;
-use piestream_pb::data::barrier::Mutation as ProstMutation;
-use piestream_pb::data::stream_message::StreamMessage;
-use piestream_pb::data::{
-    AddMutation, Barrier as ProstBarrier, DispatcherMutation, Epoch as ProstEpoch,
-    SourceChangeSplitMutation, StopMutation, StreamMessage as ProstStreamMessage, UpdateMutation,
+use piestream_common::util::epoch::EpochPair;
+use piestream_connector::source::SplitImpl;
+use piestream_pb::data::Epoch as ProstEpoch;
+use piestream_pb::stream_plan::add_mutation::Dispatchers;
+use piestream_pb::stream_plan::barrier::Mutation as ProstMutation;
+use piestream_pb::stream_plan::stream_message::StreamMessage;
+use piestream_pb::stream_plan::update_mutation::{DispatcherUpdate, MergeUpdate};
+use piestream_pb::stream_plan::{
+    AddMutation, Barrier as ProstBarrier, Dispatcher as ProstDispatcher, PauseMutation,
+    ResumeMutation, SourceChangeSplitMutation, StopMutation, StreamMessage as ProstStreamMessage,
+    UpdateMutation,
 };
 use smallvec::SmallVec;
-use tracing::trace_span;
 
-use crate::task::{ActorId, DispatcherId, ENABLE_BARRIER_AGGREGATION};
+use crate::error::StreamResult;
+use crate::task::{ActorId, FragmentId};
 
 mod actor;
-pub mod aggregation;
 mod barrier_align;
+pub mod exchange;
+pub mod monitor;
+
+pub mod aggregation;
 mod batch_query;
 mod chain;
-mod debug;
-pub mod dispatch;
+mod dispatch;
+mod dynamic_filter;
 mod error;
+mod expand;
 mod filter;
 mod global_simple_agg;
 mod hash_agg;
@@ -57,30 +65,33 @@ mod local_simple_agg;
 mod lookup;
 mod lookup_union;
 mod managed_state;
-pub mod merge;
-pub mod monitor;
+mod merge;
 mod mview;
 mod project;
+mod project_set;
 mod rearranged_chain;
-pub mod receiver;
+mod receiver;
 mod simple;
 mod sink;
-mod source;
+pub mod source;
+pub mod subtask;
 mod top_n;
-mod top_n_appendonly;
-mod top_n_executor;
 mod union;
+mod wrapper;
 
 #[cfg(test)]
 mod integration_tests;
 #[cfg(test)]
 mod test_utils;
 
-pub use actor::{Actor, ActorContext, ActorContextRef, OperatorInfo, OperatorInfoStatus};
+pub use actor::{Actor, ActorContext, ActorContextRef};
+use anyhow::Context;
 pub use batch_query::BatchQueryExecutor;
 pub use chain::ChainExecutor;
-pub use debug::DebugExecutor;
-pub use dispatch::DispatchExecutor;
+pub use dispatch::{DispatchExecutor, DispatcherImpl};
+pub use dynamic_filter::DynamicFilterExecutor;
+pub use error::{StreamExecutorError, StreamExecutorResult};
+pub use expand::ExpandExecutor;
 pub use filter::FilterExecutor;
 pub use global_simple_agg::GlobalSimpleAggExecutor;
 pub use hash_agg::HashAggExecutor;
@@ -89,25 +100,28 @@ pub use hop_window::HopWindowExecutor;
 pub use local_simple_agg::LocalSimpleAggExecutor;
 pub use lookup::*;
 pub use lookup_union::LookupUnionExecutor;
+pub use managed_state::join::JoinManagedCache;
 pub use merge::MergeExecutor;
 pub use mview::*;
 pub use project::ProjectExecutor;
+pub use project_set::*;
 pub use rearranged_chain::RearrangedChainExecutor;
+pub use receiver::ReceiverExecutor;
 use piestream_pb::source::{ConnectorSplit, ConnectorSplits};
 use simple::{SimpleExecutor, SimpleExecutorWrapper};
+pub use sink::SinkExecutor;
 pub use source::*;
-pub use top_n::TopNExecutor;
-pub use top_n_appendonly::AppendOnlyTopNExecutor;
+pub use top_n::{AppendOnlyTopNExecutor, GroupTopNExecutor, TopNExecutor};
 pub use union::UnionExecutor;
+pub use wrapper::WrapperExecutor;
+
+use self::barrier_align::AlignedMessageStream;
 
 pub type BoxedExecutor = Box<dyn Executor>;
-pub type BoxedMessageStream = BoxStream<'static, StreamExecutorResult<Message>>;
 pub type MessageStreamItem = StreamExecutorResult<Message>;
+pub type BoxedMessageStream = BoxStream<'static, MessageStreamItem>;
 
 pub trait MessageStream = futures::Stream<Item = MessageStreamItem> + Send;
-
-/// The maximum chunk length produced by executor at a time.
-const PROCESSING_WINDOW_SIZE: usize = 1024;
 
 /// Static information of an executor.
 #[derive(Debug, Default)]
@@ -132,7 +146,7 @@ pub trait Executor: Send + 'static {
     /// Return the primary key indices of the OUTPUT of the executor.
     /// Schema is used by both OLAP and streaming, therefore
     /// pk indices are maintained independently.
-    fn pk_indices(&self) -> PkIndicesRef;
+    fn pk_indices(&self) -> PkIndicesRef<'_>;
 
     /// Identity of the executor.
     fn identity(&self) -> &str;
@@ -161,82 +175,55 @@ pub trait Executor: Send + 'static {
     }
 }
 
+impl std::fmt::Debug for BoxedExecutor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.identity())
+    }
+}
+
 pub const INVALID_EPOCH: u64 = 0;
 
-pub trait ExprFn = Fn(&DataChunk) -> Result<Bitmap> + Send + Sync + 'static;
+type UpstreamFragmentId = FragmentId;
 
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct AddOutput {
-    pub map: HashMap<(ActorId, DispatcherId), Vec<ActorInfo>>,
-    pub splits: HashMap<ActorId, Vec<SplitImpl>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
+/// See [`piestream_pb::stream_plan::barrier::Mutation`] for the semantics of each mutation.
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Mutation {
     Stop(HashSet<ActorId>),
-    UpdateOutputs(HashMap<(ActorId, DispatcherId), Vec<ActorInfo>>),
-    AddOutput(AddOutput),
-    SourceChangeSplit(HashMap<ActorId, ConnectorState>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Epoch {
-    pub curr: u64,
-    pub prev: u64,
-}
-
-impl Epoch {
-    pub fn new(curr: u64, prev: u64) -> Self {
-        assert!(curr > prev);
-        Self { curr, prev }
-    }
-
-    #[cfg(test)]
-    pub fn inc(&self) -> Self {
-        Self {
-            curr: self.curr + 1,
-            prev: self.prev + 1,
-        }
-    }
-
-    pub fn new_test_epoch(curr: u64) -> Self {
-        assert!(curr > 0);
-        Self::new(curr, curr - 1)
-    }
-}
-
-impl Default for Epoch {
-    fn default() -> Self {
-        Self {
-            curr: 1,
-            prev: INVALID_EPOCH,
-        }
-    }
+    Update {
+        dispatchers: HashMap<ActorId, Vec<DispatcherUpdate>>,
+        merges: HashMap<(ActorId, UpstreamFragmentId), MergeUpdate>,
+        vnode_bitmaps: HashMap<ActorId, Arc<Bitmap>>,
+        dropped_actors: HashSet<ActorId>,
+        actor_splits: HashMap<ActorId, Vec<SplitImpl>>,
+    },
+    Add {
+        adds: HashMap<ActorId, Vec<ProstDispatcher>>,
+        // TODO: remove this and use `SourceChangesSplit` after we support multiple mutations.
+        splits: HashMap<ActorId, Vec<SplitImpl>>,
+    },
+    SourceChangeSplit(HashMap<ActorId, Vec<SplitImpl>>),
+    Pause,
+    Resume,
 }
 
 #[derive(Debug, Clone)]
 pub struct Barrier {
-    pub epoch: Epoch,
+    pub epoch: EpochPair,
     pub mutation: Option<Arc<Mutation>>,
-    pub span: tracing::Span,
-}
+    pub checkpoint: bool,
 
-impl Default for Barrier {
-    fn default() -> Self {
-        Self {
-            span: tracing::Span::none(),
-            epoch: Epoch::default(),
-            mutation: None,
-        }
-    }
+    /// The actors that this barrier has passed locally. Used for debugging only.
+    pub passed_actors: Vec<ActorId>,
 }
 
 impl Barrier {
     /// Create a plain barrier.
     pub fn new_test_barrier(epoch: u64) -> Self {
         Self {
-            epoch: Epoch::new_test_epoch(epoch),
-            ..Default::default()
+            epoch: EpochPair::new_test_epoch(epoch),
+            checkpoint: true,
+            mutation: Default::default(),
+            passed_actors: Default::default(),
         }
     }
 
@@ -253,25 +240,69 @@ impl Barrier {
         self.with_mutation(Mutation::Stop(HashSet::default()))
     }
 
-    // TODO: The barrier should always contain trace info after we migrated barrier generation to
-    // meta service.
-    #[must_use]
-    pub fn with_span(self, span: tracing::span::Span) -> Self {
-        Self { span, ..self }
+    /// Whether this barrier carries stop mutation.
+    pub fn is_with_stop_mutation(&self) -> bool {
+        matches!(self.mutation.as_deref(), Some(Mutation::Stop(_)))
     }
 
-    pub fn is_to_stop_actor(&self, actor_id: ActorId) -> bool {
-        matches!(self.mutation.as_deref(), Some(Mutation::Stop(actors)) if actors.contains(&actor_id))
+    /// Whether this barrier is to stop the actor with `actor_id`.
+    pub fn is_stop_or_update_drop_actor(&self, actor_id: ActorId) -> bool {
+        self.all_stop_actors()
+            .map_or(false, |actors| actors.contains(&actor_id))
     }
 
-    pub fn is_to_add_output(&self, actor_id: ActorId) -> bool {
+    /// Get all actors that to be stopped (dropped) by this barrier.
+    pub fn all_stop_actors(&self) -> Option<&HashSet<ActorId>> {
+        match self.mutation.as_deref() {
+            Some(Mutation::Stop(actors)) => Some(actors),
+            Some(Mutation::Update { dropped_actors, .. }) => Some(dropped_actors),
+            _ => None,
+        }
+    }
+
+    /// Whether this barrier is to add new dispatchers for the actor with `actor_id`.
+    pub fn is_add_dispatcher(&self, actor_id: ActorId) -> bool {
         matches!(
             self.mutation.as_deref(),
-            Some(Mutation::AddOutput(map)) if map.map
+            Some(Mutation::Add {adds, ..}) if adds
                 .values()
                 .flatten()
-                .any(|info| info.actor_id == actor_id)
+                .any(|dispatcher| dispatcher.downstream_actor_id.contains(&actor_id))
         )
+    }
+
+    /// Whether this barrier is for configuration change. Used for source executor initialization.
+    pub fn is_update(&self) -> bool {
+        matches!(self.mutation.as_deref(), Some(Mutation::Update { .. }))
+    }
+
+    /// Returns the [`MergeUpdate`] if this barrier is to update the merge executors for the actor
+    /// with `actor_id`.
+    pub fn as_update_merge(
+        &self,
+        actor_id: ActorId,
+        upstream_fragment_id: UpstreamFragmentId,
+    ) -> Option<&MergeUpdate> {
+        self.mutation
+            .as_deref()
+            .and_then(|mutation| match mutation {
+                Mutation::Update { merges, .. } => merges.get(&(actor_id, upstream_fragment_id)),
+                _ => None,
+            })
+    }
+
+    /// Returns the new vnode bitmap if this barrier is to update the vnode bitmap for the actor
+    /// with `actor_id`.
+    ///
+    /// Actually, this vnode bitmap update is only useful for the record accessing validation for
+    /// distributed executors, since the read/write pattern will never be across multiple vnodes.
+    pub fn as_update_vnode_bitmap(&self, actor_id: ActorId) -> Option<Arc<Bitmap>> {
+        self.mutation
+            .as_deref()
+            .and_then(|mutation| match mutation {
+                Mutation::Update { vnode_bitmaps, .. } => vnode_bitmaps.get(&actor_id).cloned(),
+                _ => None,
+            })
     }
 }
 
@@ -293,26 +324,44 @@ impl Mutation {
     fn to_protobuf(&self) -> ProstMutation {
         match self {
             Mutation::Stop(actors) => ProstMutation::Stop(StopMutation {
-                actors: actors.iter().cloned().collect::<Vec<_>>(),
+                actors: actors.iter().copied().collect::<Vec<_>>(),
             }),
-            Mutation::UpdateOutputs(updates) => ProstMutation::Update(UpdateMutation {
-                mutations: updates
+            Mutation::Update {
+                dispatchers,
+                merges,
+                vnode_bitmaps,
+                dropped_actors,
+                actor_splits,
+            } => ProstMutation::Update(UpdateMutation {
+                dispatcher_update: dispatchers.values().flatten().cloned().collect(),
+                merge_update: merges.values().cloned().collect(),
+                actor_vnode_bitmap_update: vnode_bitmaps
                     .iter()
-                    .map(|(&(actor_id, dispatcher_id), actors)| DispatcherMutation {
-                        actor_id,
-                        dispatcher_id,
-                        info: actors.clone(),
+                    .map(|(&actor_id, bitmap)| (actor_id, bitmap.to_protobuf()))
+                    .collect(),
+                dropped_actors: dropped_actors.iter().cloned().collect(),
+                actor_splits: actor_splits
+                    .iter()
+                    .map(|(&actor_id, splits)| {
+                        (
+                            actor_id,
+                            ConnectorSplits {
+                                splits: splits.clone().iter().map(ConnectorSplit::from).collect(),
+                            },
+                        )
                     })
                     .collect(),
             }),
-            Mutation::AddOutput(adds) => ProstMutation::Add(AddMutation {
-                mutations: adds
-                    .map
+            Mutation::Add { adds, .. } => ProstMutation::Add(AddMutation {
+                actor_dispatchers: adds
                     .iter()
-                    .map(|(&(actor_id, dispatcher_id), actors)| DispatcherMutation {
-                        actor_id,
-                        dispatcher_id,
-                        info: actors.clone(),
+                    .map(|(&actor_id, dispatchers)| {
+                        (
+                            actor_id,
+                            Dispatchers {
+                                dispatchers: dispatchers.clone(),
+                            },
+                        )
                     })
                     .collect(),
                 ..Default::default()
@@ -327,7 +376,6 @@ impl Mutation {
                                 ConnectorSplits {
                                     splits: splits
                                         .clone()
-                                        .unwrap_or_default()
                                         .iter()
                                         .map(ConnectorSplit::from)
                                         .collect(),
@@ -337,39 +385,35 @@ impl Mutation {
                         .collect(),
                 })
             }
+            Mutation::Pause => ProstMutation::Pause(PauseMutation {}),
+            Mutation::Resume => ProstMutation::Resume(ResumeMutation {}),
         }
     }
 
-    fn from_protobuf(prost: &ProstMutation) -> Result<Self> {
+    fn from_protobuf(prost: &ProstMutation) -> StreamResult<Self> {
         let mutation = match prost {
             ProstMutation::Stop(stop) => {
                 Mutation::Stop(HashSet::from_iter(stop.get_actors().clone()))
             }
 
-            ProstMutation::Update(update) => Mutation::UpdateOutputs(
-                update
-                    .mutations
+            ProstMutation::Update(update) => Mutation::Update {
+                dispatchers: update
+                    .dispatcher_update
                     .iter()
-                    .map(|mutation| {
-                        (
-                            (mutation.actor_id, mutation.dispatcher_id),
-                            mutation.get_info().clone(),
-                        )
-                    })
-                    .collect::<HashMap<(ActorId, DispatcherId), Vec<ActorInfo>>>(),
-            ),
-            ProstMutation::Add(adds) => Mutation::AddOutput(AddOutput {
-                map: adds
-                    .mutations
+                    .map(|u| (u.actor_id, u.clone()))
+                    .into_group_map(),
+                merges: update
+                    .merge_update
                     .iter()
-                    .map(|mutation| {
-                        (
-                            (mutation.actor_id, mutation.dispatcher_id),
-                            mutation.get_info().clone(),
-                        )
-                    })
-                    .collect::<HashMap<(ActorId, DispatcherId), Vec<ActorInfo>>>(),
-                splits: adds
+                    .map(|u| ((u.actor_id, u.upstream_fragment_id), u.clone()))
+                    .collect(),
+                vnode_bitmaps: update
+                    .actor_vnode_bitmap_update
+                    .iter()
+                    .map(|(&actor_id, bitmap)| (actor_id, Arc::new(bitmap.into())))
+                    .collect(),
+                dropped_actors: update.dropped_actors.iter().cloned().collect(),
+                actor_splits: update
                     .actor_splits
                     .iter()
                     .map(|(&actor_id, splits)| {
@@ -383,33 +427,51 @@ impl Mutation {
                         )
                     })
                     .collect(),
-            }),
+            },
+
+            ProstMutation::Add(add) => Mutation::Add {
+                adds: add
+                    .actor_dispatchers
+                    .iter()
+                    .map(|(&actor_id, dispatchers)| (actor_id, dispatchers.dispatchers.clone()))
+                    .collect(),
+                // TODO: remove this and use `SourceChangesSplit` after we support multiple
+                // mutations.
+                splits: add
+                    .actor_splits
+                    .iter()
+                    .map(|(&actor_id, splits)| {
+                        (
+                            actor_id,
+                            splits
+                                .splits
+                                .iter()
+                                .map(|split| split.try_into().unwrap())
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            },
+
             ProstMutation::Splits(s) => {
-                let mut change_splits: Vec<(ActorId, ConnectorState)> =
+                let mut change_splits: Vec<(ActorId, Vec<SplitImpl>)> =
                     Vec::with_capacity(s.actor_splits.len());
                 for (&actor_id, splits) in &s.actor_splits {
-                    if splits.splits.is_empty() {
-                        change_splits.push((actor_id, None));
-                    } else {
+                    if !splits.splits.is_empty() {
                         change_splits.push((
                             actor_id,
-                            Some(
-                                splits
-                                    .splits
-                                    .iter()
-                                    .map(SplitImpl::try_from)
-                                    .collect::<anyhow::Result<Vec<SplitImpl>>>()
-                                    .to_rw_result()?,
-                            ),
+                            splits
+                                .splits
+                                .iter()
+                                .map(SplitImpl::try_from)
+                                .try_collect()?,
                         ));
                     }
                 }
-                Mutation::SourceChangeSplit(
-                    change_splits
-                        .into_iter()
-                        .collect::<HashMap<ActorId, ConnectorState>>(),
-                )
+                Mutation::SourceChangeSplit(change_splits.into_iter().collect())
             }
+            ProstMutation::Pause(_) => Mutation::Pause,
+            ProstMutation::Resume(_) => Mutation::Resume,
         };
         Ok(mutation)
     }
@@ -418,7 +480,11 @@ impl Mutation {
 impl Barrier {
     pub fn to_protobuf(&self) -> ProstBarrier {
         let Barrier {
-            epoch, mutation, ..
+            epoch,
+            mutation,
+            checkpoint,
+            passed_actors,
+            ..
         }: Barrier = self.clone();
         ProstBarrier {
             epoch: Some(ProstEpoch {
@@ -427,10 +493,12 @@ impl Barrier {
             }),
             mutation: mutation.map(|mutation| mutation.to_protobuf()),
             span: vec![],
+            checkpoint,
+            passed_actors,
         }
     }
 
-    pub fn from_protobuf(prost: &ProstBarrier) -> Result<Self> {
+    pub fn from_protobuf(prost: &ProstBarrier) -> StreamResult<Self> {
         let mutation = prost
             .mutation
             .as_ref()
@@ -439,13 +507,10 @@ impl Barrier {
             .map(Arc::new);
         let epoch = prost.get_epoch().unwrap();
         Ok(Barrier {
-            span: if ENABLE_BARRIER_AGGREGATION {
-                trace_span!("barrier", epoch = ?epoch, mutation = ?mutation)
-            } else {
-                tracing::Span::none()
-            },
-            epoch: Epoch::new(epoch.curr, epoch.prev),
+            checkpoint: prost.checkpoint,
+            epoch: EpochPair::new(epoch.curr, epoch.prev),
             mutation,
+            passed_actors: prost.get_passed_actors().clone(),
         })
     }
 }
@@ -483,7 +548,7 @@ impl Message {
         )
     }
 
-    pub fn to_protobuf(&self) -> Result<ProstStreamMessage> {
+    pub fn to_protobuf(&self) -> StreamResult<ProstStreamMessage> {
         let prost = match self {
             Self::Chunk(stream_chunk) => {
                 let prost_stream_chunk = stream_chunk.to_protobuf();
@@ -497,7 +562,7 @@ impl Message {
         Ok(prost_stream_msg)
     }
 
-    pub fn from_protobuf(prost: &ProstStreamMessage) -> Result<Self> {
+    pub fn from_protobuf(prost: &ProstStreamMessage) -> StreamResult<Self> {
         let res = match prost.get_stream_message()? {
             StreamMessage::StreamChunk(ref stream_chunk) => {
                 Message::Chunk(StreamChunk::from_protobuf(stream_chunk)?)
@@ -518,30 +583,32 @@ pub type PkIndices = Vec<usize>;
 pub type PkIndicesRef<'a> = &'a [usize];
 pub type PkDataTypes = SmallVec<[DataType; 1]>;
 
-/// Get clones of inputs by given `pk_indices` from `columns`.
-pub fn pk_input_arrays(pk_indices: PkIndicesRef, columns: &[Column]) -> Vec<ArrayRef> {
-    pk_indices
-        .iter()
-        .map(|pk_idx| columns[*pk_idx].array())
-        .collect()
-}
-
-/// Get references to inputs by given `pk_indices` from `columns`.
-pub fn pk_input_array_refs<'a>(
-    pk_indices: PkIndicesRef,
-    columns: &'a [Column],
-) -> Vec<&'a ArrayImpl> {
-    pk_indices
-        .iter()
-        .map(|pk_idx| columns[*pk_idx].array_ref())
-        .collect()
-}
-
 /// Expect the first message of the given `stream` as a barrier.
+#[track_caller]
 pub async fn expect_first_barrier(
     stream: &mut (impl MessageStream + Unpin),
 ) -> StreamExecutorResult<Barrier> {
-    let message = stream.next().await.unwrap()?;
+    let message = stream
+        .next()
+        .stack_trace("expect_first_barrier")
+        .await
+        .context("failed to extract the first message: stream closed unexpectedly")??;
+    let barrier = message
+        .into_barrier()
+        .expect("the first message must be a barrier");
+    Ok(barrier)
+}
+
+/// Expect the first message of the given `stream` as a barrier.
+#[track_caller]
+pub async fn expect_first_barrier_from_aligned_stream(
+    stream: &mut (impl AlignedMessageStream + Unpin),
+) -> StreamExecutorResult<Barrier> {
+    let message = stream
+        .next()
+        .stack_trace("expect_first_barrier")
+        .await
+        .context("failed to extract the first message: stream closed unexpectedly")??;
     let barrier = message
         .into_barrier()
         .expect("the first message must be a barrier");
@@ -550,7 +617,7 @@ pub async fn expect_first_barrier(
 
 /// `StreamConsumer` is the last step in an actor.
 pub trait StreamConsumer: Send + 'static {
-    type BarrierStream: Stream<Item = Result<Barrier>> + Send;
+    type BarrierStream: Stream<Item = StreamResult<Barrier>> + Send;
 
     fn execute(self: Box<Self>) -> Self::BarrierStream;
 }

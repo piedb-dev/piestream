@@ -20,14 +20,12 @@ use tikv_jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 #[cfg_attr(coverage, no_coverage)]
-#[tokio::main]
-async fn main() {
+fn main() {
     use clap::StructOpt;
 
     let opts = piestream_compactor::CompactorOpts::parse();
 
-    piestream_rt::oneshot_common();
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
 
-    piestream_compactor::start(opts).await;
+    piestream_rt::main_okk(piestream_compactor::start(opts))
 }

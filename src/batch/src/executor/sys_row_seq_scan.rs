@@ -56,7 +56,7 @@ pub struct SysRowSeqScanExecutorBuilder {}
 #[async_trait::async_trait]
 impl BoxedExecutorBuilder for SysRowSeqScanExecutorBuilder {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
+        source: &ExecutorBuilder<'_, C>,
         inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
         ensure!(
@@ -67,7 +67,7 @@ impl BoxedExecutorBuilder for SysRowSeqScanExecutorBuilder {
             source.plan_node().get_node_body().unwrap(),
             NodeBody::SysRowSeqScan
         )?;
-        let sys_catalog_reader = source.context.try_get_catalog_reader_ref()?;
+        let sys_catalog_reader = source.context.catalog_reader();
 
         let table_name = seq_scan_node.table_name.clone();
         let column_descs = seq_scan_node
@@ -118,8 +118,7 @@ impl SysRowSeqScanExecutor {
             })
             .collect_vec();
 
-        let chunk = DataChunk::from_rows(&filtered_rows, &self.schema.data_types())
-            .map_err(RwError::from)?;
+        let chunk = DataChunk::from_rows(&filtered_rows, &self.schema.data_types());
         yield chunk
     }
 }

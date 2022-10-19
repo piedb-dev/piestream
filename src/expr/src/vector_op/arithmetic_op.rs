@@ -18,13 +18,12 @@ use std::fmt::Debug;
 use std::ops::Sub;
 
 use chrono::{Duration, NaiveDateTime};
-use num_traits::{CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, Signed};
+use num_traits::{CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, Signed, Zero};
 use piestream_common::types::{
     CheckedAdd, Decimal, IntervalUnit, NaiveDateTimeWrapper, NaiveDateWrapper, NaiveTimeWrapper,
     OrderedF64,
 };
 
-use super::cast::date_to_timestamp;
 use crate::{ExprError, Result};
 
 #[inline(always)]
@@ -68,10 +67,16 @@ pub fn general_div<T1, T2, T3>(l: T1, r: T2) -> Result<T3>
 where
     T1: TryInto<T3> + Debug,
     T2: TryInto<T3> + Debug,
-    T3: CheckedDiv,
+    T3: CheckedDiv + Zero,
 {
     general_atm(l, r, |a, b| {
-        a.checked_div(&b).ok_or(ExprError::NumericOutOfRange)
+        a.checked_div(&b).ok_or_else(|| {
+            if b.is_zero() {
+                ExprError::DivisionByZero
+            } else {
+                ExprError::NumericOutOfRange
+            }
+        })
     })
 }
 
@@ -151,7 +156,15 @@ pub fn interval_date_add<T1, T2, T3>(
     l: IntervalUnit,
     r: NaiveDateWrapper,
 ) -> Result<NaiveDateTimeWrapper> {
-    interval_timestamp_add::<T1, T2, T3>(l, date_to_timestamp(r)?)
+    interval_timestamp_add::<T1, T2, T3>(l, r.into())
+}
+
+#[inline(always)]
+pub fn interval_time_add<T1, T2, T3>(
+    l: IntervalUnit,
+    r: NaiveTimeWrapper,
+) -> Result<NaiveTimeWrapper> {
+    time_interval_add::<T2, T1, T3>(r, l)
 }
 
 #[inline(always)]
@@ -204,6 +217,33 @@ pub fn timestamp_interval_sub<T1, T2, T3>(
     r: IntervalUnit,
 ) -> Result<NaiveDateTimeWrapper> {
     interval_timestamp_add::<T1, T2, T3>(r.negative(), l)
+}
+
+#[inline(always)]
+pub fn timestampz_interval_add<T1, T2, T3>(l: i64, r: IntervalUnit) -> Result<i64> {
+    interval_timestampz_add::<T1, T2, T3>(r, l)
+}
+
+#[inline(always)]
+pub fn timestampz_interval_sub<T1, T2, T3>(l: i64, r: IntervalUnit) -> Result<i64> {
+    interval_timestampz_add::<T1, T2, T3>(r.negative(), l)
+}
+
+#[inline(always)]
+pub fn interval_timestampz_add<T1, T2, T3>(l: IntervalUnit, r: i64) -> Result<i64> {
+    // Without session TimeZone, we cannot add month/day in local time. See #5826.
+    // However, we only reject months but accept days, assuming them are always 24-hour and ignoring
+    // Daylight Saving.
+    // This is to keep consistent with `tumble_start` of piestream / `date_bin` of PostgreSQL.
+    if l.get_months() != 0 {
+        return Err(ExprError::UnsupportedFunction(
+            "timestamp with time zone +/- interval of months".into(),
+        ));
+    }
+    let delta_usecs = l.get_days() as i64 * 24 * 60 * 60 * 1_000_000 + l.get_ms() * 1000;
+
+    r.checked_add(delta_usecs)
+        .ok_or(ExprError::NumericOutOfRange)
 }
 
 #[inline(always)]

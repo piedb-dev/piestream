@@ -12,20 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::backtrace::Backtrace;
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Error as IoError;
-use std::sync::Arc;
 
 use memcomparable::Error as MemComparableError;
-use prost::Message;
-use piestream_pb::common::Status;
 use piestream_pb::ProstFieldNotFound;
 use thiserror::Error;
 use tokio::task::JoinError;
-use tonic::metadata::{MetadataMap, MetadataValue};
 use tonic::Code;
 
 use crate::array::ArrayError;
@@ -67,58 +62,46 @@ impl From<Option<u32>> for TrackingIssue {
 impl Display for TrackingIssue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Some(id) => write!(
-                f,
-                "Tracking issue: https://github.com/singularity-data/piestream/issues/{}",
-                id
-            ),
-            None => write!(f, "No tracking issue"),
+            Some(id) => write!(f, "Tracking issue: https://github.com/piestreamlabs/piestream/issues/{id}"),
+            None => write!(f, "No tracking issue yet. Feel free to submit a feature request at https://github.com/piestreamlabs/piestream/issues/new?labels=type%2Ffeature&template=feature_request.yml"),
         }
     }
 }
 
 #[derive(Error, Debug)]
 pub enum ErrorCode {
-    #[error("ok")]
-    OK,
-    #[error("Failed to alloc memory for layout: {layout:?}")]
-    MemoryError { layout: Layout },
     #[error("internal error: {0}")]
     InternalError(String),
     #[error("connector error: {0}")]
-    ConnectorError(String),
-    #[error(transparent)]
-    ProstError(prost::DecodeError),
-    #[error("Feature is not yet implemented: {0}, {1}")]
+    ConnectorError(BoxedError),
+    #[error("Feature is not yet implemented: {0}\n{1}")]
     NotImplemented(String, TrackingIssue),
     #[error(transparent)]
     IoError(IoError),
-    #[error("Storage error: {0:?}")]
+    #[error("Storage error: {0}")]
     StorageError(
         #[backtrace]
         #[source]
         BoxedError,
     ),
-    #[error("Expr error: {0:?}")]
+    #[error("Expr error: {0}")]
     ExprError(BoxedError),
-    #[error("Array error: {0:?}")]
+    #[error("BatchError: {0}")]
+    BatchError(BoxedError),
+    #[error("Array error: {0}")]
     ArrayError(ArrayError),
-    #[error("Stream error: {0:?}")]
+    #[error("Stream error: {0}")]
     StreamError(
         #[backtrace]
         #[source]
         BoxedError,
     ),
-    #[error("RPC error: {0:?}")]
+    #[error("RPC error: {0}")]
     RpcError(BoxedError),
-    #[error("Parse error: {0}")]
-    ParseError(String),
     #[error("Bind error: {0}")]
     BindError(String),
     #[error("Catalog error: {0}")]
     CatalogError(BoxedError),
-    #[error("Out of range")]
-    NumericValueOutOfRange,
     #[error("Protocol error: {0}")]
     ProtocolError(String),
     #[error("Scheduler error: {0}")]
@@ -133,8 +116,6 @@ pub enum ErrorCode {
     MemComparableError(MemComparableError),
     #[error("Error while de/se values: {0}")]
     ValueEncodingError(ValueEncodingError),
-    #[error("Error while interact with meta service: {0}")]
-    MetaError(String),
     #[error("Invalid value [{config_value:?}] for [{config_entry:?}]")]
     InvalidConfigValue {
         config_entry: String,
@@ -142,24 +123,14 @@ pub enum ErrorCode {
     },
     #[error("Invalid Parameter Value: {0}")]
     InvalidParameterValue(String),
-    #[error("MySQL error: {0}")]
+    #[error("Sink error: {0}")]
     SinkError(BoxedError),
 
-    /// This error occurs when the meta node receives heartbeat from a previous removed worker
-    /// node. Currently we don't support re-register, and the worker node need a full restart.
-    #[error("Unknown worker")]
-    UnknownWorker,
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
 
     #[error("unrecognized configuration parameter \"{0}\"")]
     UnrecognizedConfigurationParameter(String),
-
-    /// `Eof` represents an upstream node will not generate new data. This error is rare in our
-    /// system, currently only used in the `BatchQueryExecutor` as an ephemeral solution.
-    #[error("End of the stream")]
-    Eof,
-
-    #[error("Unknown error: {0}")]
-    UnknownError(String),
 }
 
 pub fn internal_err(msg: impl Into<anyhow::Error>) -> RwError {
@@ -170,48 +141,26 @@ pub fn internal_error(msg: impl Into<String>) -> RwError {
     ErrorCode::InternalError(msg.into()).into()
 }
 
-pub fn parse_error(msg: impl Into<String>) -> RwError {
-    ErrorCode::ParseError(msg.into()).into()
-}
-
-#[derive(Clone)]
+#[derive(Error)]
+#[error("{inner}")]
 pub struct RwError {
-    inner: Arc<ErrorCode>,
-    backtrace: Arc<Backtrace>,
+    #[source]
+    inner: Box<ErrorCode>,
+    backtrace: Box<Backtrace>,
 }
 
 impl From<RwError> for tonic::Status {
     fn from(err: RwError) -> Self {
-        match *err.inner {
-            ErrorCode::OK => tonic::Status::ok(err.to_string()),
-            _ => {
-                let bytes = {
-                    let status = err.to_status();
-                    let mut bytes = Vec::<u8>::with_capacity(status.encoded_len());
-                    status.encode(&mut bytes).expect("Failed to encode status.");
-                    bytes
-                };
-                let mut header = MetadataMap::new();
-                header.insert_bin(RW_ERROR_GRPC_HEADER, MetadataValue::from_bytes(&bytes));
-                tonic::Status::with_metadata(Code::Internal, err.to_string(), header)
-            }
+        match &*err.inner {
+            ErrorCode::ExprError(e) => tonic::Status::invalid_argument(e.to_string()),
+            ErrorCode::PermissionDenied(e) => tonic::Status::permission_denied(e),
+            ErrorCode::InternalError(e) => tonic::Status::internal(e),
+            _ => tonic::Status::internal(err.to_string()),
         }
     }
 }
 
 impl RwError {
-    /// Converting to piestream's status.
-    ///
-    /// We can't use grpc/tonic's library directly because we need to customized error code and
-    /// information.
-    fn to_status(&self) -> Status {
-        // TODO: We need better error reporting for stacktrace.
-        Status {
-            code: self.inner.get_code() as i32,
-            message: self.to_string(),
-        }
-    }
-
     pub fn inner(&self) -> &ErrorCode {
         &self.inner
     }
@@ -220,8 +169,8 @@ impl RwError {
 impl From<ErrorCode> for RwError {
     fn from(code: ErrorCode) -> Self {
         Self {
-            inner: Arc::new(code),
-            backtrace: Arc::new(Backtrace::capture()),
+            inner: Box::new(code),
+            backtrace: Box::new(Backtrace::capture()),
         }
     }
 }
@@ -229,15 +178,9 @@ impl From<ErrorCode> for RwError {
 impl From<JoinError> for RwError {
     fn from(join_error: JoinError) -> Self {
         Self {
-            inner: Arc::new(ErrorCode::InternalError(join_error.to_string())),
-            backtrace: Arc::new(Backtrace::capture()),
+            inner: Box::new(ErrorCode::InternalError(join_error.to_string())),
+            backtrace: Box::new(Backtrace::capture()),
         }
-    }
-}
-
-impl From<prost::DecodeError> for RwError {
-    fn from(prost_error: prost::DecodeError) -> Self {
-        ErrorCode::ProstError(prost_error).into()
     }
 }
 
@@ -289,69 +232,15 @@ impl Debug for RwError {
     }
 }
 
-impl Display for RwError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
-    }
-}
-
-impl std::error::Error for RwError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.inner)
-    }
-}
-
 impl PartialEq for RwError {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl ErrorCode {
-    fn get_code(&self) -> u32 {
-        match self {
-            ErrorCode::OK => 0,
-            ErrorCode::InternalError(_) => 1,
-            ErrorCode::MemoryError { .. } => 2,
-            ErrorCode::StreamError(_) => 3,
-            ErrorCode::NotImplemented(..) => 4,
-            ErrorCode::IoError(_) => 5,
-            ErrorCode::StorageError(_) => 6,
-            ErrorCode::ParseError(_) => 7,
-            ErrorCode::NumericValueOutOfRange => 8,
-            ErrorCode::ProtocolError(_) => 9,
-            ErrorCode::TaskNotFound => 10,
-            ErrorCode::ProstError(_) => 11,
-            ErrorCode::ItemNotFound(_) => 13,
-            ErrorCode::InvalidInputSyntax(_) => 14,
-            ErrorCode::MemComparableError(_) => 15,
-            ErrorCode::ValueEncodingError(_) => 16,
-            ErrorCode::InvalidConfigValue { .. } => 17,
-            ErrorCode::MetaError(_) => 18,
-            ErrorCode::CatalogError(..) => 21,
-            ErrorCode::Eof => 22,
-            ErrorCode::BindError(_) => 23,
-            ErrorCode::UnknownWorker => 24,
-            ErrorCode::ConnectorError(_) => 25,
-            ErrorCode::InvalidParameterValue(_) => 26,
-            ErrorCode::UnrecognizedConfigurationParameter(_) => 27,
-            ErrorCode::ExprError(_) => 28,
-            ErrorCode::ArrayError(_) => 29,
-            ErrorCode::SchedulerError(_) => 30,
-            ErrorCode::SinkError(_) => 31,
-            ErrorCode::RpcError(_) => 32,
-            ErrorCode::UnknownError(_) => 101,
-        }
-    }
-}
-
 impl PartialEq for ErrorCode {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (&ErrorCode::OK, &ErrorCode::OK) => true,
-            (&ErrorCode::MemoryError { layout }, &ErrorCode::MemoryError { layout: layout2 }) => {
-                layout == layout2
-            }
             (&ErrorCode::InternalError(ref msg), &ErrorCode::InternalError(ref msg2)) => {
                 msg == msg2
             }
@@ -372,7 +261,16 @@ impl From<ProstFieldNotFound> for RwError {
 
 impl From<tonic::Status> for RwError {
     fn from(err: tonic::Status) -> Self {
-        ErrorCode::RpcError(err.into()).into()
+        match err.code() {
+            Code::InvalidArgument => {
+                ErrorCode::InvalidParameterValue(err.message().to_string()).into()
+            }
+            Code::NotFound | Code::AlreadyExists => {
+                ErrorCode::CatalogError(err.message().to_string().into()).into()
+            }
+            Code::PermissionDenied => ErrorCode::PermissionDenied(err.message().to_string()).into(),
+            _ => ErrorCode::InternalError(err.message().to_string()).into(),
+        }
     }
 }
 
@@ -535,12 +433,6 @@ mod tests {
     use crate::error::ErrorCode::InternalError;
 
     #[test]
-    fn test_display_ok() {
-        let ret: RwError = ErrorCode::OK.into();
-        println!("Error: {}", ret);
-    }
-
-    #[test]
     fn test_display_internal_error() {
         let internal_error = ErrorCode::InternalError("some thing bad happened!".to_string());
         println!("{:?}", RwError::from(internal_error));
@@ -587,16 +479,6 @@ mod tests {
                 )))),
                 error
             );
-        }
-
-        {
-            let layout = Layout::new::<u64>();
-            let expected_error = ErrorCode::MemoryError { layout };
-            let error = (|| {
-                ensure!(a < 0, ErrorCode::MemoryError { layout });
-                Ok(())
-            })();
-            assert_eq!(Err(RwError::from(expected_error)), error);
         }
     }
 

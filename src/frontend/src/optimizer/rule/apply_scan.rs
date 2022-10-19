@@ -19,18 +19,31 @@ use piestream_pb::plan_common::JoinType;
 
 use super::{BoxedRule, Rule};
 use crate::expr::{Expr, ExprImpl, ExprType, FunctionCall, InputRef};
-use crate::optimizer::plan_node::{LogicalJoin, LogicalProject};
+use crate::optimizer::plan_node::{LogicalFilter, LogicalJoin, LogicalProject};
 use crate::optimizer::PlanRef;
+use crate::utils::Condition;
 
-pub struct ApplyScan {}
-impl Rule for ApplyScan {
+pub struct ApplyScanRule {}
+impl Rule for ApplyScanRule {
     fn apply(&self, plan: PlanRef) -> Option<PlanRef> {
         let apply = plan.as_logical_apply()?;
-        let (left, right, on, join_type, correlated_indices) = apply.clone().decompose();
+        let (left, right, on, join_type, _correlated_id, correlated_indices, max_one_row) =
+            apply.clone().decompose();
+
+        if max_one_row {
+            return None;
+        }
+
         let apply_left_len = left.schema().len();
         assert_eq!(join_type, JoinType::Inner);
-        // TODO: Push `LogicalApply` down `LogicalJoin`.
-        if let (None, None) = (right.as_logical_scan(), right.as_logical_join()) {
+
+        // LogicalJoin with correlated inputs in join condition has been handled by ApplyJoin. This
+        // handles the ones without correlation
+        if let (None, None, None) = (
+            right.as_logical_scan(),
+            right.as_logical_join(),
+            right.as_logical_values(),
+        ) {
             return None;
         }
 
@@ -52,10 +65,9 @@ impl Rule for ApplyScan {
             // Replace `LogicalApply` with `LogicalProject` and insert the `InputRef`s which is
             // equal to `CorrelatedInputRef` at the beginning of `LogicalProject`.
             // See the fourth section of Unnesting Arbitrary Queries for how to do the optimization.
-            let mut exprs: Vec<ExprImpl> = correlated_indices
-                .into_iter()
-                .map(|correlated_index| {
-                    let (col_index, data_type) = column_mapping.get(&correlated_index).unwrap();
+            let mut exprs: Vec<ExprImpl> = (0..correlated_indices.len())
+                .map(|i| {
+                    let (col_index, data_type) = column_mapping.get(&i).unwrap();
                     InputRef::new(*col_index - apply_left_len, data_type.clone()).into()
                 })
                 .collect();
@@ -68,8 +80,29 @@ impl Rule for ApplyScan {
                     .map(|(index, data_type)| InputRef::new(index, data_type).into()),
             );
             let project = LogicalProject::create(right, exprs);
-            // TODO: add LogicalFilter here.
-            Some(project)
+
+            // Null reject for equal
+            let filter_exprs: Vec<ExprImpl> = (0..correlated_indices.len())
+                .map(|i| {
+                    ExprImpl::FunctionCall(Box::new(FunctionCall::new_unchecked(
+                        ExprType::IsNotNull,
+                        vec![ExprImpl::InputRef(Box::new(InputRef::new(
+                            i,
+                            project.schema().fields[i].data_type.clone(),
+                        )))],
+                        DataType::Boolean,
+                    )))
+                })
+                .collect();
+
+            let filter = LogicalFilter::create(
+                project,
+                Condition {
+                    conjunctions: filter_exprs,
+                },
+            );
+
+            Some(filter)
         } else {
             let join = LogicalJoin::new(left, right, join_type, on);
             Some(join.into())
@@ -77,9 +110,9 @@ impl Rule for ApplyScan {
     }
 }
 
-impl ApplyScan {
+impl ApplyScanRule {
     pub fn create() -> BoxedRule {
-        Box::new(ApplyScan {})
+        Box::new(ApplyScanRule {})
     }
 
     /// Check whether the `func_call` is like v1 = v2, in which v1 and v2 belong respectively to

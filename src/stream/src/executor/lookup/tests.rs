@@ -19,11 +19,9 @@ use piestream_common::array::stream_chunk::StreamChunkTestExt;
 use piestream_common::array::StreamChunk;
 use piestream_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
 use piestream_common::types::DataType;
-use piestream_common::util::ordered::{deserialize_column_id, SENTINEL_CELL_ID};
 use piestream_common::util::sort_util::{OrderPair, OrderType};
-use piestream_common::util::value_encoding::deserialize_cell;
 use piestream_storage::memory::MemoryStateStore;
-use piestream_storage::store::ReadOptions;
+use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
 use crate::executor::lookup::impl_::LookupExecutorParams;
@@ -37,14 +35,14 @@ fn arrangement_col_descs() -> Vec<ColumnDesc> {
     vec![
         ColumnDesc {
             data_type: DataType::Int64,
-            column_id: ColumnId::new(1),
+            column_id: ColumnId::new(0),
             name: "rowid_column".to_string(),
             field_descs: vec![],
             type_name: "".to_string(),
         },
         ColumnDesc {
             data_type: DataType::Int64,
-            column_id: ColumnId::new(2),
+            column_id: ColumnId::new(1),
             name: "join_column".to_string(),
             field_descs: vec![],
             type_name: "".to_string(),
@@ -124,7 +122,7 @@ fn create_arrangement(
         ],
     );
 
-    Box::new(MaterializeExecutor::new_for_test(
+    Box::new(MaterializeExecutor::for_test(
         Box::new(source),
         memory_state_store,
         table_id,
@@ -204,6 +202,21 @@ fn check_chunk_eq(chunk1: &StreamChunk, chunk2: &StreamChunk) {
     assert_eq!(format!("{:?}", chunk1), format!("{:?}", chunk2));
 }
 
+fn build_state_table_helper<S: StateStore>(
+    s: S,
+    table_id: TableId,
+    columns: Vec<ColumnDesc>,
+    order_types: Vec<OrderPair>,
+    pk_indices: Vec<usize>,
+) -> StateTable<S> {
+    StateTable::new_without_distribution(
+        s,
+        table_id,
+        columns,
+        order_types.iter().map(|pair| pair.order_type).collect_vec(),
+        pk_indices,
+    )
+}
 #[tokio::test]
 async fn test_lookup_this_epoch() {
     // TODO: memory state store doesn't support read epoch yet, so it is possible that this test
@@ -215,8 +228,6 @@ async fn test_lookup_this_epoch() {
     let lookup_executor = Box::new(LookupExecutor::new(LookupExecutorParams {
         arrangement,
         stream,
-        arrangement_store: store.clone(),
-        arrangement_table_id: table_id,
         arrangement_col_descs: arrangement_col_descs(),
         arrangement_order_rules: arrangement_col_arrange_rules_join_key(),
         pk_indices: vec![1, 2],
@@ -230,6 +241,16 @@ async fn test_lookup_this_epoch() {
             Field::with_name(DataType::Int64, "rowid_column"),
             Field::with_name(DataType::Int64, "join_column"),
         ]),
+        state_table: build_state_table_helper(
+            store.clone(),
+            table_id,
+            arrangement_col_descs(),
+            arrangement_col_arrange_rules(),
+            vec![1, 0],
+        ),
+        lru_manager: None,
+        cache_size: 1 << 16,
+        chunk_size: 1024,
     }));
     let mut lookup_executor = lookup_executor.execute();
 
@@ -239,29 +260,6 @@ async fn test_lookup_this_epoch() {
     next_msg(&mut msgs, &mut lookup_executor).await;
     next_msg(&mut msgs, &mut lookup_executor).await;
     next_msg(&mut msgs, &mut lookup_executor).await;
-
-    for (k, v) in store
-        .scan::<_, Vec<u8>>(
-            ..,
-            None,
-            ReadOptions {
-                epoch: u64::MAX,
-                table_id: Default::default(),
-                ttl: None,
-            },
-        )
-        .await
-        .unwrap()
-    {
-        // Do not deserialize datum for SENTINEL_CELL_ID cuz the value length is 0.
-        if deserialize_column_id(&k[k.len() - 4..]).unwrap() != SENTINEL_CELL_ID {
-            println!(
-                "{:?} => {:?}",
-                k,
-                deserialize_cell(v, &DataType::Int64).unwrap()
-            );
-        }
-    }
 
     println!("{:#?}", msgs);
 
@@ -296,8 +294,6 @@ async fn test_lookup_last_epoch() {
     let lookup_executor = Box::new(LookupExecutor::new(LookupExecutorParams {
         arrangement,
         stream,
-        arrangement_store: store.clone(),
-        arrangement_table_id: table_id,
         arrangement_col_descs: arrangement_col_descs(),
         arrangement_order_rules: arrangement_col_arrange_rules_join_key(),
         pk_indices: vec![1, 2],
@@ -311,6 +307,16 @@ async fn test_lookup_last_epoch() {
             Field::with_name(DataType::Int64, "join_column"),
             Field::with_name(DataType::Int64, "rowid_column"),
         ]),
+        state_table: build_state_table_helper(
+            store.clone(),
+            table_id,
+            arrangement_col_descs(),
+            arrangement_col_arrange_rules(),
+            vec![1, 0],
+        ),
+        lru_manager: None,
+        cache_size: 1 << 16,
+        chunk_size: 1024,
     }));
     let mut lookup_executor = lookup_executor.execute();
 

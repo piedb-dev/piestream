@@ -20,49 +20,35 @@ use serde::{Deserialize, Serialize};
 use crate::error::ErrorCode::InternalError;
 use crate::error::{Result, RwError};
 
-/// TODO(TaoWu): The configs here may be preferable to be managed under corresponding module
-/// separately.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct ComputeNodeConfig {
-    // For connection
-    #[serde(default)]
-    pub server: ServerConfig,
+pub const MAX_CONNECTION_WINDOW_SIZE: u32 = (1 << 31) - 1;
 
-    // Below for batch query.
-    #[serde(default)]
-    pub batch: BatchConfig,
-
-    // Below for streaming.
-    #[serde(default)]
-    pub streaming: StreamingConfig,
-
-    // Below for Hummock.
-    #[serde(default)]
-    pub storage: StorageConfig,
-}
-
-pub fn load_config(path: &str) -> ComputeNodeConfig {
+pub fn load_config<S>(path: &str) -> Result<S>
+where
+    for<'a> S: Deserialize<'a> + Default,
+{
     if path.is_empty() {
         tracing::warn!("piestream.toml not found, using default config.");
-        return ComputeNodeConfig::default();
+        return Ok(S::default());
     }
-
-    ComputeNodeConfig::init(path.to_owned().into()).unwrap()
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct FrontendConfig {
-    // For connection
-    #[serde(default)]
-    pub server: ServerConfig,
+    let config_str = fs::read_to_string(PathBuf::from(path.to_owned())).map_err(|e| {
+        RwError::from(InternalError(format!(
+            "failed to open config file '{}': {}",
+            path, e
+        )))
+    })?;
+    let config: S = toml::from_str(config_str.as_str())
+        .map_err(|e| RwError::from(InternalError(format!("parse error {}", e))))?;
+    Ok(config)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
+    /// The interval for periodic heartbeat from worker to the meta service.
     #[serde(default = "default::heartbeat_interval_ms")]
     pub heartbeat_interval_ms: u32,
+
+    #[serde(default = "default::connection_pool_size")]
+    pub connection_pool_size: u16,
 }
 
 impl Default for ServerConfig {
@@ -72,10 +58,14 @@ impl Default for ServerConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct BatchConfig {
-    // #[serde(default = "default::chunk_size")]
-    // pub chunk_size: u32,
+    /// The thread number of the batch task runtime in the compute node. The default value is
+    /// decided by `tokio`.
+    #[serde(default)]
+    pub worker_threads_num: Option<usize>,
+
+    #[serde(default)]
+    pub developer: DeveloperConfig,
 }
 
 impl Default for BatchConfig {
@@ -87,12 +77,42 @@ impl Default for BatchConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StreamingConfig {
-    // #[serde(default = "default::chunk_size")]
-    // pub chunk_size: u32,
-    #[serde(default = "default::checkpoint_interval_ms")]
-    pub checkpoint_interval_ms: u32,
+    /// Not used.
+    #[cfg(any())]
+    #[serde(default = "default::chunk_size")]
+    pub chunk_size: u32,
+
+    /// The interval of periodic barrier.
+    #[serde(default = "default::barrier_interval_ms")]
+    pub barrier_interval_ms: u32,
+
+    /// The maximum number of barriers in-flight in the compute nodes.
     #[serde(default = "default::in_flight_barrier_nums")]
     pub in_flight_barrier_nums: usize,
+
+    /// There will be a checkpoint for every n barriers
+    #[serde(default = "default::checkpoint_frequency")]
+    pub checkpoint_frequency: usize,
+
+    /// Whether to enable the minimal scheduling strategy, that is, only schedule the streaming
+    /// fragment on one parallel unit per compute node.
+    #[serde(default)]
+    pub minimal_scheduling: bool,
+
+    /// The parallelism that the compute node will register to the scheduler of the meta service.
+    #[serde(default = "default::worker_node_parallelism")]
+    pub worker_node_parallelism: usize,
+
+    /// The thread number of the streaming actor runtime in the compute node. The default value is
+    /// decided by `tokio`.
+    #[serde(default)]
+    pub actor_runtime_worker_threads_num: Option<usize>,
+
+    #[serde(default = "default::total_memory_available_bytes")]
+    pub total_memory_available_bytes: usize,
+
+    #[serde(default)]
+    pub developer: DeveloperConfig,
 }
 
 impl Default for StreamingConfig {
@@ -105,7 +125,7 @@ impl Default for StreamingConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageConfig {
-    /// Target size of the SSTable.
+    /// Target size of the Sstable.
     #[serde(default = "default::sst_size_mb")]
     pub sstable_size_mb: u32,
 
@@ -126,9 +146,6 @@ pub struct StorageConfig {
     #[serde(default = "default::share_buffer_compaction_worker_threads_number")]
     pub share_buffer_compaction_worker_threads_number: u32,
 
-    // /// Size threshold to trigger shared buffer flush.
-    // #[serde(default = "default::shared_buffer_threshold")]
-    // pub shared_buffer_threshold: u32,
     /// Maximum shared buffer size, writes attempting to exceed the capacity will stall until there
     /// is enough space.
     #[serde(default = "default::shared_buffer_capacity_mb")]
@@ -163,6 +180,25 @@ pub struct StorageConfig {
     /// Number of tasks shared buffer can upload in parallel.
     #[serde(default = "default::share_buffer_upload_concurrency")]
     pub share_buffer_upload_concurrency: usize,
+
+    /// Capacity of sstable meta cache.
+    #[serde(default = "default::compactor_memory_limit_mb")]
+    pub compactor_memory_limit_mb: usize,
+
+    /// Number of SST ids fetched from meta per RPC
+    #[serde(default = "default::sstable_id_remote_fetch_number")]
+    pub sstable_id_remote_fetch_number: u32,
+
+    #[serde(default)]
+    pub file_cache: FileCacheConfig,
+
+    /// Whether to enable streaming upload for sstable.
+    #[serde(default = "default::min_sst_size_for_streaming_upload")]
+    pub min_sst_size_for_streaming_upload: u64,
+
+    /// Max sub compaction task numbers
+    #[serde(default = "default::max_sub_compaction")]
+    pub max_sub_compaction: u32,
 }
 
 impl Default for StorageConfig {
@@ -171,44 +207,85 @@ impl Default for StorageConfig {
     }
 }
 
-impl ComputeNodeConfig {
-    pub fn init(path: PathBuf) -> Result<ComputeNodeConfig> {
-        let config_str = fs::read_to_string(path.clone()).map_err(|e| {
-            RwError::from(InternalError(format!(
-                "failed to open config file '{}': {}",
-                path.to_string_lossy(),
-                e
-            )))
-        })?;
-        let config: ComputeNodeConfig = toml::from_str(config_str.as_str())
-            .map_err(|e| RwError::from(InternalError(format!("parse error {}", e))))?;
-        Ok(config)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FileCacheConfig {
+    #[serde(default = "default::file_cache_capacity_mb")]
+    pub capacity_mb: usize,
+
+    #[serde(default = "default::file_cache_total_buffer_capacity_mb")]
+    pub total_buffer_capacity_mb: usize,
+
+    #[serde(default = "default::file_cache_cache_file_fallocate_unit_mb")]
+    pub cache_file_fallocate_unit_mb: usize,
+
+    #[serde(default = "default::file_cache_cache_meta_fallocate_unit_mb")]
+    pub cache_meta_fallocate_unit_mb: usize,
+
+    #[serde(default = "default::file_cache_cache_file_max_write_size_mb")]
+    pub cache_file_max_write_size_mb: usize,
+}
+
+impl Default for FileCacheConfig {
+    fn default() -> Self {
+        toml::from_str("").unwrap()
     }
 }
 
-impl FrontendConfig {
-    pub fn init(path: PathBuf) -> Result<Self> {
-        let config_str = fs::read_to_string(path.clone()).map_err(|e| {
-            RwError::from(InternalError(format!(
-                "failed to open config file '{}': {}",
-                path.to_string_lossy(),
-                e
-            )))
-        })?;
-        let config: FrontendConfig = toml::from_str(config_str.as_str())
-            .map_err(|e| RwError::from(InternalError(format!("parse error {}", e))))?;
-        Ok(config)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeveloperConfig {
+    /// The size of the channel used for output to exchange/shuffle.
+    #[serde(default = "default::developer::batch_output_channel_size")]
+    pub batch_output_channel_size: usize,
+
+    /// The size of a chunk produced by `RowSeqScanExecutor`
+    #[serde(default = "default::developer::batch_chunk_size")]
+    pub batch_chunk_size: usize,
+
+    /// Set to true to enable per-executor row count metrics. This will produce a lot of timeseries
+    /// and might affect the prometheus performance. If you only need actor input and output
+    /// rows data, see `stream_actor_in_record_cnt` and `stream_actor_out_record_cnt` instead.
+    #[serde(default = "default::developer::stream_enable_executor_row_count")]
+    pub stream_enable_executor_row_count: bool,
+
+    /// The capacity of the chunks in the channel that connects between `ConnectorSource` and
+    /// `SourceExecutor`.
+    #[serde(default = "default::developer::stream_connector_message_buffer_size")]
+    pub stream_connector_message_buffer_size: usize,
+
+    /// Limit number of cached entries (one per group key).
+    #[serde(default = "default::developer::stream_unsafe_hash_agg_cache_size")]
+    pub unsafe_stream_hash_agg_cache_size: usize,
+
+    /// Limit number of the cached entries (one per join key) on each side.
+    #[serde(default = "default::developer::unsafe_stream_join_cache_size")]
+    pub unsafe_stream_join_cache_size: usize,
+
+    /// Limit number of the cached entries in an extreme aggregation call.
+    #[serde(default = "default::developer::unsafe_stream_extreme_cache_size")]
+    pub unsafe_stream_extreme_cache_size: usize,
+
+    /// The maximum size of the chunk produced by executor at a time.
+    #[serde(default = "default::developer::stream_chunk_size")]
+    pub stream_chunk_size: usize,
+}
+
+impl Default for DeveloperConfig {
+    fn default() -> Self {
+        toml::from_str("").unwrap()
     }
 }
 
 mod default {
+    use sysinfo::{System, SystemExt};
 
     pub fn heartbeat_interval_ms() -> u32 {
         1000
     }
 
-    pub fn chunk_size() -> u32 {
-        1024
+    pub fn connection_pool_size() -> u16 {
+        16
     }
 
     pub fn sst_size_mb() -> u32 {
@@ -216,7 +293,7 @@ mod default {
     }
 
     pub fn block_size_kb() -> u32 {
-        16
+        1024
     }
 
     pub fn bloom_false_positive() -> f64 {
@@ -229,11 +306,6 @@ mod default {
 
     pub fn share_buffer_compaction_worker_threads_number() -> u32 {
         4
-    }
-
-    pub fn shared_buffer_threshold() -> u32 {
-        // 192MB
-        201326592
     }
 
     pub fn shared_buffer_capacity_mb() -> u32 {
@@ -268,14 +340,101 @@ mod default {
         "tempdisk".to_string()
     }
 
-    pub fn checkpoint_interval_ms() -> u32 {
+    pub fn barrier_interval_ms() -> u32 {
         250
     }
+
     pub fn in_flight_barrier_nums() -> usize {
         40
     }
+
+    pub fn checkpoint_frequency() -> usize {
+        10
+    }
+
     pub fn share_buffer_upload_concurrency() -> usize {
         8
+    }
+
+    pub fn worker_node_parallelism() -> usize {
+        std::thread::available_parallelism().unwrap().get()
+    }
+
+    pub fn total_memory_available_bytes() -> usize {
+        let mut sys = System::new();
+        sys.refresh_memory();
+        sys.total_memory() as usize
+    }
+
+    pub fn compactor_memory_limit_mb() -> usize {
+        512
+    }
+
+    pub fn sstable_id_remote_fetch_number() -> u32 {
+        10
+    }
+
+    pub fn file_cache_capacity_mb() -> usize {
+        1024
+    }
+
+    pub fn file_cache_total_buffer_capacity_mb() -> usize {
+        128
+    }
+
+    pub fn file_cache_cache_file_fallocate_unit_mb() -> usize {
+        512
+    }
+
+    pub fn file_cache_cache_meta_fallocate_unit_mb() -> usize {
+        16
+    }
+
+    pub fn file_cache_cache_file_max_write_size_mb() -> usize {
+        4
+    }
+
+    pub fn min_sst_size_for_streaming_upload() -> u64 {
+        // 32MB
+        32 * 1024 * 1024
+    }
+
+    pub fn max_sub_compaction() -> u32 {
+        4
+    }
+
+    pub mod developer {
+        pub fn batch_output_channel_size() -> usize {
+            64
+        }
+
+        pub fn batch_chunk_size() -> usize {
+            1024
+        }
+
+        pub fn stream_enable_executor_row_count() -> bool {
+            false
+        }
+
+        pub fn stream_connector_message_buffer_size() -> usize {
+            16
+        }
+
+        pub fn stream_unsafe_hash_agg_cache_size() -> usize {
+            1 << 16
+        }
+
+        pub fn unsafe_stream_join_cache_size() -> usize {
+            1 << 16
+        }
+
+        pub fn unsafe_stream_extreme_cache_size() -> usize {
+            1 << 10
+        }
+
+        pub fn stream_chunk_size() -> usize {
+            1024
+        }
     }
 }
 
@@ -298,7 +457,7 @@ pub mod constant {
             }
         }
 
-        pub const TABLE_OPTION_DUMMY_TTL: u32 = 0;
-        pub const PROPERTIES_TTL_KEY: &str = "ttl";
+        pub const TABLE_OPTION_DUMMY_RETENTION_SECOND: u32 = 0;
+        pub const PROPERTIES_RETENTION_SECOND_KEY: &str = "retention_seconds";
     }
 }

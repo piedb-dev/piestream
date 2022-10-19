@@ -22,17 +22,19 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::future::try_join_all;
-use piestream_common::cache::{CachableEntry, LruCache};
-use tokio::io::AsyncWriteExt;
+use piestream_common::cache::{CacheableEntry, LruCache};
+use tokio::io::{AsyncRead, AsyncWriteExt};
 
-use crate::object::{BlockLocation, ObjectError, ObjectMetadata, ObjectResult, ObjectStore};
+use super::{
+    BlockLocation, BoxedStreamingUploader, ObjectError, ObjectMetadata, ObjectResult, ObjectStore,
+};
 
 pub(super) mod utils {
     use std::fs::Metadata;
     use std::path::Path;
+    use std::time::{Duration, SystemTime};
 
     use tokio::fs::{create_dir_all, OpenOptions};
-    use tokio::task::spawn_blocking;
 
     use super::OpenReadFileHolder;
     use crate::object::{ObjectError, ObjectResult};
@@ -70,7 +72,8 @@ pub(super) mod utils {
         T: Send + 'static,
         F: FnOnce() -> ObjectResult<T> + Send + 'static,
     {
-        spawn_blocking(f).await.map_err(|e| {
+        #[cfg_attr(madsim, expect(deprecated))]
+        tokio::task::spawn_blocking(f).await.map_err(|e| {
             ObjectError::internal(format!("Fail to join a blocking-spawned task: {}", e))
         })?
     }
@@ -83,9 +86,27 @@ pub(super) mod utils {
         })
         .await
     }
+
+    pub fn get_last_modified_timestamp_since_unix_epoch(
+        metadata: &Metadata,
+    ) -> ObjectResult<Duration> {
+        metadata
+            .modified()
+            .map_err(|err| {
+                ObjectError::disk("Last modification metadata not available".to_string(), err)
+            })?
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(ObjectError::internal)
+    }
+
+    pub fn get_path_str(path: &Path) -> ObjectResult<String> {
+        path.to_str()
+            .map(|s| s.to_owned())
+            .ok_or_else(|| ObjectError::internal("Don't support non-UTF-8 in path"))
+    }
 }
 
-pub type OpenReadFileHolder = Arc<CachableEntry<PathBuf, File>>;
+pub type OpenReadFileHolder = Arc<CacheableEntry<PathBuf, File>>;
 
 pub struct DiskObjectStore {
     path_prefix: String,
@@ -125,20 +146,25 @@ impl DiskObjectStore {
             path.hash(&mut hasher);
             hasher.finish()
         };
+        let path_when_err = path.clone();
         let entry = self
             .opened_read_file_cache
-            .lookup_with_request_dedup::<_, ObjectError, _>(hash, path.clone(), || async {
-                let file = utils::open_file(&path, true, false, false)
-                    .await?
-                    .into_std()
-                    .await;
-                Ok((file, 1))
-            })
+            .lookup_with_request_dedup::<_, ObjectError, _>(
+                hash,
+                path.clone(),
+                move || async move {
+                    let file = utils::open_file(&path, true, false, false)
+                        .await?
+                        .into_std()
+                        .await;
+                    Ok((file, 1))
+                },
+            )
             .await
             .map_err(|e| {
                 ObjectError::internal(format!(
                     "open file cache request dedup get canceled {:?}. Err{:?}",
-                    path.to_str(),
+                    path_when_err.to_str(),
                     e
                 ))
             })??;
@@ -148,16 +174,28 @@ impl DiskObjectStore {
 
 #[async_trait::async_trait]
 impl ObjectStore for DiskObjectStore {
+    fn get_object_prefix(&self, _obj_id: u64) -> String {
+        String::default()
+    }
+
     async fn upload(&self, path: &str, obj: Bytes) -> ObjectResult<()> {
-        let mut file =
-            utils::open_file(self.new_file_path(path)?.as_path(), false, true, true).await?;
-        file.write_all(&obj)
-            .await
-            .map_err(|e| ObjectError::disk(format!("failed to write {}", path), e))?;
-        file.flush()
-            .await
-            .map_err(|e| ObjectError::disk(format!("failed to flush {}", path), e))?;
-        Ok(())
+        if obj.is_empty() {
+            Err(ObjectError::internal("upload empty object"))
+        } else {
+            let mut file =
+                utils::open_file(self.new_file_path(path)?.as_path(), false, true, true).await?;
+            file.write_all(&obj)
+                .await
+                .map_err(|e| ObjectError::disk(format!("failed to write {}", path), e))?;
+            file.flush()
+                .await
+                .map_err(|e| ObjectError::disk(format!("failed to flush {}", path), e))?;
+            Ok(())
+        }
+    }
+
+    fn streaming_upload(&self, _path: &str) -> ObjectResult<BoxedStreamingUploader> {
+        unimplemented!("streaming upload is not implemented for disk object store");
     }
 
     async fn read(&self, path: &str, block_loc: Option<BlockLocation>) -> ObjectResult<Bytes> {
@@ -209,7 +247,7 @@ impl ObjectStore for DiskObjectStore {
             let path_owned = path.to_owned();
             let block_loc = *block_loc_ref;
             let future = utils::asyncify(move || {
-                let mut buf = vec![0; block_loc.size as usize];
+                let mut buf = vec![0; block_loc.size];
                 file_holder
                     .value()
                     .read_exact_at(&mut buf, block_loc.offset as u64)
@@ -230,19 +268,113 @@ impl ObjectStore for DiskObjectStore {
         try_join_all(ret).await
     }
 
+    /// **Currently not implemented!**
+    ///
+    /// Returns a stream reading the object specified in `path`. If given, the stream starts at the
+    /// byte with index `start_pos` (0-based). As far as possible, the stream only loads the amount
+    /// of data into memory that is read from the stream.
+    async fn streaming_read(
+        &self,
+        _path: &str,
+        _start_pos: Option<usize>,
+    ) -> ObjectResult<Box<dyn AsyncRead + Unpin + Send + Sync>> {
+        unimplemented!()
+    }
+
     async fn metadata(&self, path: &str) -> ObjectResult<ObjectMetadata> {
         let file_holder = self.get_read_file(path).await?;
         let metadata = utils::get_metadata(file_holder).await?;
         Ok(ObjectMetadata {
+            key: path.to_owned(),
+            last_modified: utils::get_last_modified_timestamp_since_unix_epoch(&metadata)?
+                .as_secs_f64(),
             total_size: metadata.len() as usize,
         })
     }
 
     async fn delete(&self, path: &str) -> ObjectResult<()> {
-        tokio::fs::remove_file(self.new_file_path(path)?.as_path())
-            .await
-            .map_err(|e| ObjectError::disk(format!("failed to delete {}", path), e))?;
+        let result = tokio::fs::remove_file(self.new_file_path(path)?.as_path()).await;
+
+        // Note that S3 storage considers deleting successful if the `path` does not refer to an
+        // existing object. We therefore ignore if a file does not exist to ensures that
+        // `DiskObjectStore::delete()` behaves the same way as `S3ObjectStore::delete()`.
+        if let Err(e) = &result && e.kind() == ErrorKind::NotFound {
+            Ok(())
+        }
+        else {
+            result.map_err(|e| ObjectError::disk(format!("failed to delete {}", path), e))
+        }
+    }
+
+    /// Deletes the objects with the given paths permanently from the storage. If an object
+    /// specified in the request is not found, it will be considered as successfully deleted.
+    ///
+    /// Calling this function is equivalent to calling `delete` individually for each given path.
+    async fn delete_objects(&self, paths: &[String]) -> ObjectResult<()> {
+        for path in paths {
+            self.delete(path).await?
+        }
         Ok(())
+    }
+
+    async fn list(&self, prefix: &str) -> ObjectResult<Vec<ObjectMetadata>> {
+        let mut list_result = vec![];
+        let mut path_to_walk = vec![];
+        let common_prefix = {
+            let mut common_prefix = PathBuf::from(&self.path_prefix);
+            common_prefix.push(prefix.trim_start_matches(std::path::MAIN_SEPARATOR));
+            utils::get_path_str(common_prefix.as_path())?.to_owned()
+        };
+        path_to_walk.push(PathBuf::from(&self.path_prefix));
+        while let Some(path) = path_to_walk.pop() {
+            let mut entries = tokio::fs::read_dir(path.as_path()).await.map_err(|err| {
+                ObjectError::disk(
+                    format!("Failed to read dir {}", path.to_str().unwrap_or("")),
+                    err,
+                )
+            })?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|err| ObjectError::disk(format!("Failed to list {}", prefix), err))?
+            {
+                let metadata = entry
+                    .metadata()
+                    .await
+                    .map_err(|err| ObjectError::disk("Failed to get metadata.".to_string(), err))?;
+                let entry_path = utils::get_path_str(entry.path().as_path())?;
+                if metadata.is_symlink() {
+                    tracing::warn!("Skip symlink {}", entry_path);
+                    continue;
+                }
+                if metadata.is_dir() {
+                    if entry_path.starts_with(&common_prefix)
+                        || common_prefix.starts_with(&entry_path)
+                    {
+                        path_to_walk.push(entry.path());
+                    }
+                    continue;
+                }
+                if !entry_path.starts_with(&common_prefix) {
+                    continue;
+                }
+                list_result.push(ObjectMetadata {
+                    key: entry_path
+                        .trim_start_matches(&self.path_prefix)
+                        .trim_start_matches(std::path::MAIN_SEPARATOR)
+                        .to_owned(),
+                    last_modified: utils::get_last_modified_timestamp_since_unix_epoch(&metadata)?
+                        .as_secs_f64(),
+                    total_size: metadata.len() as usize,
+                });
+            }
+        }
+        list_result.sort_by(|a, b| Ord::cmp(&a.key, &b.key));
+        Ok(list_result)
+    }
+
+    fn store_media_type(&self) -> &'static str {
+        "disk"
     }
 }
 
@@ -253,7 +385,7 @@ mod tests {
     use std::path::PathBuf;
 
     use bytes::Bytes;
-    use itertools::Itertools;
+    use itertools::{enumerate, Itertools};
     use tempfile::TempDir;
 
     use crate::object::disk::DiskObjectStore;
@@ -276,6 +408,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_simple_upload() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -294,6 +427,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_multi_level_dir_upload() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -312,6 +446,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_read_all() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -328,6 +463,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_read_partial() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -353,6 +489,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_read_multi_block() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -385,6 +522,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_delete() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -402,6 +540,53 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
+    async fn test_delete_objects() {
+        let test_dir = TempDir::new().unwrap();
+        let test_root_path = test_dir.path().to_str().unwrap();
+        let store = DiskObjectStore::new(test_root_path);
+        let payload = gen_test_payload();
+
+        // The number of files that will be created and uploaded to storage.
+        const REAL_COUNT: usize = 2;
+
+        // The number of files that we do not create but still try to delete.
+        const FAKE_COUNT: usize = 2;
+
+        let mut name_list = vec![];
+        let mut path_list = vec![];
+
+        for i in 0..(REAL_COUNT + FAKE_COUNT) {
+            let file_name = format!("test{}.obj", i);
+            name_list.push(file_name.clone());
+
+            let mut path = PathBuf::from(test_root_path);
+            path.push(file_name);
+            path_list.push(path);
+        }
+
+        // Upload data.
+        for file_name in name_list.iter().take(REAL_COUNT) {
+            store
+                .upload(file_name.as_str(), Bytes::from(payload.clone()))
+                .await
+                .unwrap();
+        }
+
+        // Verify that files do or do not exist.
+        for (i, path) in path_list.iter().enumerate() {
+            assert!((i < REAL_COUNT) == path.exists());
+        }
+
+        store.delete_objects(&name_list).await.unwrap();
+
+        for path in path_list {
+            assert!(!path.exists());
+        }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_read_not_exists() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -411,6 +596,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
     async fn test_read_out_of_range() {
         let test_dir = TempDir::new().unwrap();
         let test_root_path = test_dir.path().to_str().unwrap();
@@ -470,5 +656,50 @@ mod tests {
             .upload("/test.obj", Bytes::from(payload))
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    #[cfg_attr(madsim, ignore)] // TODO: remove this when madsim supports fs
+    async fn test_list() {
+        let test_dir = TempDir::new().unwrap();
+        let test_root_path = test_dir.path().to_str().unwrap();
+        let store = DiskObjectStore::new(test_root_path);
+        let payload = gen_test_payload();
+        assert!(store.list("").await.unwrap().is_empty());
+        assert!(store.list("/").await.unwrap().is_empty());
+
+        let paths = vec!["001/002/test.obj", "001/003/test.obj"];
+        for (i, path) in enumerate(paths.clone()) {
+            assert_eq!(store.list("").await.unwrap().len(), i);
+            store
+                .upload(path, Bytes::from(payload.clone()))
+                .await
+                .unwrap();
+            assert_eq!(store.list("").await.unwrap().len(), i + 1);
+        }
+
+        let list_path = store
+            .list("")
+            .await
+            .unwrap()
+            .iter()
+            .map(|p| p.key.clone())
+            .collect_vec();
+        assert_eq!(list_path, paths);
+
+        for i in 0..=5 {
+            assert_eq!(store.list(&paths[0][0..=i]).await.unwrap().len(), 2);
+        }
+        for i in 6..=paths[0].len() - 1 {
+            assert_eq!(store.list(&paths[0][0..=i]).await.unwrap().len(), 1);
+        }
+        assert!(store.list("003").await.unwrap().is_empty());
+        assert_eq!(store.list("/").await.unwrap().len(), 2);
+
+        for (i, path) in enumerate(paths.clone()) {
+            assert_eq!(store.list("").await.unwrap().len(), paths.len() - i);
+            store.delete(path).await.unwrap();
+            assert_eq!(store.list("").await.unwrap().len(), paths.len() - i - 1);
+        }
     }
 }

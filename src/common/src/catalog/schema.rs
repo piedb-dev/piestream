@@ -19,7 +19,6 @@ use piestream_pb::plan_common::Field as ProstField;
 
 use super::ColumnDesc;
 use crate::array::ArrayBuilderImpl;
-use crate::error::{ErrorCode, Result};
 use crate::types::DataType;
 
 /// The field in the schema of the executor's return data
@@ -47,23 +46,19 @@ impl Field {
             name: self.name.to_string(),
         }
     }
+}
 
-    /// Returns field and field index.
-    pub fn sub_field(&self, name: &String) -> Result<(Field, usize)> {
-        if let DataType::Struct { .. } = self.data_type {
-            for (index, field) in self.sub_fields.iter().enumerate() {
-                if field.name == *name {
-                    return Ok((field.clone(), index));
-                }
-            }
-            Err(ErrorCode::ItemNotFound(format!("Invalid field name: {}", name)).into())
-        } else {
-            Err(ErrorCode::ItemNotFound(format!(
-                "Cannot get field from non nested column: {}",
-                self.name
-            ))
-            .into())
-        }
+pub struct FieldDisplay<'a>(pub &'a Field);
+
+impl std::fmt::Debug for FieldDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.name)
+    }
+}
+
+impl std::fmt::Display for FieldDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.name)
     }
 }
 
@@ -175,6 +170,15 @@ impl Field {
 
     pub fn data_type(&self) -> DataType {
         self.data_type.clone()
+    }
+
+    pub fn from_with_table_name_prefix(desc: &ColumnDesc, table_name: &str) -> Self {
+        Self {
+            data_type: desc.data_type.clone(),
+            name: format!("{}.{}", table_name, desc.name),
+            sub_fields: desc.field_descs.iter().map(|d| d.into()).collect_vec(),
+            type_name: desc.type_name.clone(),
+        }
     }
 }
 

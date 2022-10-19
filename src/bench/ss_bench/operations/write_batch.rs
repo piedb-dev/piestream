@@ -83,7 +83,7 @@ impl Operations {
         &mut self,
         store: &impl StateStore,
         opts: &Opts,
-        context: Option<(Arc<CompactorContext>, Arc<LocalVersionManager>)>,
+        context: Option<(Arc<CompactorContext>, LocalVersionManagerRef)>,
     ) {
         let (prefixes, keys) = Workload::new_random_keys(opts, opts.writes as u64, &mut self.rng);
         let values = Workload::new_values(opts, opts.writes as u64, &mut self.rng);
@@ -99,15 +99,7 @@ impl Operations {
         if opts.compact_level_after_write > 0 {
             if let Some((compact_context, local_version_manager)) = context {
                 if let Some(task) = self.meta_client.get_compact_task().await {
-                    Compactor::compact(compact_context.clone(), task).await;
-                    // FIXME: A workaround to ensure the version after compaction is available
-                    // locally. Notice now multiple tasks are trying to pin_version, which breaks
-                    // the assumption required by LocalVersionManager. It may result in some pinned
-                    // versions never get unpinned. This can be fixed after
-                    // LocalVersionManager::start_workers is modified into push-based.
-                    let last_pinned_id = local_version_manager.get_pinned_version().id();
-                    let version = self.meta_client.pin_version(last_pinned_id).await.unwrap();
-                    local_version_manager.try_update_pinned_version(version);
+                    Compactor::compact(compact_context, task).await;
                 }
             }
         }
@@ -187,7 +179,7 @@ impl Operations {
                     let start = Instant::now();
                     let batch = batch
                         .into_iter()
-                        .map(|(k, v)| (k, StorageValue::new(Default::default(), v)))
+                        .map(|(k, v)| (k, StorageValue::new(v)))
                         .collect_vec();
                     let epoch = ctx.epoch.load(Ordering::Acquire);
                     store
@@ -202,10 +194,9 @@ impl Operations {
                         .unwrap();
                     let last_batch = i + 1 == l;
                     if ctx.epoch_barrier_finish(last_batch) {
-                        store.sync(Some(epoch)).await.unwrap();
-                        let synced_sst = store.get_uncommitted_ssts(epoch);
+                        let ssts = store.sync(epoch).await.unwrap().uncommitted_ssts;
                         ctx.meta_client
-                            .commit_epoch(epoch, synced_sst)
+                            .commit_epoch(epoch, ssts)
                             .await
                             .unwrap();
                         ctx.epoch.fetch_add(1, Ordering::SeqCst);

@@ -18,13 +18,14 @@ use std::future::Future;
 use futures::StreamExt;
 use piestream_common::array::DataChunk;
 use piestream_common::error::Result;
-use piestream_pb::batch_plan::exchange_source::LocalExecutePlan::Plan;
-use piestream_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskOutputId};
+use piestream_pb::batch_plan::exchange_source::LocalExecutePlan::{self, Plan};
+use piestream_pb::batch_plan::TaskOutputId;
 use piestream_pb::task_service::{ExecuteRequest, GetDataResponse};
 use piestream_rpc_client::ComputeClient;
 use tonic::Streaming;
 
 use crate::exchange_source::ExchangeSource;
+use crate::task::TaskId;
 
 /// Use grpc client as the source.
 pub struct GrpcExchangeSource {
@@ -34,12 +35,12 @@ pub struct GrpcExchangeSource {
 }
 
 impl GrpcExchangeSource {
-    pub async fn create(exchange_source: ProstExchangeSource) -> Result<Self> {
-        let addr = exchange_source.get_host()?.into();
-        let task_output_id = exchange_source.get_task_output_id()?.clone();
+    pub async fn create(
+        client: ComputeClient,
+        task_output_id: TaskOutputId,
+        local_execute_plan: Option<LocalExecutePlan>,
+    ) -> Result<Self> {
         let task_id = task_output_id.get_task_id()?.clone();
-        let client = ComputeClient::new(addr).await?;
-        let local_execute_plan = exchange_source.local_execute_plan;
         let stream = match local_execute_plan {
             // When in the local execution mode, `GrpcExchangeSource` would send out
             // `ExecuteRequest` and get the data chunks back in a single RPC.
@@ -80,7 +81,7 @@ impl ExchangeSource for GrpcExchangeSource {
                 Some(r) => r,
             };
             let task_data = res?;
-            let data = DataChunk::from_protobuf(task_data.get_record_batch()?)?.compact()?;
+            let data = DataChunk::from_protobuf(task_data.get_record_batch()?)?.compact();
             trace!(
                 "Receiver taskOutput = {:?}, data = {:?}",
                 self.task_output_id,
@@ -89,5 +90,9 @@ impl ExchangeSource for GrpcExchangeSource {
 
             Ok(Some(data))
         }
+    }
+
+    fn get_task_id(&self) -> TaskId {
+        TaskId::from(self.task_output_id.get_task_id().unwrap())
     }
 }

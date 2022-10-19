@@ -15,12 +15,13 @@
 use std::slice;
 
 use piestream_common::types::DataType;
-use piestream_expr::expr::AggKind;
+use piestream_common::util::sort_util::OrderPair;
+use piestream_expr::expr::{AggKind, ExpressionRef};
 
 /// An aggregation function may accept 0, 1 or 2 arguments.
 #[derive(Clone, Debug)]
 pub enum AggArgs {
-    /// `None` is used for aggregation function accepts 0 arguments, such as [`AggKind::RowCount`].
+    /// `None` is used for aggregation function accepts 0 arguments, such as `count(*)`.
     None,
     /// `Unary` is used for aggregation function accepts 1 argument, such as [`AggKind::Sum`].
     Unary(DataType, usize),
@@ -53,15 +54,21 @@ impl AggArgs {
 /// Represents an aggregation function.
 #[derive(Clone, Debug)]
 pub struct AggCall {
-    /// Aggregation Kind for constructing
-    /// [`crate::executor::aggregation::StreamingAggStateImpl`]
+    /// Aggregation kind for constructing agg state.
     pub kind: AggKind,
     /// Arguments of aggregation function input.
     pub args: AggArgs,
     /// The return type of aggregation function.
     pub return_type: DataType,
 
+    /// Order requirements specified in order by clause of agg call
+    pub order_pairs: Vec<OrderPair>,
+
     /// Whether the stream is append-only.
-    /// Specific `StreamingAggStateImpl` may optimize its implementation based on this knowledge.
+    /// Specific streaming aggregator may optimize its implementation
+    /// based on this knowledge.
     pub append_only: bool,
+
+    /// Filter of aggregation.
+    pub filter: Option<ExpressionRef>,
 }

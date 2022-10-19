@@ -58,10 +58,11 @@ enum Commands {
 #[derive(Clone, Copy, Debug, Sequence, PartialEq, Eq, ArgEnum)]
 pub enum Components {
     #[clap(name = "minio")]
-    MinIO,
+    Minio,
     PrometheusAndGrafana,
     Etcd,
     Kafka,
+    Redis,
     Tracing,
     RustComponents,
     Dashboard,
@@ -73,10 +74,11 @@ pub enum Components {
 impl Components {
     pub fn title(&self) -> String {
         match self {
-            Self::MinIO => "[Component] Hummock: MinIO + MinIO-CLI",
+            Self::Minio => "[Component] Hummock: MinIO + MinIO-CLI",
             Self::PrometheusAndGrafana => "[Component] Metrics: Prometheus + Grafana",
             Self::Etcd => "[Component] Etcd",
             Self::Kafka => "[Component] Kafka",
+            Self::Redis => "[Component] Redis",
             Self::RustComponents => "[Build] Rust components",
             Self::Dashboard => "[Build] Dashboard v2",
             Self::Tracing => "[Component] Tracing: Jaeger",
@@ -89,7 +91,7 @@ impl Components {
 
     pub fn description(&self) -> String {
         match self {
-            Self::MinIO => {
+            Self::Minio => {
                 "
 Required by Hummock state store."
             }
@@ -141,13 +143,18 @@ with thread sanitizer. The built binaries will be at
 a dev cluster.
 "
             }
+            Self::Redis => {
+                "
+Required if you want to sink data to redis.
+                "
+            }
         }
         .into()
     }
 
     pub fn from_env(env: impl AsRef<str>) -> Option<Self> {
         match env.as_ref() {
-            "ENABLE_MINIO" => Some(Self::MinIO),
+            "ENABLE_MINIO" => Some(Self::Minio),
             "ENABLE_PROMETHEUS_GRAFANA" => Some(Self::PrometheusAndGrafana),
             "ENABLE_ETCD" => Some(Self::Etcd),
             "ENABLE_KAFKA" => Some(Self::Kafka),
@@ -157,16 +164,18 @@ a dev cluster.
             "ENABLE_RELEASE_PROFILE" => Some(Self::Release),
             "ENABLE_ALL_IN_ONE" => Some(Self::AllInOne),
             "ENABLE_SANITIZER" => Some(Self::Sanitizer),
+            "ENABLE_REDIS" => Some(Self::Redis),
             _ => None,
         }
     }
 
     pub fn env(&self) -> String {
         match self {
-            Self::MinIO => "ENABLE_MINIO",
+            Self::Minio => "ENABLE_MINIO",
             Self::PrometheusAndGrafana => "ENABLE_PROMETHEUS_GRAFANA",
             Self::Etcd => "ENABLE_ETCD",
             Self::Kafka => "ENABLE_KAFKA",
+            Self::Redis => "ENABLE_REDIS",
             Self::RustComponents => "ENABLE_BUILD_RUST",
             Self::Dashboard => "ENABLE_BUILD_DASHBOARD_V2",
             Self::Tracing => "ENABLE_COMPUTE_TRACING",
@@ -261,7 +270,7 @@ fn main() -> Result<()> {
                 if component == "RISEDEV_CONFIGURED" {
                     continue;
                 }
-                match Components::from_env(&component) {
+                match Components::from_env(component) {
                     Some(component) => {
                         if val == "true" {
                             enabled.push(component);

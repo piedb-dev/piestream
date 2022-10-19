@@ -15,10 +15,11 @@
 use enum_as_inner::EnumAsInner;
 use fixedbitset::FixedBitSet;
 use paste::paste;
+use piestream_common::array::{ListValue, Row};
 use piestream_common::error::Result;
-use piestream_common::types::{DataType, Scalar};
-use piestream_expr::expr::AggKind;
-use piestream_pb::expr::ExprNode;
+use piestream_common::types::{DataType, Datum, Scalar};
+use piestream_expr::expr::{build_from_prost, AggKind};
+use piestream_pb::expr::{ExprNode, ProjectSetSelectItem};
 
 mod agg_call;
 mod correlated_input_ref;
@@ -26,30 +27,39 @@ mod function_call;
 mod input_ref;
 mod literal;
 mod subquery;
+mod table_function;
+mod window_function;
 
+mod order_by_expr;
+pub use order_by_expr::{OrderBy, OrderByExpr};
+
+mod expr_mutator;
 mod expr_rewriter;
 mod expr_visitor;
 mod type_inference;
 mod utils;
 
 pub use agg_call::AggCall;
-pub use correlated_input_ref::CorrelatedInputRef;
-pub use function_call::FunctionCall;
-pub use input_ref::{as_alias_display, input_ref_to_column_indices, InputRef, InputRefDisplay};
+pub use correlated_input_ref::{CorrelatedId, CorrelatedInputRef, Depth};
+pub use function_call::{FunctionCall, FunctionCallDisplay};
+pub use input_ref::{input_ref_to_column_indices, InputRef, InputRefDisplay};
 pub use literal::Literal;
 pub use subquery::{Subquery, SubqueryKind};
+pub use table_function::{TableFunction, TableFunctionType};
+pub use window_function::{WindowFunction, WindowFunctionType};
 
 pub type ExprType = piestream_pb::expr::expr_node::Type;
 
+pub use expr_mutator::ExprMutator;
 pub use expr_rewriter::ExprRewriter;
 pub use expr_visitor::ExprVisitor;
 pub use type_inference::{
-    align_types, cast_map_array, cast_ok, func_sigs, infer_type, least_restrictive, CastContext,
-    DataTypeName, FuncSign,
+    agg_func_sigs, align_types, cast_map_array, cast_ok, cast_sigs, func_sigs, infer_type,
+    least_restrictive, AggFuncSig, CastContext, CastSig, FuncSign,
 };
 pub use utils::*;
 
-/// the trait of bound exprssions
+/// the trait of bound expressions
 pub trait Expr: Into<ExprImpl> {
     /// Get the return type of the expr
     fn return_type(&self) -> DataType;
@@ -58,16 +68,32 @@ pub trait Expr: Into<ExprImpl> {
     fn to_expr_proto(&self) -> ExprNode;
 }
 
-#[derive(Clone, Eq, PartialEq, Hash, EnumAsInner)]
-pub enum ExprImpl {
-    // ColumnRef(Box<BoundColumnRef>), might be used in binder.
-    InputRef(Box<InputRef>),
-    CorrelatedInputRef(Box<CorrelatedInputRef>),
-    Literal(Box<Literal>),
-    FunctionCall(Box<FunctionCall>),
-    AggCall(Box<AggCall>),
-    Subquery(Box<Subquery>),
+macro_rules! impl_expr_impl {
+    ($($t:ident),*) => {
+        #[derive(Clone, Eq, PartialEq, Hash, EnumAsInner)]
+        pub enum ExprImpl {
+            $($t(Box<$t>),)*
+        }
+        $(
+        impl From<$t> for ExprImpl {
+            fn from(o: $t) -> ExprImpl {
+                ExprImpl::$t(Box::new(o))
+            }
+        })*
+    };
 }
+
+impl_expr_impl!(
+    // BoundColumnRef, might be used in binder.
+    CorrelatedInputRef,
+    InputRef,
+    Literal,
+    FunctionCall,
+    AggCall,
+    Subquery,
+    TableFunction,
+    WindowFunction
+);
 
 impl ExprImpl {
     /// A literal int value.
@@ -88,12 +114,36 @@ impl ExprImpl {
         Literal::new(Some(v.to_scalar_value()), DataType::Varchar).into()
     }
 
+    /// A literal null value.
+    #[inline(always)]
+    pub fn literal_null(element_type: DataType) -> Self {
+        Literal::new(None, element_type).into()
+    }
+
+    /// A literal list value.
+    #[inline(always)]
+    pub fn literal_list(v: ListValue, element_type: DataType) -> Self {
+        Literal::new(
+            Some(v.to_scalar_value()),
+            DataType::List {
+                datatype: Box::new(element_type),
+            },
+        )
+        .into()
+    }
+
     /// A `count(*)` aggregate function.
     #[inline(always)]
     pub fn count_star() -> Self {
-        AggCall::new(AggKind::Count, vec![], false, Condition::true_cond())
-            .unwrap()
-            .into()
+        AggCall::new(
+            AggKind::Count,
+            vec![],
+            false,
+            OrderBy::any(),
+            Condition::true_cond(),
+        )
+        .unwrap()
+        .into()
     }
 
     /// Collect all `InputRef`s' indexes in the expression.
@@ -106,7 +156,7 @@ impl ExprImpl {
         visitor.into()
     }
 
-    /// Check whether self is NULL.
+    /// Check whether self is literal NULL.
     pub fn is_null(&self) -> bool {
         matches!(self, ExprImpl::Literal(literal) if literal.get_data().is_none())
     }
@@ -149,6 +199,21 @@ impl ExprImpl {
         // check and there is no difference.
         self.cast_assign(DataType::Varchar)
     }
+
+    /// Evaluate the expression on the given input.
+    ///
+    /// TODO: This is a naive implementation. We should avoid proto ser/de.
+    /// Tracking issue: <https://github.com/piestreamlabs/piestream/issues/3479>
+    fn eval_row(&self, input: &Row) -> Result<Datum> {
+        let backend_expr = build_from_prost(&self.to_expr_proto())?;
+        backend_expr.eval_row(input).map_err(Into::into)
+    }
+
+    /// Evaluate a constant expression.
+    pub fn eval_row_const(&self) -> Result<Datum> {
+        assert!(self.is_const());
+        self.eval_row(Row::empty())
+    }
 }
 
 /// Implement helper functions which recursively checks whether an variant is included in the
@@ -156,26 +221,26 @@ impl ExprImpl {
 ///
 /// It will not traverse inside subqueries.
 macro_rules! impl_has_variant {
-    ( $($variant:ident),* ) => {
+    ( $($variant:ty),* ) => {
         paste! {
             impl ExprImpl {
                 $(
                     pub fn [<has_ $variant:snake>](&self) -> bool {
-                        struct Has {
-                            has: bool,
-                        }
+                        struct Has {}
 
-                        impl ExprVisitor for Has {
-                            fn [<visit_ $variant:snake>](&mut self, _: &$variant) {
-                                self.has = true;
+                        impl ExprVisitor<bool> for Has {
+
+                            fn merge(a: bool, b: bool) -> bool {
+                                a | b
+                            }
+
+                            fn [<visit_ $variant:snake>](&mut self, _: &$variant) -> bool {
+                                true
                             }
                         }
 
-                        let mut visitor = Has {
-                            has: false,
-                        };
-                        visitor.visit_expr(self);
-                        visitor.has
+                        let mut visitor = Has {};
+                        visitor.visit_expr(self)
                     }
                 )*
             }
@@ -183,83 +248,150 @@ macro_rules! impl_has_variant {
     };
 }
 
-impl_has_variant! {InputRef, Literal, FunctionCall, AggCall, Subquery}
+impl_has_variant! {InputRef, Literal, FunctionCall, AggCall, Subquery, TableFunction, WindowFunction}
 
 impl ExprImpl {
-    /// Used to check whether the expression has [`CorrelatedInputRef`].
-    // We need to traverse inside subqueries.
-    pub fn has_correlated_input_ref(&self) -> bool {
-        struct Has {
-            has: bool,
-            depth: usize,
-        }
-
-        impl ExprVisitor for Has {
-            fn visit_correlated_input_ref(&mut self, correlated_input_ref: &CorrelatedInputRef) {
-                if correlated_input_ref.depth() == self.depth {
-                    self.has = true;
-                }
-            }
-
-            fn visit_subquery(&mut self, subquery: &Subquery) {
-                use crate::binder::BoundSetExpr;
-
-                self.depth += 1;
-                match &subquery.query.body {
-                    BoundSetExpr::Select(select) => select
-                        .select_items
-                        .iter()
-                        .chain(select.group_by.iter())
-                        .chain(select.where_clause.iter())
-                        .for_each(|expr| self.visit_expr(expr)),
-                    BoundSetExpr::Values(_) => {}
-                }
-                self.depth -= 1;
-            }
-        }
-
-        let mut visitor = Has {
-            has: false,
-            depth: 1,
-        };
-        visitor.visit_expr(self);
-        visitor.has
+    /// This function is not meant to be called. In most cases you would want
+    /// [`ExprImpl::has_correlated_input_ref_by_depth`].
+    ///
+    /// When an expr contains a [`CorrelatedInputRef`] with lower depth, the whole expr is still
+    /// considered to be uncorrelated, and can be checked with [`ExprImpl::has_subquery`] as well.
+    /// See examples on [`crate::binder::BoundQuery::is_correlated`] for details.
+    ///
+    /// This is a placeholder to trigger a compiler error when a trivial implementation checking for
+    /// enum variant is generated by accident. It cannot be called either because you cannot pass
+    /// `Infallible` to it.
+    pub fn has_correlated_input_ref(&self, _: std::convert::Infallible) -> bool {
+        unreachable!()
     }
 
-    /// Collect `CorrelatedInputRef`s in `ExprImpl` and return theirs indices.
-    pub fn collect_correlated_indices(&self) -> Vec<usize> {
-        struct Collector {
+    /// Used to check whether the expression has [`CorrelatedInputRef`].
+    ///
+    /// This is the core logic that supports [`crate::binder::BoundQuery::is_correlated`]. Check the
+    /// doc of it for examples of `depth` being equal, less or greater.
+    // We need to traverse inside subqueries.
+    pub fn has_correlated_input_ref_by_depth(&self) -> bool {
+        struct Has {
             depth: usize,
-            correlated_indices: Vec<usize>,
         }
 
-        impl ExprVisitor for Collector {
-            fn visit_correlated_input_ref(&mut self, correlated_input_ref: &CorrelatedInputRef) {
+        impl ExprVisitor<bool> for Has {
+            fn merge(a: bool, b: bool) -> bool {
+                a | b
+            }
+
+            fn visit_correlated_input_ref(
+                &mut self,
+                correlated_input_ref: &CorrelatedInputRef,
+            ) -> bool {
+                correlated_input_ref.depth() >= self.depth
+            }
+
+            fn visit_subquery(&mut self, subquery: &Subquery) -> bool {
+                use crate::binder::BoundSetExpr;
+
+                let mut has = false;
+                self.depth += 1;
+                match &subquery.query.body {
+                    BoundSetExpr::Select(select) => {
+                        select.exprs().for_each(|expr| has |= self.visit_expr(expr))
+                    }
+                    BoundSetExpr::Values(values) => {
+                        values.exprs().for_each(|expr| has |= self.visit_expr(expr))
+                    }
+                }
+                self.depth -= 1;
+
+                has
+            }
+        }
+
+        let mut visitor = Has { depth: 1 };
+        visitor.visit_expr(self)
+    }
+
+    pub fn has_correlated_input_ref_by_correlated_id(&self, correlated_id: CorrelatedId) -> bool {
+        struct Has {
+            correlated_id: CorrelatedId,
+        }
+
+        impl ExprVisitor<bool> for Has {
+            fn merge(a: bool, b: bool) -> bool {
+                a | b
+            }
+
+            fn visit_correlated_input_ref(
+                &mut self,
+                correlated_input_ref: &CorrelatedInputRef,
+            ) -> bool {
+                correlated_input_ref.correlated_id() == self.correlated_id
+            }
+
+            fn visit_subquery(&mut self, subquery: &Subquery) -> bool {
+                use crate::binder::BoundSetExpr;
+                match &subquery.query.body {
+                    BoundSetExpr::Select(select) => select
+                        .exprs()
+                        .map(|expr| self.visit_expr(expr))
+                        .reduce(Self::merge)
+                        .unwrap_or_default(),
+                    BoundSetExpr::Values(values) => values
+                        .exprs()
+                        .map(|expr| self.visit_expr(expr))
+                        .reduce(Self::merge)
+                        .unwrap_or_default(),
+                }
+            }
+        }
+
+        let mut visitor = Has { correlated_id };
+        visitor.visit_expr(self)
+    }
+
+    /// Collect `CorrelatedInputRef`s in `ExprImpl` by relative `depth`, return their indices, and
+    /// assign absolute `correlated_id` for them.
+    pub fn collect_correlated_indices_by_depth_and_assign_id(
+        &mut self,
+        depth: Depth,
+        correlated_id: CorrelatedId,
+    ) -> Vec<usize> {
+        struct Collector {
+            depth: Depth,
+            correlated_indices: Vec<usize>,
+            correlated_id: CorrelatedId,
+        }
+
+        impl ExprMutator for Collector {
+            fn visit_correlated_input_ref(
+                &mut self,
+                correlated_input_ref: &mut CorrelatedInputRef,
+            ) {
                 if correlated_input_ref.depth() == self.depth {
                     self.correlated_indices.push(correlated_input_ref.index());
+                    correlated_input_ref.set_correlated_id(self.correlated_id);
                 }
             }
 
-            fn visit_subquery(&mut self, subquery: &Subquery) {
+            fn visit_subquery(&mut self, subquery: &mut Subquery) {
                 use crate::binder::BoundSetExpr;
 
                 self.depth += 1;
-                match &subquery.query.body {
-                    BoundSetExpr::Select(select) => select
-                        .select_items
-                        .iter()
-                        .chain(select.group_by.iter())
-                        .chain(select.where_clause.iter())
-                        .for_each(|expr| self.visit_expr(expr)),
-                    BoundSetExpr::Values(_) => {}
+                match &mut subquery.query.body {
+                    BoundSetExpr::Select(select) => {
+                        select.exprs_mut().for_each(|expr| self.visit_expr(expr))
+                    }
+                    BoundSetExpr::Values(values) => {
+                        values.exprs_mut().for_each(|expr| self.visit_expr(expr))
+                    }
                 }
                 self.depth -= 1;
             }
         }
 
         let mut collector = Collector {
-            depth: 1,
+            depth,
             correlated_indices: vec![],
+            correlated_id,
         };
         collector.visit_expr(self);
         collector.correlated_indices
@@ -272,7 +404,9 @@ impl ExprImpl {
         struct Has {
             has: bool,
         }
-        impl ExprVisitor for Has {
+        impl ExprVisitor<()> for Has {
+            fn merge(_: (), _: ()) {}
+
             fn visit_expr(&mut self, expr: &ExprImpl) {
                 match expr {
                     ExprImpl::Literal(_inner) => {}
@@ -303,12 +437,49 @@ impl ExprImpl {
         }
     }
 
-    pub fn as_eq_const(&self) -> Option<(InputRef, Literal)> {
-        if let ExprImpl::FunctionCall(function_call) = self &&
-        function_call.get_expr_type() == ExprType::Equal{
-            match function_call.clone().decompose_as_binary() {
-                (_, ExprImpl::InputRef(x), ExprImpl::Literal(y)) => Some((*x, *y)),
-                (_, ExprImpl::Literal(x), ExprImpl::InputRef(y)) => Some((*y, *x)),
+    pub fn as_is_not_distinct_from_cond(&self) -> Option<(InputRef, InputRef)> {
+        if let ExprImpl::FunctionCall(function_call) = self
+            && function_call.get_expr_type() == ExprType::IsNotDistinctFrom
+            && let (_, ExprImpl::InputRef(x), ExprImpl::InputRef(y)) = function_call.clone().decompose_as_binary()
+        {
+            if x.index() < y.index() {
+                Some((*x, *y))
+            } else {
+                Some((*y, *x))
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_comparison_cond(&self) -> Option<(InputRef, ExprType, InputRef)> {
+        fn reverse_comparison(comparison: ExprType) -> ExprType {
+            match comparison {
+                ExprType::LessThan => ExprType::GreaterThan,
+                ExprType::LessThanOrEqual => ExprType::GreaterThanOrEqual,
+                ExprType::GreaterThan => ExprType::LessThan,
+                ExprType::GreaterThanOrEqual => ExprType::LessThanOrEqual,
+                _ => unreachable!(),
+            }
+        }
+
+        if let ExprImpl::FunctionCall(function_call) = self {
+            match function_call.get_expr_type() {
+                ty @ (ExprType::LessThan
+                | ExprType::LessThanOrEqual
+                | ExprType::GreaterThan
+                | ExprType::GreaterThanOrEqual) => {
+                    let (_, op1, op2) = function_call.clone().decompose_as_binary();
+                    if let (ExprImpl::InputRef(x), ExprImpl::InputRef(y)) = (op1, op2) {
+                        if x.index < y.index {
+                            Some((*x, ty, *y))
+                        } else {
+                            Some((*y, reverse_comparison(ty), *x))
+                        }
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             }
         } else {
@@ -316,7 +487,45 @@ impl ExprImpl {
         }
     }
 
-    pub fn as_comparison_const(&self) -> Option<(InputRef, ExprType, Literal)> {
+    pub fn as_eq_const(&self) -> Option<(InputRef, ExprImpl)> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+        function_call.get_expr_type() == ExprType::Equal{
+            match function_call.clone().decompose_as_binary() {
+                (_, ExprImpl::InputRef(x), y) if y.is_const() => Some((*x, y)),
+                (_, x, ExprImpl::InputRef(y)) if x.is_const() => Some((*y, x)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_eq_correlated_input_ref(&self) -> Option<(InputRef, CorrelatedInputRef)> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+            function_call.get_expr_type() == ExprType::Equal{
+            match function_call.clone().decompose_as_binary() {
+                (_, ExprImpl::InputRef(x), ExprImpl::CorrelatedInputRef(y)) => Some((*x, *y)),
+                (_, ExprImpl::CorrelatedInputRef(x), ExprImpl::InputRef(y)) => Some((*y, *x)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_is_null(&self) -> Option<InputRef> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+            function_call.get_expr_type() == ExprType::IsNull{
+            match function_call.clone().decompose_as_unary() {
+                (_, ExprImpl::InputRef(x)) => Some(*x),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn as_comparison_const(&self) -> Option<(InputRef, ExprType, ExprImpl)> {
         fn reverse_comparison(comparison: ExprType) -> ExprType {
             match comparison {
                 ExprType::LessThan => ExprType::GreaterThan,
@@ -335,9 +544,9 @@ impl ExprImpl {
                 | ExprType::GreaterThanOrEqual) => {
                     let (_, op1, op2) = function_call.clone().decompose_as_binary();
                     match (op1, op2) {
-                        (ExprImpl::InputRef(x), ExprImpl::Literal(y)) => Some((*x, ty, *y)),
-                        (ExprImpl::Literal(x), ExprImpl::InputRef(y)) => {
-                            Some((*y, reverse_comparison(ty), *x))
+                        (ExprImpl::InputRef(x), y) if y.is_const() => Some((*x, ty, y)),
+                        (x, ExprImpl::InputRef(y)) if x.is_const() => {
+                            Some((*y, reverse_comparison(ty), x))
                         }
                         _ => None,
                     }
@@ -346,6 +555,46 @@ impl ExprImpl {
             }
         } else {
             None
+        }
+    }
+
+    pub fn as_in_const_list(&self) -> Option<(InputRef, Vec<ExprImpl>)> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+        function_call.get_expr_type() == ExprType::In {
+            let mut inputs = function_call.inputs().iter().cloned();
+            let input_ref= match inputs.next().unwrap() {
+                ExprImpl::InputRef(i) => *i,
+                _ => { return None }
+            };
+            let list: Vec<_> = inputs.map(|expr|{
+                // Non constant IN will be bound to OR
+                assert!(expr.is_const());
+                expr
+            }).collect();
+
+           Some((input_ref, list))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_or_disjunctions(&self) -> Option<Vec<ExprImpl>> {
+        if let ExprImpl::FunctionCall(function_call) = self &&
+            function_call.get_expr_type() == ExprType::Or {
+            Some(to_disjunctions(self.clone()))
+        } else {
+            None
+        }
+    }
+
+    pub fn to_project_set_select_item_proto(&self) -> ProjectSetSelectItem {
+        use piestream_pb::expr::project_set_select_item::SelectItem::*;
+
+        ProjectSetSelectItem {
+            select_item: Some(match self {
+                ExprImpl::TableFunction(tf) => TableFunction(tf.to_protobuf()),
+                expr => Expr(expr.to_expr_proto()),
+            }),
         }
     }
 }
@@ -359,6 +608,8 @@ impl Expr for ExprImpl {
             ExprImpl::AggCall(expr) => expr.return_type(),
             ExprImpl::Subquery(expr) => expr.return_type(),
             ExprImpl::CorrelatedInputRef(expr) => expr.return_type(),
+            ExprImpl::TableFunction(expr) => expr.return_type(),
+            ExprImpl::WindowFunction(expr) => expr.return_type(),
         }
     }
 
@@ -370,43 +621,13 @@ impl Expr for ExprImpl {
             ExprImpl::AggCall(e) => e.to_expr_proto(),
             ExprImpl::Subquery(e) => e.to_expr_proto(),
             ExprImpl::CorrelatedInputRef(e) => e.to_expr_proto(),
+            ExprImpl::TableFunction(_e) => {
+                unreachable!("Table function should not be converted to ExprNode")
+            }
+            ExprImpl::WindowFunction(_e) => {
+                unreachable!("Window function should not be converted to ExprNode")
+            }
         }
-    }
-}
-
-impl From<InputRef> for ExprImpl {
-    fn from(input_ref: InputRef) -> Self {
-        ExprImpl::InputRef(Box::new(input_ref))
-    }
-}
-
-impl From<Literal> for ExprImpl {
-    fn from(literal: Literal) -> Self {
-        ExprImpl::Literal(Box::new(literal))
-    }
-}
-
-impl From<FunctionCall> for ExprImpl {
-    fn from(func_call: FunctionCall) -> Self {
-        ExprImpl::FunctionCall(Box::new(func_call))
-    }
-}
-
-impl From<AggCall> for ExprImpl {
-    fn from(agg_call: AggCall) -> Self {
-        ExprImpl::AggCall(Box::new(agg_call))
-    }
-}
-
-impl From<Subquery> for ExprImpl {
-    fn from(subquery: Subquery) -> Self {
-        ExprImpl::Subquery(Box::new(subquery))
-    }
-}
-
-impl From<CorrelatedInputRef> for ExprImpl {
-    fn from(correlated_input_ref: CorrelatedInputRef) -> Self {
-        ExprImpl::CorrelatedInputRef(Box::new(correlated_input_ref))
     }
 }
 
@@ -435,6 +656,8 @@ impl std::fmt::Debug for ExprImpl {
                 Self::CorrelatedInputRef(arg0) => {
                     f.debug_tuple("CorrelatedInputRef").field(arg0).finish()
                 }
+                Self::TableFunction(arg0) => f.debug_tuple("TableFunction").field(arg0).finish(),
+                Self::WindowFunction(arg0) => f.debug_tuple("WindowFunction").field(arg0).finish(),
             };
         }
         match self {
@@ -444,7 +667,56 @@ impl std::fmt::Debug for ExprImpl {
             Self::AggCall(x) => write!(f, "{:?}", x),
             Self::Subquery(x) => write!(f, "{:?}", x),
             Self::CorrelatedInputRef(x) => write!(f, "{:?}", x),
+            Self::TableFunction(x) => write!(f, "{:?}", x),
+            Self::WindowFunction(x) => write!(f, "{:?}", x),
         }
+    }
+}
+
+pub struct ExprDisplay<'a> {
+    pub expr: &'a ExprImpl,
+    pub input_schema: &'a Schema,
+}
+
+impl std::fmt::Debug for ExprDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let that = self.expr;
+        match that {
+            ExprImpl::InputRef(x) => write!(
+                f,
+                "{:?}",
+                InputRefDisplay {
+                    input_ref: x,
+                    input_schema: self.input_schema
+                }
+            ),
+            ExprImpl::Literal(x) => write!(f, "{:?}", x),
+            ExprImpl::FunctionCall(x) => write!(
+                f,
+                "{:?}",
+                FunctionCallDisplay {
+                    function_call: x,
+                    input_schema: self.input_schema
+                }
+            ),
+            ExprImpl::AggCall(x) => write!(f, "{:?}", x),
+            ExprImpl::Subquery(x) => write!(f, "{:?}", x),
+            ExprImpl::CorrelatedInputRef(x) => write!(f, "{:?}", x),
+            ExprImpl::TableFunction(x) => {
+                // TODO: TableFunctionCallVerboseDisplay
+                write!(f, "{:?}", x)
+            }
+            ExprImpl::WindowFunction(x) => {
+                // TODO: WindowFunctionCallVerboseDisplay
+                write!(f, "{:?}", x)
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ExprDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self as &dyn std::fmt::Debug).fmt(f)
     }
 }
 
@@ -461,6 +733,7 @@ macro_rules! assert_eq_input_ref {
 
 #[cfg(test)]
 pub(crate) use assert_eq_input_ref;
+use piestream_common::catalog::Schema;
 
 use crate::utils::Condition;
 

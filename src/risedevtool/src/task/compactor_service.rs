@@ -20,7 +20,10 @@ use std::process::Command;
 use anyhow::Result;
 
 use crate::util::{get_program_args, get_program_env_cmd, get_program_name};
-use crate::{add_meta_node, add_storage_backend, CompactorConfig, ExecuteContext, Task};
+use crate::{
+    add_meta_node, add_storage_backend, CompactorConfig, ExecuteContext, HummockInMemoryStrategy,
+    Task,
+};
 
 pub struct CompactorService {
     config: CompactorConfig,
@@ -41,7 +44,7 @@ impl CompactorService {
         }
     }
 
-    /// Apply command args accroding to config
+    /// Apply command args according to config
     pub fn apply_command_args(cmd: &mut Command, config: &CompactorConfig) -> Result<()> {
         cmd.arg("--host")
             .arg(format!("{}:{}", config.listen_address, config.port))
@@ -50,12 +53,28 @@ impl CompactorService {
                 "{}:{}",
                 config.listen_address, config.exporter_port
             ))
+            .arg("--client-address")
+            .arg(format!("{}:{}", config.address, config.port))
             .arg("--metrics-level")
-            .arg("1");
+            .arg("1")
+            .arg("--max-concurrent-task-number")
+            .arg(format!("{}", config.max_concurrent_task_number));
+        if let Some(compaction_worker_threads_number) =
+            config.compaction_worker_threads_number.as_ref()
+        {
+            cmd.arg("--compaction-worker-threads-number")
+                .arg(format!("{}", compaction_worker_threads_number));
+        }
 
         let provide_minio = config.provide_minio.as_ref().unwrap();
         let provide_aws_s3 = config.provide_aws_s3.as_ref().unwrap();
-        add_storage_backend(&config.id, provide_minio, provide_aws_s3, false, cmd)?;
+        add_storage_backend(
+            &config.id,
+            provide_minio,
+            provide_aws_s3,
+            HummockInMemoryStrategy::Shared,
+            cmd,
+        )?;
 
         let provide_meta_node = config.provide_meta_node.as_ref().unwrap();
         add_meta_node(provide_meta_node, cmd)?;
@@ -74,6 +93,21 @@ impl Task for CompactorService {
         let mut cmd = self.compactor()?;
 
         cmd.env("RUST_BACKTRACE", "1");
+        if crate::util::is_env_set("RISEDEV_ENABLE_PROFILE") {
+            cmd.env(
+                "RW_PROFILE_PATH",
+                Path::new(&env::var("PREFIX_LOG")?).join(format!("profile-{}", self.id())),
+            );
+        }
+
+        if crate::util::is_env_set("RISEDEV_ENABLE_HEAP_PROFILE") {
+            // See https://linux.die.net/man/3/jemalloc for the descriptions of profiling options
+            cmd.env(
+                "_RJEM_MALLOC_CONF",
+                "prof:true,lg_prof_interval:34,lg_prof_sample:19,prof_prefix:compactor",
+            );
+        }
+
         cmd.arg("--config-path")
             .arg(Path::new(&prefix_config).join("piestream.toml"));
         Self::apply_command_args(&mut cmd, &self.config)?;

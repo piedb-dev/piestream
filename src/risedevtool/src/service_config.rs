@@ -27,6 +27,9 @@ pub struct ComputeNodeConfig {
     pub port: u16,
     pub listen_address: String,
     pub exporter_port: u16,
+    pub enable_async_stack_trace: bool,
+    pub enable_managed_cache: bool,
+    pub enable_tiered_cache: bool,
 
     pub provide_minio: Option<Vec<MinioConfig>>,
     pub provide_meta_node: Option<Vec<MetaNodeConfig>>,
@@ -35,6 +38,7 @@ pub struct ComputeNodeConfig {
     pub provide_jaeger: Option<Vec<JaegerConfig>>,
     pub provide_compactor: Option<Vec<CompactorConfig>>,
     pub user_managed: bool,
+    pub enable_in_memory_kv_state_backend: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -57,8 +61,15 @@ pub struct MetaNodeConfig {
     pub provide_etcd_backend: Option<Vec<EtcdConfig>>,
 
     pub enable_dashboard_v2: bool,
+    pub max_heartbeat_interval_secs: u64,
     pub unsafe_disable_recovery: bool,
     pub max_idle_secs_to_exit: Option<u64>,
+    pub vacuum_interval_sec: u64,
+    pub collect_gc_watermark_spin_interval_sec: u64,
+    pub min_sst_retention_time_sec: u64,
+    pub enable_committed_sst_sanity_check: bool,
+    pub periodic_compaction_interval_sec: u64,
+    pub enable_compaction_deterministic: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -73,6 +84,7 @@ pub struct FrontendConfig {
     #[serde(with = "string")]
     pub port: u16,
     pub listen_address: String,
+    pub exporter_port: u16,
 
     pub provide_meta_node: Option<Vec<MetaNodeConfig>>,
     pub user_managed: bool,
@@ -96,6 +108,8 @@ pub struct CompactorConfig {
     pub provide_aws_s3: Option<Vec<AwsS3Config>>,
     pub provide_meta_node: Option<Vec<MetaNodeConfig>>,
     pub user_managed: bool,
+    pub max_concurrent_task_number: u64,
+    pub compaction_worker_threads_number: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -155,12 +169,17 @@ pub struct PrometheusConfig {
     pub port: u16,
     pub listen_address: String,
 
+    pub remote_write: bool,
+    pub remote_write_region: String,
+    pub remote_write_url: String,
+
     pub provide_compute_node: Option<Vec<ComputeNodeConfig>>,
     pub provide_meta_node: Option<Vec<MetaNodeConfig>>,
     pub provide_minio: Option<Vec<MinioConfig>>,
     pub provide_compactor: Option<Vec<CompactorConfig>>,
     pub provide_etcd: Option<Vec<EtcdConfig>>,
     pub provide_redpanda: Option<Vec<RedPandaConfig>>,
+    pub provide_frontend: Option<Vec<FrontendConfig>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -241,6 +260,20 @@ pub struct RedPandaConfig {
     pub internal_port: u16,
     pub outside_port: u16,
     pub address: String,
+    pub cpus: usize,
+    pub memory: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
+pub struct RedisConfig {
+    #[serde(rename = "use")]
+    phantom_use: Option<String>,
+    pub id: String,
+
+    pub port: u16,
+    pub address: String,
 }
 
 /// All service configuration
@@ -248,7 +281,7 @@ pub struct RedPandaConfig {
 pub enum ServiceConfig {
     ComputeNode(ComputeNodeConfig),
     MetaNode(MetaNodeConfig),
-    FrontendV2(FrontendConfig),
+    Frontend(FrontendConfig),
     Compactor(CompactorConfig),
     Minio(MinioConfig),
     Etcd(EtcdConfig),
@@ -257,6 +290,7 @@ pub enum ServiceConfig {
     Jaeger(JaegerConfig),
     AwsS3(AwsS3Config),
     Kafka(KafkaConfig),
+    Redis(RedisConfig),
     ZooKeeper(ZooKeeperConfig),
     RedPanda(RedPandaConfig),
 }
@@ -266,7 +300,7 @@ impl ServiceConfig {
         match self {
             Self::ComputeNode(c) => &c.id,
             Self::MetaNode(c) => &c.id,
-            Self::FrontendV2(c) => &c.id,
+            Self::Frontend(c) => &c.id,
             Self::Compactor(c) => &c.id,
             Self::Minio(c) => &c.id,
             Self::Etcd(c) => &c.id,
@@ -276,6 +310,7 @@ impl ServiceConfig {
             Self::AwsS3(c) => &c.id,
             Self::ZooKeeper(c) => &c.id,
             Self::Kafka(c) => &c.id,
+            Self::Redis(c) => &c.id,
             Self::RedPanda(c) => &c.id,
         }
     }

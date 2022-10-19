@@ -13,18 +13,16 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use parking_lot::RwLock;
 use piestream_common::catalog::CatalogVersion;
 use piestream_common::error::{ErrorCode, Result};
-use piestream_common::util::addr::HostAddr;
-use piestream_pb::common::{WorkerNode, WorkerType};
+use piestream_common::util::compress::decompress_data;
+use piestream_common_service::observer_manager::{ObserverState, SubscribeFrontend};
+use piestream_pb::common::WorkerNode;
 use piestream_pb::meta::subscribe_response::{Info, Operation};
 use piestream_pb::meta::SubscribeResponse;
-use piestream_rpc_client::{MetaClient, NotificationStream};
 use tokio::sync::watch::Sender;
-use tokio::task::JoinHandle;
 
 use crate::catalog::root_catalog::Catalog;
 use crate::scheduler::worker_node_manager::WorkerNodeManagerRef;
@@ -32,13 +30,7 @@ use crate::scheduler::HummockSnapshotManagerRef;
 use crate::user::user_manager::UserInfoManager;
 use crate::user::UserInfoVersion;
 
-/// `ObserverManager` is used to update data based on notification from meta.
-/// Call `start` to spawn a new asynchronous task
-/// which receives meta's notification and update frontend data.
-pub(crate) struct ObserverManager {
-    rx: Box<dyn NotificationStream>,
-    meta_client: MetaClient,
-    addr: HostAddr,
+pub(crate) struct FrontendObserverNode {
     worker_node_manager: WorkerNodeManagerRef,
     catalog: Arc<RwLock<Catalog>>,
     catalog_updated_tx: Sender<CatalogVersion>,
@@ -47,60 +39,85 @@ pub(crate) struct ObserverManager {
     hummock_snapshot_manager: HummockSnapshotManagerRef,
 }
 
-const RE_SUBSCRIBE_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+impl ObserverState for FrontendObserverNode {
+    type SubscribeType = SubscribeFrontend;
 
-impl ObserverManager {
-    #[expect(clippy::too_many_arguments)]
-    pub async fn new(
-        meta_client: MetaClient,
-        addr: HostAddr,
-        worker_node_manager: WorkerNodeManagerRef,
-        catalog: Arc<RwLock<Catalog>>,
-        catalog_updated_tx: Sender<CatalogVersion>,
-        user_info_manager: Arc<RwLock<UserInfoManager>>,
-        user_info_updated_tx: Sender<UserInfoVersion>,
-        hummock_snapshot_manager: HummockSnapshotManagerRef,
-    ) -> Self {
-        let rx = meta_client
-            .subscribe(&addr, WorkerType::Frontend)
-            .await
-            .unwrap();
-        Self {
-            rx,
-            meta_client,
-            addr,
-            worker_node_manager,
-            catalog,
-            catalog_updated_tx,
-            user_info_manager,
-            user_info_updated_tx,
-            hummock_snapshot_manager,
+    fn handle_notification(&mut self, resp: SubscribeResponse) {
+        let Some(info) = resp.info.as_ref() else {
+            return;
+        };
+
+        match info {
+            Info::Database(_)
+            | Info::Schema(_)
+            | Info::Table(_)
+            | Info::Source(_)
+            | Info::Index(_)
+            | Info::Sink(_) => {
+                self.handle_catalog_notification(resp);
+            }
+            Info::Node(node) => {
+                self.update_worker_node_manager(resp.operation(), node.clone());
+            }
+            Info::User(_) => {
+                self.handle_user_notification(resp);
+            }
+            Info::ParallelUnitMapping(_) => self.handle_fragment_mapping_notification(resp),
+            Info::Snapshot(_) => {
+                panic!(
+                    "receiving a snapshot in the middle is unsupported now {:?}",
+                    resp
+                )
+            }
+            Info::HummockSnapshot(_) => {
+                self.handle_hummock_snapshot_notification(resp);
+            }
+            Info::HummockVersionDeltas(_) => {
+                panic!("frontend node should not receive HummockVersionDeltas");
+            }
         }
     }
 
-    pub fn handle_snapshot_notification(&mut self, resp: SubscribeResponse) -> Result<()> {
+    fn handle_initialization_notification(&mut self, resp: SubscribeResponse) -> Result<()> {
         let mut catalog_guard = self.catalog.write();
         let mut user_guard = self.user_info_manager.write();
         catalog_guard.clear();
         user_guard.clear();
         match resp.info {
             Some(Info::Snapshot(snapshot)) => {
-                for db in snapshot.database {
+                for db in snapshot.databases {
                     catalog_guard.create_database(db)
                 }
-                for schema in snapshot.schema {
+                for schema in snapshot.schemas {
                     catalog_guard.create_schema(schema)
                 }
-                for table in snapshot.table {
+                for table in snapshot.tables {
                     catalog_guard.create_table(&table)
                 }
-                for source in snapshot.source {
+                for source in snapshot.sources {
                     catalog_guard.create_source(source)
                 }
                 for user in snapshot.users {
                     user_guard.create_user(user)
                 }
-                self.worker_node_manager.refresh_worker_node(snapshot.nodes);
+                for index in snapshot.indexes {
+                    catalog_guard.create_index(&index)
+                }
+                self.worker_node_manager.refresh(
+                    snapshot.nodes,
+                    snapshot
+                        .parallel_unit_mappings
+                        .iter()
+                        .map(|mapping| {
+                            (
+                                mapping.fragment_id,
+                                decompress_data(&mapping.original_indices, &mapping.data),
+                            )
+                        })
+                        .collect(),
+                );
+                self.hummock_snapshot_manager
+                    .update_epoch(snapshot.hummock_snapshot.unwrap());
             }
             _ => {
                 return Err(ErrorCode::InternalError(format!(
@@ -112,7 +129,29 @@ impl ObserverManager {
         }
         catalog_guard.set_version(resp.version);
         self.catalog_updated_tx.send(resp.version).unwrap();
+        user_guard.set_version(resp.version);
+        self.user_info_updated_tx.send(resp.version).unwrap();
         Ok(())
+    }
+}
+
+impl FrontendObserverNode {
+    pub fn new(
+        worker_node_manager: WorkerNodeManagerRef,
+        catalog: Arc<RwLock<Catalog>>,
+        catalog_updated_tx: Sender<CatalogVersion>,
+        user_info_manager: Arc<RwLock<UserInfoManager>>,
+        user_info_updated_tx: Sender<UserInfoVersion>,
+        hummock_snapshot_manager: HummockSnapshotManagerRef,
+    ) -> Self {
+        Self {
+            worker_node_manager,
+            catalog,
+            catalog_updated_tx,
+            user_info_manager,
+            user_info_updated_tx,
+            hummock_snapshot_manager,
+        }
     }
 
     fn handle_catalog_notification(&mut self, resp: SubscribeResponse) {
@@ -125,7 +164,7 @@ impl ObserverManager {
             Info::Database(database) => match resp.operation() {
                 Operation::Add => catalog_guard.create_database(database.clone()),
                 Operation::Delete => catalog_guard.drop_database(database.id),
-                _ => panic!("receive an unsupported notify {:?}", resp.clone()),
+                _ => panic!("receive an unsupported notify {:?}", resp),
             },
             Info::Schema(schema) => match resp.operation() {
                 Operation::Add => catalog_guard.create_schema(schema.clone()),
@@ -137,12 +176,27 @@ impl ObserverManager {
                 Operation::Delete => {
                     catalog_guard.drop_table(table.database_id, table.schema_id, table.id.into())
                 }
+                Operation::Update => catalog_guard.update_table(table),
                 _ => panic!("receive an unsupported notify {:?}", resp),
             },
             Info::Source(source) => match resp.operation() {
                 Operation::Add => catalog_guard.create_source(source.clone()),
                 Operation::Delete => {
                     catalog_guard.drop_source(source.database_id, source.schema_id, source.id)
+                }
+                _ => panic!("receive an unsupported notify {:?}", resp),
+            },
+            Info::Sink(sink) => match resp.operation() {
+                Operation::Add => catalog_guard.create_sink(sink.clone()),
+                Operation::Delete => {
+                    catalog_guard.drop_sink(sink.database_id, sink.schema_id, sink.id)
+                }
+                _ => panic!("receive an unsupported notify {:?}", resp),
+            },
+            Info::Index(index) => match resp.operation() {
+                Operation::Add => catalog_guard.create_index(index),
+                Operation::Delete => {
+                    catalog_guard.drop_index(index.database_id, index.schema_id, index.id.into())
                 }
                 _ => panic!("receive an unsupported notify {:?}", resp),
             },
@@ -167,7 +221,7 @@ impl ObserverManager {
         match info {
             Info::User(user) => match resp.operation() {
                 Operation::Add => user_guard.create_user(user.clone()),
-                Operation::Delete => user_guard.drop_user(&user.name),
+                Operation::Delete => user_guard.drop_user(user.id),
                 Operation::Update => user_guard.update_user(user.clone()),
                 _ => panic!("receive an unsupported notify {:?}", resp),
             },
@@ -183,85 +237,55 @@ impl ObserverManager {
         self.user_info_updated_tx.send(resp.version).unwrap();
     }
 
-    pub async fn handle_notification(&mut self, resp: SubscribeResponse) {
+    fn handle_fragment_mapping_notification(&mut self, resp: SubscribeResponse) {
         let Some(info) = resp.info.as_ref() else {
             return;
         };
-
         match info {
-            Info::Database(_)
-            | Info::Schema(_)
-            | Info::Table(_)
-            | Info::Source(_)
-            | Info::Sink(_) => {
-                self.handle_catalog_notification(resp);
-            }
-            Info::Node(node) => {
-                self.update_worker_node_manager(resp.operation(), node.clone());
-            }
-            Info::User(_) => {
-                self.handle_user_notification(resp);
-            }
-            Info::Snapshot(_) => {
-                panic!(
-                    "receiving a snapshot in the middle is unsupported now {:?}",
-                    resp
-                )
-            }
-            Info::HummockSnapshot(hummock_snapshot) => {
-                self.hummock_snapshot_manager
-                    .update_snapshot_status(hummock_snapshot.epoch)
-                    .await;
-            }
+            Info::ParallelUnitMapping(parallel_unit_mapping) => match resp.operation() {
+                Operation::Add => {
+                    let fragment_id = parallel_unit_mapping.fragment_id;
+                    let mapping = decompress_data(
+                        &parallel_unit_mapping.original_indices,
+                        &parallel_unit_mapping.data,
+                    );
+                    self.worker_node_manager
+                        .insert_fragment_mapping(fragment_id, mapping);
+                }
+                Operation::Delete => {
+                    let fragment_id = parallel_unit_mapping.fragment_id;
+                    self.worker_node_manager
+                        .remove_fragment_mapping(&fragment_id);
+                }
+                Operation::Update => {
+                    let fragment_id = parallel_unit_mapping.fragment_id;
+                    let mapping = decompress_data(
+                        &parallel_unit_mapping.original_indices,
+                        &parallel_unit_mapping.data,
+                    );
+                    self.worker_node_manager
+                        .update_fragment_mapping(fragment_id, mapping);
+                }
+                _ => panic!("receive an unsupported notify {:?}", resp),
+            },
+            _ => unreachable!(),
         }
     }
 
-    /// `start` is used to spawn a new asynchronous task which receives meta's notification and
-    /// update frontend data.
-    pub async fn start(mut self) -> Result<JoinHandle<()>> {
-        let first_resp = self.rx.next().await?.ok_or_else(|| {
-            ErrorCode::InternalError(
-                "ObserverManager start failed, Stream of notification terminated at the start."
-                    .to_string(),
-            )
-        })?;
-        self.handle_snapshot_notification(first_resp)?;
-        let handle = tokio::spawn(async move {
-            loop {
-                if let Ok(resp) = self.rx.next().await {
-                    if resp.is_none() {
-                        tracing::error!("Stream of notification terminated.");
-                        self.re_subscribe().await;
-                        continue;
-                    }
-                    self.handle_notification(resp.unwrap()).await;
+    /// Update max committed epoch in `HummockSnapshotManager`.
+    fn handle_hummock_snapshot_notification(&self, resp: SubscribeResponse) {
+        let Some(info) = resp.info.as_ref() else {
+            return;
+        };
+        match info {
+            Info::HummockSnapshot(hummock_snapshot) => match resp.operation() {
+                Operation::Update => {
+                    self.hummock_snapshot_manager
+                        .update_epoch(hummock_snapshot.clone());
                 }
-            }
-        });
-        Ok(handle)
-    }
-
-    /// `re_subscribe` is used to re-subscribe to the meta's notification.
-    async fn re_subscribe(&mut self) {
-        loop {
-            match self
-                .meta_client
-                .subscribe(&self.addr, WorkerType::Frontend)
-                .await
-            {
-                Ok(rx) => {
-                    tracing::debug!("re-subscribe success");
-                    self.rx = rx;
-                    if let Ok(Some(snapshot_resp)) = self.rx.next().await {
-                        self.handle_snapshot_notification(snapshot_resp)
-                            .expect("handle snapshot notification failed after re-subscribe");
-                        break;
-                    }
-                }
-                Err(_) => {
-                    tokio::time::sleep(RE_SUBSCRIBE_RETRY_INTERVAL).await;
-                }
-            }
+                _ => panic!("receive an unsupported notify {:?}", resp),
+            },
+            _ => unreachable!(),
         }
     }
 

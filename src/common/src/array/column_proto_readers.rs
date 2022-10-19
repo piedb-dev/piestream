@@ -49,17 +49,17 @@ pub fn read_numeric_array<T: PrimitiveArrayItemType, R: PrimitiveValueReader<T>>
     );
 
     let mut builder = PrimitiveArrayBuilder::<T>::new(cardinality);
-    let bitmap: Bitmap = array.get_null_bitmap()?.try_into()?;
+    let bitmap: Bitmap = array.get_null_bitmap()?.into();
     let mut cursor = Cursor::new(buf);
     for not_null in bitmap.iter() {
         if not_null {
             let v = R::read(&mut cursor)?;
-            builder.append(Some(v))?;
+            builder.append(Some(v));
         } else {
-            builder.append(None)?;
+            builder.append(None);
         }
     }
-    let arr = builder.finish()?;
+    let arr = builder.finish();
     Ok(arr.into())
 }
 
@@ -69,8 +69,8 @@ pub fn read_bool_array(array: &ProstArray, cardinality: usize) -> ArrayResult<Ar
         "Must have only 1 buffer in a bool array"
     );
 
-    let data = (&array.get_values()[0]).try_into()?;
-    let bitmap: Bitmap = array.get_null_bitmap()?.try_into()?;
+    let data = (&array.get_values()[0]).into();
+    let bitmap: Bitmap = array.get_null_bitmap()?.into();
 
     let arr = BoolArray::new(bitmap, data);
     assert_eq!(arr.len(), cardinality);
@@ -127,16 +127,16 @@ macro_rules! read_one_value_array {
                 let buf = array.get_values()[0].get_body().as_slice();
 
                 let mut builder = $builder::new(cardinality);
-                let bitmap: Bitmap = array.get_null_bitmap()?.try_into()?;
+                let bitmap: Bitmap = array.get_null_bitmap()?.into();
                 let mut cursor = Cursor::new(buf);
                 for not_null in bitmap.iter() {
                     if not_null {
-                        builder.append(Some([<read_ $type:snake>](&mut cursor)?))?;
+                        builder.append(Some([<read_ $type:snake>](&mut cursor)?));
                     } else {
-                        builder.append(None)?;
+                        builder.append(None);
                     }
                 }
-                let arr = builder.finish()?;
+                let arr = builder.finish();
                 Ok(arr.into())
             }
             )*
@@ -170,7 +170,7 @@ pub fn read_string_array<B: ArrayBuilder, R: VarSizedValueReader<B>>(
     let data_buf = array.get_values()[1].get_body().as_slice();
 
     let mut builder = B::with_meta(cardinality, ArrayMeta::Simple);
-    let bitmap: Bitmap = array.get_null_bitmap()?.try_into()?;
+    let bitmap: Bitmap = array.get_null_bitmap()?.into();
     let mut offset_cursor = Cursor::new(offset_buff);
     let mut data_cursor = Cursor::new(data_buf);
     let mut prev_offset: i64 = -1;
@@ -194,11 +194,11 @@ pub fn read_string_array<B: ArrayBuilder, R: VarSizedValueReader<B>>(
                 )
             })?;
             let v = R::read(buf.as_slice())?;
-            builder.append(Some(v))?;
+            builder.append(Some(v));
         } else {
-            builder.append(None)?;
+            builder.append(None);
         }
     }
-    let arr = builder.finish()?;
+    let arr = builder.finish();
     Ok(arr.into())
 }

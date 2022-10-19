@@ -21,19 +21,25 @@ use piestream_common::catalog::Schema;
 use piestream_expr::expr::BoxedExpression;
 
 use super::{
-    Executor, ExecutorInfo, PkIndicesRef, SimpleExecutor, SimpleExecutorWrapper,
+    ActorContextRef, Executor, ExecutorInfo, PkIndicesRef, SimpleExecutor, SimpleExecutorWrapper,
     StreamExecutorResult,
 };
+use crate::common::InfallibleExpression;
 
 pub type FilterExecutor = SimpleExecutorWrapper<SimpleFilterExecutor>;
 
 impl FilterExecutor {
-    pub fn new(input: Box<dyn Executor>, expr: BoxedExpression, executor_id: u64) -> Self {
+    pub fn new(
+        ctx: ActorContextRef,
+        input: Box<dyn Executor>,
+        expr: BoxedExpression,
+        executor_id: u64,
+    ) -> Self {
         let info = input.info();
 
         SimpleExecutorWrapper {
             input,
-            inner: SimpleFilterExecutor::new(info, expr, executor_id),
+            inner: SimpleFilterExecutor::new(ctx, info, expr, executor_id),
         }
     }
 }
@@ -43,6 +49,7 @@ impl FilterExecutor {
 /// `FilterExecutor` will insert, delete or update element into next executor according
 /// to the result of the expression.
 pub struct SimpleFilterExecutor {
+    ctx: ActorContextRef,
     info: ExecutorInfo,
 
     /// Expression of the current filter, note that the filter must always have the same output for
@@ -51,8 +58,14 @@ pub struct SimpleFilterExecutor {
 }
 
 impl SimpleFilterExecutor {
-    pub fn new(input_info: ExecutorInfo, expr: BoxedExpression, executor_id: u64) -> Self {
+    pub fn new(
+        ctx: ActorContextRef,
+        input_info: ExecutorInfo,
+        expr: BoxedExpression,
+        executor_id: u64,
+    ) -> Self {
         Self {
+            ctx,
             info: ExecutorInfo {
                 schema: input_info.schema,
                 pk_indices: input_info.pk_indices,
@@ -76,11 +89,13 @@ impl SimpleExecutor for SimpleFilterExecutor {
         &mut self,
         chunk: StreamChunk,
     ) -> StreamExecutorResult<Option<StreamChunk>> {
-        let chunk = chunk.compact()?;
+        let chunk = chunk.compact();
 
         let (data_chunk, ops) = chunk.into_parts();
 
-        let pred_output = self.expr.eval(&data_chunk)?;
+        let pred_output = self.expr.eval_infallible(&data_chunk, |err| {
+            self.ctx.on_compute_error(err, self.identity())
+        });
 
         let (columns, vis) = data_chunk.into_parts();
 
@@ -95,7 +110,6 @@ impl SimpleExecutor for SimpleFilterExecutor {
             Vis::Compact(c) => c == n,
             Vis::Bitmap(ref m) => m.len() == n,
         });
-        assert!(matches!(&*pred_output, ArrayImpl::Bool(_)));
 
         if let ArrayImpl::Bool(bool_array) = &*pred_output {
             for (op, res) in ops.into_iter().zip_eq(bool_array.iter()) {
@@ -159,7 +173,7 @@ impl SimpleExecutor for SimpleFilterExecutor {
         &self.info.schema
     }
 
-    fn pk_indices(&self) -> PkIndicesRef {
+    fn pk_indices(&self) -> PkIndicesRef<'_> {
         &self.info.pk_indices
     }
 
@@ -218,8 +232,14 @@ mod tests {
             DataType::Boolean,
             Box::new(left_expr),
             Box::new(right_expr),
-        );
-        let filter = Box::new(FilterExecutor::new(Box::new(source), test_expr, 1));
+        )
+        .unwrap();
+        let filter = Box::new(FilterExecutor::new(
+            ActorContext::create(123),
+            Box::new(source),
+            test_expr,
+            1,
+        ));
         let mut filter = filter.execute();
 
         let chunk = filter.next().await.unwrap().unwrap().into_chunk().unwrap();

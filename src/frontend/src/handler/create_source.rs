@@ -12,36 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use itertools::Itertools;
 use pgwire::pg_response::{PgResponse, StatementType};
-use piestream_common::error::Result;
+use piestream_common::catalog::DEFAULT_SCHEMA_NAME;
+use piestream_common::error::ErrorCode::ProtocolError;
+use piestream_common::error::{Result, RwError};
 use piestream_pb::catalog::source::Info;
-use piestream_pb::catalog::{Source as ProstSource, StreamSourceInfo};
+use piestream_pb::catalog::{
+    ColumnIndex as ProstColumnIndex, Source as ProstSource, StreamSourceInfo,
+};
 use piestream_pb::plan_common::{ColumnCatalog as ProstColumnCatalog, RowFormatType};
-use piestream_source::ProtobufParser;
-use piestream_sqlparser::ast::{CreateSourceStatement, ObjectName, ProtobufSchema, SourceSchema};
+use piestream_pb::user::grant_privilege::{Action, Object};
+use piestream_source::{AvroParser, ProtobufParser};
+use piestream_sqlparser::ast::{
+    AvroSchema, CreateSourceStatement, ObjectName, ProtobufSchema, SourceSchema,
+};
 
-use super::create_table::{bind_sql_columns, gen_materialized_source_plan};
-use super::util::handle_with_properties;
+use super::create_table::{
+    bind_sql_columns, bind_sql_table_constraints, gen_materialized_source_plan,
+};
+use super::privilege::check_privileges;
+use super::RwPgResponse;
 use crate::binder::Binder;
 use crate::catalog::check_schema_writable;
-use crate::catalog::column_catalog::ColumnCatalog;
+use crate::handler::privilege::ObjectCheckItem;
 use crate::session::{OptimizerContext, SessionImpl};
-use crate::stream_fragmenter::StreamFragmenter;
+use crate::stream_fragmenter::build_graph;
 
 pub(crate) fn make_prost_source(
     session: &SessionImpl,
     name: ObjectName,
     source_info: Info,
 ) -> Result<ProstSource> {
-    let (schema_name, name) = Binder::resolve_table_name(name)?;
-    check_schema_writable(&schema_name)?;
+    let db_name = session.database();
+    let (schema_name, name) = Binder::resolve_table_or_source_name(db_name, name)?;
+    let search_path = session.config().get_search_path();
+    let user_name = &session.auth_context().user_name;
 
-    let (database_id, schema_id) = session
-        .env()
-        .catalog_reader()
-        .read_guard()
-        .check_relation_name_duplicated(session.database(), &schema_name, &name)?;
+    let (database_id, schema_id) = {
+        let catalog_reader = session.env().catalog_reader().read_guard();
+        let schema = match schema_name {
+            Some(schema_name) => catalog_reader.get_schema_by_name(db_name, &schema_name)?,
+            None => catalog_reader.first_valid_schema(db_name, &search_path, user_name)?,
+        };
+
+        check_schema_writable(&schema.name())?;
+        if schema.name() != DEFAULT_SCHEMA_NAME {
+            check_privileges(
+                session,
+                &vec![ObjectCheckItem::new(
+                    schema.owner(),
+                    Action::Create,
+                    Object::SchemaId(schema.id()),
+                )],
+            )?;
+        }
+
+        let db_id = catalog_reader.get_database_by_name(db_name)?.id();
+        (db_id, schema.id())
+    };
 
     Ok(ProstSource {
         id: 0,
@@ -49,8 +80,24 @@ pub(crate) fn make_prost_source(
         database_id,
         name,
         info: Some(source_info),
-        owner: session.user_name().to_string(),
+        owner: session.user_id(),
     })
+}
+
+/// Map an Avro schema to a relational schema.
+async fn extract_avro_table_schema(
+    schema: &AvroSchema,
+    with_properties: HashMap<String, String>,
+) -> Result<Vec<ProstColumnCatalog>> {
+    let parser = AvroParser::new(schema.row_schema_location.0.as_str(), with_properties).await?;
+    let vec_column_desc = parser.map_to_columns()?;
+    Ok(vec_column_desc
+        .into_iter()
+        .map(|c| ProstColumnCatalog {
+            column_desc: Some(c),
+            is_hidden: false,
+        })
+        .collect_vec())
 }
 
 /// Map a protobuf schema to a relational schema.
@@ -71,45 +118,95 @@ pub async fn handle_create_source(
     context: OptimizerContext,
     is_materialized: bool,
     stmt: CreateSourceStatement,
-) -> Result<PgResponse> {
-    let with_properties = handle_with_properties("create_source", stmt.with_properties.0)?;
+) -> Result<RwPgResponse> {
+    let (column_descs, pk_column_id_from_columns) = bind_sql_columns(stmt.columns)?;
+    let (mut columns, pk_column_ids, row_id_index) =
+        bind_sql_table_constraints(column_descs, pk_column_id_from_columns, stmt.constraints)?;
+
+    let with_properties = context.with_options.inner().clone();
 
     let source = match &stmt.source_schema {
         SourceSchema::Protobuf(protobuf_schema) => {
-            let mut columns = vec![ColumnCatalog::row_id_column().to_protobuf()];
-            columns.extend(extract_protobuf_table_schema(protobuf_schema)?.into_iter());
+            assert_eq!(columns.len(), 1);
+            assert_eq!(pk_column_ids, vec![0.into()]);
+            assert_eq!(row_id_index, Some(0));
+            columns.extend(extract_protobuf_table_schema(protobuf_schema)?);
             StreamSourceInfo {
                 properties: with_properties.clone(),
                 row_format: RowFormatType::Protobuf as i32,
                 row_schema_location: protobuf_schema.row_schema_location.0.clone(),
-                row_id_index: 0,
+                row_id_index: row_id_index.map(|index| ProstColumnIndex { index: index as _ }),
                 columns,
-                pk_column_ids: vec![0],
+                pk_column_ids: pk_column_ids.into_iter().map(Into::into).collect(),
+            }
+        }
+        SourceSchema::Avro(avro_schema) => {
+            assert_eq!(columns.len(), 1);
+            assert_eq!(pk_column_ids, vec![0.into()]);
+            assert_eq!(row_id_index, Some(0));
+            columns.extend(extract_avro_table_schema(avro_schema, with_properties.clone()).await?);
+            StreamSourceInfo {
+                properties: with_properties.clone(),
+                row_format: RowFormatType::Avro as i32,
+                row_schema_location: avro_schema.row_schema_location.0.clone(),
+                row_id_index: row_id_index.map(|index| ProstColumnIndex { index: index as _ }),
+                columns,
+                pk_column_ids: pk_column_ids.into_iter().map(Into::into).collect(),
             }
         }
         SourceSchema::Json => StreamSourceInfo {
             properties: with_properties.clone(),
             row_format: RowFormatType::Json as i32,
             row_schema_location: "".to_string(),
-            row_id_index: 0,
-            columns: bind_sql_columns(stmt.columns)?,
-            pk_column_ids: vec![0],
+            row_id_index: row_id_index.map(|index| ProstColumnIndex { index: index as _ }),
+            columns,
+            pk_column_ids: pk_column_ids.into_iter().map(Into::into).collect(),
         },
+        SourceSchema::DebeziumJson => {
+            // return err if user has not specified a pk
+            if row_id_index.is_some() {
+                return Err(RwError::from(ProtocolError(
+                    "Primary key must be specified when creating source with row format debezium."
+                        .to_string(),
+                )));
+            }
+            StreamSourceInfo {
+                properties: with_properties.clone(),
+                row_format: RowFormatType::DebeziumJson as i32,
+                row_schema_location: "".to_string(),
+                row_id_index: row_id_index.map(|index| ProstColumnIndex { index: index as _ }),
+                columns,
+                pk_column_ids: pk_column_ids.into_iter().map(Into::into).collect(),
+            }
+        }
     };
 
     let session = context.session_ctx.clone();
+    {
+        let db_name = session.database();
+        let catalog_reader = session.env().catalog_reader().read_guard();
+        let (schema_name, source_name) = {
+            let (schema_name, source_name) =
+                Binder::resolve_table_or_source_name(db_name, stmt.source_name.clone())?;
+            let search_path = session.config().get_search_path();
+            let user_name = &session.auth_context().user_name;
+            let schema_name = match schema_name {
+                Some(schema_name) => schema_name,
+                None => catalog_reader
+                    .first_valid_schema(db_name, &search_path, user_name)?
+                    .name(),
+            };
+            (schema_name, source_name)
+        };
+        catalog_reader.check_relation_name_duplicated(db_name, &schema_name, &source_name)?;
+    }
     let source = make_prost_source(&session, stmt.source_name, Info::StreamSource(source))?;
     let catalog_writer = session.env().catalog_writer();
     if is_materialized {
         let (graph, table) = {
-            let (plan, table) = gen_materialized_source_plan(
-                context.into(),
-                source.clone(),
-                session.user_name().to_string(),
-                with_properties.clone(),
-            )?;
-            let plan = plan.to_stream_prost();
-            let graph = StreamFragmenter::build_graph(plan);
+            let (plan, table) =
+                gen_materialized_source_plan(context.into(), source.clone(), session.user_id())?;
+            let graph = build_graph(plan);
 
             (graph, table)
         };
@@ -130,6 +227,7 @@ pub mod tests {
     use piestream_common::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
     use piestream_common::types::DataType;
 
+    use crate::catalog::root_catalog::SchemaPath;
     use crate::catalog::row_id_column_name;
     use crate::test_utils::{create_proto_file, LocalFrontend, PROTO_FILE_DATA};
 
@@ -138,7 +236,7 @@ pub mod tests {
         let proto_file = create_proto_file(PROTO_FILE_DATA);
         let sql = format!(
             r#"CREATE SOURCE t
-    WITH ('kafka.topic' = 'abc', 'kafka.servers' = 'localhost:1001')
+    WITH (kafka.topic = 'abc', kafka.servers = 'localhost:1001')
     ROW FORMAT PROTOBUF MESSAGE '.test.TestRecord' ROW SCHEMA LOCATION 'file://{}'"#,
             proto_file.path().to_str().unwrap()
         );
@@ -146,44 +244,35 @@ pub mod tests {
         frontend.run_sql(sql).await.unwrap();
 
         let session = frontend.session_ref();
-        let catalog_reader = session.env().catalog_reader();
+        let catalog_reader = session.env().catalog_reader().read_guard();
+        let schema_path = SchemaPath::Name(DEFAULT_SCHEMA_NAME);
 
         // Check source exists.
-        let source = catalog_reader
-            .read_guard()
-            .get_source_by_name(DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, "t")
-            .unwrap()
-            .clone();
+        let (source, _) = catalog_reader
+            .get_source_by_name(DEFAULT_DATABASE_NAME, schema_path, "t")
+            .unwrap();
         assert_eq!(source.name, "t");
 
-        // Only check stream source
-        let catalogs = source.columns;
-        let mut columns = vec![];
-
-        // Get all column descs
-        for catalog in catalogs {
-            columns.append(&mut catalog.column_desc.flatten());
-        }
-        let columns = columns
+        let columns = source
+            .columns
             .iter()
-            .map(|col| (col.name.as_str(), col.data_type.clone()))
+            .map(|col| (col.name(), col.data_type().clone()))
             .collect::<HashMap<&str, DataType>>();
 
-        let city_type = DataType::Struct {
-            fields: vec![DataType::Varchar, DataType::Varchar].into(),
-        };
+        let city_type = DataType::new_struct(
+            vec![DataType::Varchar, DataType::Varchar],
+            vec!["address".to_string(), "zipcode".to_string()],
+        );
         let row_id_col_name = row_id_column_name();
         let expected_columns = maplit::hashmap! {
             row_id_col_name.as_str() => DataType::Int64,
             "id" => DataType::Int32,
-            "country.zipcode" => DataType::Varchar,
             "zipcode" => DataType::Int64,
-            "country.city.address" => DataType::Varchar,
-            "country.address" => DataType::Varchar,
-            "country.city" => city_type.clone(),
-            "country.city.zipcode" => DataType::Varchar,
             "rate" => DataType::Float32,
-            "country" => DataType::Struct {fields:vec![DataType::Varchar,city_type,DataType::Varchar].into()},
+            "country" => DataType::new_struct(
+                vec![DataType::Varchar,city_type,DataType::Varchar],
+                vec!["address".to_string(), "city".to_string(), "zipcode".to_string()],
+            ),
         };
         assert_eq!(columns, expected_columns);
     }

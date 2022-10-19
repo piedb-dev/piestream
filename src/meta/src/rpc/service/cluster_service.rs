@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use piestream_common::error::tonic_err;
-use piestream_common::try_match_expand;
 use piestream_pb::meta::cluster_service_server::ClusterService;
 use piestream_pb::meta::{
     ActivateWorkerNodeRequest, ActivateWorkerNodeResponse, AddWorkerNodeRequest,
@@ -22,7 +20,7 @@ use piestream_pb::meta::{
 };
 use tonic::{Request, Response, Status};
 
-use crate::cluster::ClusterManagerRef;
+use crate::manager::ClusterManagerRef;
 use crate::storage::MetaStore;
 
 #[derive(Clone)]
@@ -49,11 +47,12 @@ where
         request: Request<AddWorkerNodeRequest>,
     ) -> Result<Response<AddWorkerNodeResponse>, Status> {
         let req = request.into_inner();
-        let worker_type = req.get_worker_type().map_err(tonic_err)?;
-        let host = try_match_expand!(req.host, Some, "AddWorkerNodeRequest::host is empty")?;
-        let (worker_node, _added) = self
+        let worker_type = req.get_worker_type()?;
+        let host = req.get_host()?.clone();
+        let worker_node_parallelism = req.worker_node_parallelism as usize;
+        let worker_node = self
             .cluster_manager
-            .add_worker_node(host, worker_type)
+            .add_worker_node(worker_type, host, worker_node_parallelism)
             .await?;
         Ok(Response::new(AddWorkerNodeResponse {
             status: None,
@@ -66,7 +65,7 @@ where
         request: Request<ActivateWorkerNodeRequest>,
     ) -> Result<Response<ActivateWorkerNodeResponse>, Status> {
         let req = request.into_inner();
-        let host = try_match_expand!(req.host, Some, "ActivateWorkerNodeRequest::host is empty")?;
+        let host = req.get_host()?.clone();
         self.cluster_manager.activate_worker_node(host).await?;
         Ok(Response::new(ActivateWorkerNodeResponse { status: None }))
     }
@@ -76,7 +75,7 @@ where
         request: Request<DeleteWorkerNodeRequest>,
     ) -> Result<Response<DeleteWorkerNodeResponse>, Status> {
         let req = request.into_inner();
-        let host = try_match_expand!(req.host, Some, "ActivateWorkerNodeRequest::host is empty")?;
+        let host = req.get_host()?.clone();
         self.cluster_manager.delete_worker_node(host).await?;
         Ok(Response::new(DeleteWorkerNodeResponse { status: None }))
     }
@@ -86,7 +85,7 @@ where
         request: Request<ListAllNodesRequest>,
     ) -> Result<Response<ListAllNodesResponse>, Status> {
         let req = request.into_inner();
-        let worker_type = req.get_worker_type().map_err(tonic_err)?;
+        let worker_type = req.get_worker_type()?;
         let worker_state = if req.include_starting_nodes {
             None
         } else {

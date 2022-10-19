@@ -12,11 +12,6 @@ RUN mkdir -p /piestream
 
 WORKDIR /piestream
 
-COPY proto proto
-COPY src src
-COPY rust-toolchain rust-toolchain
-COPY Cargo.toml Cargo.toml
-
 COPY ./ /piestream
 
 ENV PATH /root/.cargo/bin/:$PATH
@@ -29,7 +24,15 @@ RUN rustup self update \
 
 RUN cargo fetch
 RUN mkdir -p /piestream/bin
-RUN cargo build -p piestream_cmd -p piestream_cmd_all --release --features static-link && \
+
+ARG simd_disabled=false
+
+RUN if [ "$simd_disabled" == "true" ]; then \
+    echo "Disabling SIMD build flags for piestream" && \
+    . scripts/cargo-config-disable-simd.sh; \
+  fi
+
+RUN cargo build -p piestream_cmd -p piestream_cmd_all --release --features "static-link static-log-level" && \
   mv /piestream/target/release/{frontend,compute-node,meta-node,compactor,piestream} /piestream/bin/ && \
   cargo clean
 RUN objcopy --compress-debug-sections=zlib-gnu /piestream/bin/piestream && \
@@ -42,35 +45,35 @@ FROM ubuntu:22.04 as image-base
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install ca-certificates && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 FROM image-base as frontend-node
-LABEL org.opencontainers.image.source https://github.com/singularity-data/piestream
+LABEL org.opencontainers.image.source https://github.com/piestreamlabs/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/frontend /piestream/bin/frontend
 EXPOSE 4566
 ENTRYPOINT [ "/piestream/bin/frontend" ]
 
 FROM image-base as compute-node
-LABEL org.opencontainers.image.source https://github.com/singularity-data/piestream
+LABEL org.opencontainers.image.source https://github.com/piestreamlabs/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/compute-node /piestream/bin/compute-node
 EXPOSE 5687
 ENTRYPOINT [ "/piestream/bin/compute-node" ]
 
 FROM image-base as meta-node
-LABEL org.opencontainers.image.source https://github.com/singularity-data/piestream
+LABEL org.opencontainers.image.source https://github.com/piestreamlabs/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/meta-node /piestream/bin/meta-node
 EXPOSE 5690
 ENTRYPOINT [ "/piestream/bin/meta-node" ]
 
 FROM image-base as compactor-node
-LABEL org.opencontainers.image.source https://github.com/singularity-data/piestream
+LABEL org.opencontainers.image.source https://github.com/piestreamlabs/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/compactor /piestream/bin/compactor
 EXPOSE 6660
 ENTRYPOINT [ "/piestream/bin/compactor" ]
 
 FROM image-base as piestream
-LABEL org.opencontainers.image.source https://github.com/singularity-data/piestream
+LABEL org.opencontainers.image.source https://github.com/piestreamlabs/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/piestream /piestream/bin/piestream
 # Copy risedev.yml into container

@@ -14,31 +14,14 @@
 
 //! Configures the piestream binary, including logging, locks, panic handler, etc.
 
-#![feature(let_chains)]
-
-mod trace_runtime;
-
+use std::path::PathBuf;
 use std::time::Duration;
 
+use futures::Future;
 use tracing::Level;
 use tracing_subscriber::filter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::prelude::*;
-
-/// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
-/// logs are needed, add them here.
-fn configure_piestream_targets_jaeger(targets: filter::Targets) -> filter::Targets {
-    targets
-        // enable trace for most modules
-        .with_target("piestream_stream", Level::TRACE)
-        .with_target("piestream_batch", Level::TRACE)
-        .with_target("piestream_storage", Level::TRACE)
-        .with_target("piestream_sqlparser", Level::INFO)
-        // disable events that are too verbose
-        // if you want to enable any of them, find the target name and set it to `TRACE`
-        // .with_target("events::stream::mview::scan", Level::TRACE)
-        .with_target("events", Level::ERROR)
-}
 
 /// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
 /// logs are needed, add them here.
@@ -53,6 +36,7 @@ fn configure_piestream_targets_fmt(targets: filter::Targets) -> filter::Targets 
         .with_target("piestream_connector", Level::INFO)
         .with_target("piestream_frontend", Level::INFO)
         .with_target("piestream_meta", Level::INFO)
+        .with_target("piestream_tracing", Level::INFO)
         .with_target("pgwire", Level::ERROR)
         // disable events that are too verbose
         // if you want to enable any of them, find the target name and set it to `TRACE`
@@ -103,8 +87,6 @@ pub fn set_panic_abort() {
 
 /// Init logger for piestream binaries.
 pub fn init_piestream_logger(settings: LoggerSettings) {
-    use isahc::config::Configurable;
-
     let fmt_layer = {
         // Configure log output to stdout
         let fmt_layer = tracing_subscriber::fmt::layer()
@@ -112,11 +94,13 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
             .with_ansi(settings.colorful);
 
         let filter = filter::Targets::new()
+            .with_target("aws_sdk_s3", Level::INFO)
             // Only enable WARN and ERROR for 3rd-party crates
             .with_target("aws_endpoint", Level::WARN)
             .with_target("hyper", Level::WARN)
             .with_target("h2", Level::WARN)
             .with_target("tower", Level::WARN)
+            .with_target("tonic", Level::WARN)
             .with_target("isahc", Level::WARN)
             .with_target("console_subscriber", Level::WARN);
 
@@ -132,32 +116,9 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
         fmt_layer.with_filter(filter)
     };
 
-    let opentelemetry_layer = if settings.enable_jaeger_tracing {
-        // With Jaeger tracing enabled, we should configure opentelemetry endpoints.
-
-        opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            // TODO: use UDP tracing in production environment
-            .with_collector_endpoint("http://127.0.0.1:14268/api/traces")
-            // TODO: change service name to compute-{port}
-            .with_service_name("compute")
-            // disable proxy
-            .with_http_client(isahc::HttpClient::builder().proxy(None).build().unwrap())
-            .install_batch(trace_runtime::RwTokio)
-            .unwrap();
-
-        let opentelemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-
-        // Configure piestream's own crates to log at TRACE level, and ignore all third-party
-        // crates
-        let filter = filter::Targets::new();
-        let filter = configure_piestream_targets_jaeger(filter);
-
-        Some(opentelemetry_layer.with_filter(filter))
-    } else {
-        None
-    };
+    if settings.enable_jaeger_tracing {
+        todo!("jaeger tracing is not supported for now, and it will be replaced with minitrace jaeger tracing. Tracking issue: https://github.com/piestreamlabs/piestream/issues/4120");
+    }
 
     let tokio_console_layer = if settings.enable_tokio_console {
         let (console_layer, server) = console_subscriber::ConsoleLayer::builder()
@@ -173,33 +134,24 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
         None
     };
 
-    match (opentelemetry_layer, tokio_console_layer) {
-        (Some(_), Some(_)) => {
-            // tracing_subscriber::registry()
-            //     .with(fmt_layer)
-            //     .with(opentelemetry_layer)
-            //     .with(tokio_console_layer)
-            //     .init();
-            // Strange compiler bug is preventing us from enabling both of them...
-            panic!("cannot enable opentelemetry layer and tokio console layer at the same time");
-        }
-        (Some(opentelemetry_layer), None) => {
-            tracing_subscriber::registry()
-                .with(fmt_layer)
-                .with(opentelemetry_layer)
-                .init();
-        }
-        (None, Some((tokio_console_layer, server))) => {
+    match tokio_console_layer {
+        Some((tokio_console_layer, server)) => {
             tracing_subscriber::registry()
                 .with(fmt_layer)
                 .with(tokio_console_layer)
                 .init();
-            tokio::spawn(async move {
-                tracing::info!("serving console subscriber");
-                server.serve().await.unwrap();
+            std::thread::spawn(|| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async move {
+                        tracing::info!("serving console subscriber");
+                        server.serve().await.unwrap();
+                    });
             });
         }
-        (None, None) => {
+        None => {
             tracing_subscriber::registry().with(fmt_layer).init();
         }
     }
@@ -209,6 +161,7 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
 
 /// Enable parking lot's deadlock detection.
 pub fn enable_parking_lot_deadlock_detection() {
+    tracing::info!("parking lot deadlock detection enabled");
     // TODO: deadlock detection as a feature instead of always enabling
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(3));
@@ -228,13 +181,84 @@ pub fn enable_parking_lot_deadlock_detection() {
     });
 }
 
-/// Common set-up for all piestream binaries. Currently, this includes:
+fn spawn_prof_thread(profile_path: String) -> std::thread::JoinHandle<()> {
+    tracing::info!("writing prof data to directory {}", profile_path);
+    let profile_path = PathBuf::from(profile_path);
+
+    std::fs::create_dir_all(&profile_path).unwrap();
+
+    std::thread::spawn(move || {
+        let mut cnt = 0;
+        loop {
+            let guard = pprof::ProfilerGuardBuilder::default()
+                .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+                .build()
+                .unwrap();
+            std::thread::sleep(Duration::from_secs(60));
+            match guard.report().build() {
+                Ok(report) => {
+                    let profile_svg = profile_path.join(format!("{}.svg", cnt));
+                    let file = std::fs::File::create(&profile_svg).unwrap();
+                    report.flamegraph(file).unwrap();
+                    tracing::info!("produced {:?}", profile_svg);
+                }
+                Err(err) => {
+                    tracing::warn!("failed to generate flamegraph: {}", err);
+                }
+            }
+            cnt += 1;
+        }
+    })
+}
+
+/// Start piestream components with configs from environment variable.
 ///
-/// * Set panic hook to abort the whole process.
-pub fn oneshot_common() {
+/// Currently, the following env variables will be read:
+///
+/// * `RW_WORKER_THREADS`: number of tokio worker threads. If not set, it will use tokio's default
+///   config (equivalent to CPU cores). Note: This will not effect the dedicated runtimes for each
+///   service which are controlled by their own configurations, like streaming actors, compactions,
+///   etc.
+/// * `RW_DEADLOCK_DETECTION`: whether to enable deadlock detection. If not set, will enable in
+///   debug mode, and disable in release mode.
+/// * `RW_PROFILE_PATH`: the path to generate flamegraph. If set, then profiling is automatically
+///   enabled.
+pub fn main_okk<F>(f: F) -> F::Output
+where
+    F: Future + Send + 'static,
+{
     set_panic_abort();
 
-    if cfg!(debug_assertion) {
-        enable_parking_lot_deadlock_detection();
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+    if let Ok(worker_threads) = std::env::var("RW_WORKER_THREADS") {
+        let worker_threads = worker_threads.parse().unwrap();
+        tracing::info!("setting tokio worker threads to {}", worker_threads);
+        builder.worker_threads(worker_threads);
     }
+
+    if let Ok(enable_deadlock_detection) = std::env::var("RW_DEADLOCK_DETECTION") {
+        let enable_deadlock_detection = enable_deadlock_detection
+            .parse()
+            .expect("Failed to parse RW_DEADLOCK_DETECTION");
+        if enable_deadlock_detection {
+            enable_parking_lot_deadlock_detection();
+        }
+    } else {
+        // In case the env variable is not set
+        if cfg!(debug_assertions) {
+            enable_parking_lot_deadlock_detection();
+        }
+    }
+
+    if let Ok(profile_path) = std::env::var("RW_PROFILE_PATH") {
+        spawn_prof_thread(profile_path);
+    }
+
+    builder
+        .thread_name("piestream-main")
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(f)
 }

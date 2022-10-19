@@ -11,10 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+use anyhow::anyhow;
 mod delete;
+mod expand;
 mod filter;
 mod generic_exchange;
+mod group_top_n;
 mod hash_agg;
 mod hop_window;
 mod insert;
@@ -24,6 +26,7 @@ mod merge_sort_exchange;
 pub mod monitor;
 mod order_by;
 mod project;
+mod project_set;
 mod row_seq_scan;
 mod sort_agg;
 mod sys_row_seq_scan;
@@ -31,14 +34,18 @@ mod table_function;
 pub mod test_utils;
 mod top_n;
 mod trace;
+mod union;
 mod update;
+mod utils;
 mod values;
 
 use async_recursion::async_recursion;
 pub use delete::*;
+pub use expand::*;
 pub use filter::*;
 use futures::stream::BoxStream;
 pub use generic_exchange::*;
+pub use group_top_n::*;
 pub use hash_agg::*;
 pub use hop_window::*;
 pub use insert::*;
@@ -48,18 +55,20 @@ pub use merge_sort_exchange::*;
 pub use monitor::*;
 pub use order_by::*;
 pub use project::*;
+pub use project_set::*;
 use piestream_common::array::DataChunk;
 use piestream_common::catalog::Schema;
-use piestream_common::error::ErrorCode::InternalError;
 use piestream_common::error::Result;
 use piestream_pb::batch_plan::plan_node::NodeBody;
 use piestream_pb::batch_plan::PlanNode;
 pub use row_seq_scan::*;
 pub use sort_agg::*;
 pub use table_function::*;
-pub use top_n::*;
+pub use top_n::TopNExecutor;
 pub use trace::*;
+pub use union::*;
 pub use update::*;
+pub use utils::*;
 pub use values::*;
 
 use crate::executor::sys_row_seq_scan::SysRowSeqScanExecutorBuilder;
@@ -89,12 +98,18 @@ pub trait Executor: Send + 'static {
     fn execute(self: Box<Self>) -> BoxedDataChunkStream;
 }
 
+impl std::fmt::Debug for BoxedExecutor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.identity())
+    }
+}
+
 /// Every Executor should impl this trait to provide a static method to build a `BoxedExecutor`
 /// from proto and global environment.
 #[async_trait::async_trait]
 pub trait BoxedExecutorBuilder {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
+        source: &ExecutorBuilder<'_, C>,
         inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor>;
 }
@@ -149,7 +164,7 @@ impl<'a, C: Clone> ExecutorBuilder<'a, C> {
 impl<'a, C: BatchTaskContext> ExecutorBuilder<'a, C> {
     pub async fn build(&self) -> Result<BoxedExecutor> {
         self.try_build().await.map_err(|e| {
-            InternalError(format!(
+            anyhow!(format!(
                 "[PlanNode: {:?}] Failed to build executor: {}",
                 self.plan_node.get_node_body(),
                 e,
@@ -177,16 +192,21 @@ impl<'a, C: BatchTaskContext> ExecutorBuilder<'a, C> {
             NodeBody::SortAgg => SortAggExecutor,
             NodeBody::OrderBy => OrderByExecutor,
             NodeBody::TopN => TopNExecutor,
+            NodeBody::GroupTopN => GroupTopNExecutorBuilder,
             NodeBody::Limit => LimitExecutor,
             NodeBody::Values => ValuesExecutor,
             NodeBody::NestedLoopJoin => NestedLoopJoinExecutor,
-            NodeBody::HashJoin => HashJoinExecutorBuilder,
+            NodeBody::HashJoin => HashJoinExecutor<()>,
             NodeBody::SortMergeJoin => SortMergeJoinExecutor,
             NodeBody::HashAgg => HashAggExecutorBuilder,
             NodeBody::MergeSortExchange => MergeSortExchangeExecutorBuilder,
             NodeBody::TableFunction => TableFunctionExecutorBuilder,
             NodeBody::HopWindow => HopWindowExecutor,
             NodeBody::SysRowSeqScan => SysRowSeqScanExecutorBuilder,
+            NodeBody::Expand => ExpandExecutor,
+            NodeBody::LookupJoin => LookupJoinExecutorBuilder,
+            NodeBody::ProjectSet => ProjectSetExecutor,
+            NodeBody::Union => UnionExecutor,
         }
         .await?;
         let input_desc = real_executor.identity().to_string();
@@ -196,6 +216,7 @@ impl<'a, C: BatchTaskContext> ExecutorBuilder<'a, C> {
 
 #[cfg(test)]
 mod tests {
+
     use piestream_pb::batch_plan::PlanNode;
 
     use crate::executor::ExecutorBuilder;
@@ -214,7 +235,7 @@ mod tests {
         let builder = ExecutorBuilder::new(
             &plan_node,
             task_id,
-            ComputeNodeContext::new_for_test(),
+            ComputeNodeContext::for_test(),
             u64::MAX,
         );
         let child_plan = &PlanNode {

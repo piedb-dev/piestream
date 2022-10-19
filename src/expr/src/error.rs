@@ -13,9 +13,11 @@
 // limitations under the License.
 
 pub use anyhow::anyhow;
+use regex;
 use piestream_common::array::ArrayError;
 use piestream_common::error::{ErrorCode, RwError};
 use piestream_common::types::DataType;
+use piestream_pb::ProstFieldNotFound;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -33,6 +35,9 @@ pub enum ExprError {
     #[error("Out of range")]
     NumericOutOfRange,
 
+    #[error("Division by zero")]
+    DivisionByZero,
+
     #[error("Parse error: {0}")]
     Parse(&'static str),
 
@@ -42,6 +47,9 @@ pub enum ExprError {
     #[error("Array error: {0}")]
     Array(#[from] ArrayError),
 
+    #[error("More than one row returned by {0} used as an expression")]
+    MaxOneRow(&'static str),
+
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -49,5 +57,23 @@ pub enum ExprError {
 impl From<ExprError> for RwError {
     fn from(s: ExprError) -> Self {
         ErrorCode::ExprError(Box::new(s)).into()
+    }
+}
+
+impl From<regex::Error> for ExprError {
+    fn from(re: regex::Error) -> Self {
+        Self::InvalidParam {
+            name: "pattern",
+            reason: re.to_string(),
+        }
+    }
+}
+
+impl From<ProstFieldNotFound> for ExprError {
+    fn from(err: ProstFieldNotFound) -> Self {
+        Self::Internal(anyhow::anyhow!(
+            "Failed to decode prost: field not found `{}`",
+            err.0
+        ))
     }
 }

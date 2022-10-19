@@ -16,6 +16,7 @@ use std::future::Future;
 use std::ops::RangeBounds;
 
 use bytes::Bytes;
+use piestream_hummock_sdk::HummockReadEpoch;
 
 use crate::storage_value::StorageValue;
 use crate::store::*;
@@ -31,7 +32,12 @@ impl StateStore for PanicStateStore {
 
     define_state_store_associated_type!();
 
-    fn get<'a>(&'a self, _key: &'a [u8], _read_options: ReadOptions) -> Self::GetFuture<'_> {
+    fn get<'a>(
+        &'a self,
+        _key: &'a [u8],
+        _check_bloom_filter: bool,
+        _read_options: ReadOptions,
+    ) -> Self::GetFuture<'_> {
         async move {
             panic!("should not read from the state store!");
         }
@@ -39,6 +45,7 @@ impl StateStore for PanicStateStore {
 
     fn scan<R, B>(
         &self,
+        _prefix_hint: Option<Vec<u8>>,
         _key_range: R,
         _limit: Option<usize>,
         _read_options: ReadOptions,
@@ -77,17 +84,12 @@ impl StateStore for PanicStateStore {
         }
     }
 
-    fn replicate_batch(
+    fn iter<R, B>(
         &self,
-        _kv_pairs: Vec<(Bytes, StorageValue)>,
-        _write_options: WriteOptions,
-    ) -> Self::ReplicateBatchFuture<'_> {
-        async move {
-            panic!("should not replicate batch from the state store!");
-        }
-    }
-
-    fn iter<R, B>(&self, _key_range: R, _read_options: ReadOptions) -> Self::IterFuture<'_, R, B>
+        _prefix_hint: Option<Vec<u8>>,
+        _key_range: R,
+        _read_options: ReadOptions,
+    ) -> Self::IterFuture<'_, R, B>
     where
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
@@ -111,16 +113,20 @@ impl StateStore for PanicStateStore {
         }
     }
 
-    fn wait_epoch(&self, _epoch: u64) -> Self::WaitEpochFuture<'_> {
+    fn try_wait_epoch(&self, _epoch: HummockReadEpoch) -> Self::WaitEpochFuture<'_> {
         async move {
             panic!("should not wait epoch from the panic state store!");
         }
     }
 
-    fn sync(&self, _epoch: Option<u64>) -> Self::SyncFuture<'_> {
+    fn sync(&self, _epoch: u64) -> Self::SyncFuture<'_> {
         async move {
-            panic!("should not sync from the panic state store!");
+            panic!("should not await sync epoch from the panic state store!");
         }
+    }
+
+    fn seal_epoch(&self, _epoch: u64, _is_checkpoint: bool) {
+        panic!("should not update current epoch from the panic state store!");
     }
 
     fn clear_shared_buffer(&self) -> Self::ClearSharedBufferFuture<'_> {

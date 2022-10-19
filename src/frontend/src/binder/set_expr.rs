@@ -17,6 +17,7 @@ use piestream_common::error::{ErrorCode, Result};
 use piestream_sqlparser::ast::SetExpr;
 
 use crate::binder::{Binder, BoundSelect, BoundValues};
+use crate::expr::{CorrelatedId, Depth};
 
 /// Part of a validated query, without order or limit clause. It may be composed of smaller
 /// `BoundSetExpr`s via set operators (e.g. union).
@@ -39,14 +40,22 @@ impl BoundSetExpr {
     pub fn is_correlated(&self) -> bool {
         match self {
             BoundSetExpr::Select(s) => s.is_correlated(),
-            BoundSetExpr::Values(_) => false,
+            BoundSetExpr::Values(v) => v.is_correlated(),
         }
     }
 
-    pub fn collect_correlated_indices(&self) -> Vec<usize> {
+    pub fn collect_correlated_indices_by_depth_and_assign_id(
+        &mut self,
+        depth: Depth,
+        correlated_id: CorrelatedId,
+    ) -> Vec<usize> {
         match self {
-            BoundSetExpr::Select(s) => s.collect_correlated_indices(),
-            BoundSetExpr::Values(_) => vec![],
+            BoundSetExpr::Select(s) => {
+                s.collect_correlated_indices_by_depth_and_assign_id(depth, correlated_id)
+            }
+            BoundSetExpr::Values(v) => {
+                v.collect_correlated_indices_by_depth_and_assign_id(depth, correlated_id)
+            }
         }
     }
 }
@@ -61,7 +70,7 @@ impl Binder {
                 3584.into(),
             )
             .into()),
-            _ => Err(ErrorCode::NotImplemented(
+            SetExpr::SetOperation { .. } => Err(ErrorCode::NotImplemented(
                 format!("set expr: {:}", set_expr),
                 None.into(),
             )

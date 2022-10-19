@@ -47,7 +47,7 @@ pub use data_chunk::{DataChunk, DataChunkTestExt, Vis};
 pub use data_chunk_iter::{Row, RowDeserializer, RowRef};
 pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 pub use interval_array::{IntervalArray, IntervalArrayBuilder};
-pub use iterator::ArrayIterator;
+pub use iterator::{ArrayImplIterator, ArrayIterator};
 pub use list_array::{ListArray, ListArrayBuilder, ListRef, ListValue};
 use paste::paste;
 pub use primitive_array::{PrimitiveArray, PrimitiveArrayBuilder, PrimitiveArrayItemType};
@@ -57,7 +57,6 @@ pub use struct_array::{StructArray, StructArrayBuilder, StructRef, StructValue};
 pub use utf8_array::*;
 
 pub use self::error::ArrayError;
-use crate::array::iterator::ArrayImplIterator;
 use crate::buffer::Bitmap;
 use crate::types::*;
 pub type ArrayResult<T> = std::result::Result<T, ArrayError>;
@@ -102,25 +101,29 @@ pub trait ArrayBuilder: Send + Sync + Sized + 'static {
     fn with_meta(capacity: usize, meta: ArrayMeta) -> Self;
 
     /// Append a value to builder.
-    fn append(
-        &mut self,
-        value: Option<<<Self as ArrayBuilder>::ArrayType as Array>::RefItem<'_>>,
-    ) -> ArrayResult<()>;
+    fn append(&mut self, value: Option<<<Self as ArrayBuilder>::ArrayType as Array>::RefItem<'_>>);
 
-    fn append_null(&mut self) -> ArrayResult<()> {
+    fn append_null(&mut self) {
         self.append(None)
     }
 
     /// Append an array to builder.
-    fn append_array(&mut self, other: &Self::ArrayType) -> ArrayResult<()>;
+    fn append_array(&mut self, other: &Self::ArrayType);
+
+    /// Pop an element from the builder.
+    ///
+    /// # Returns
+    ///
+    /// Returns `None` if there is no elements in the builder.
+    fn pop(&mut self) -> Option<()>;
 
     /// Append an element in another array into builder.
-    fn append_array_element(&mut self, other: &Self::ArrayType, idx: usize) -> ArrayResult<()> {
-        self.append(other.value_at(idx))
+    fn append_array_element(&mut self, other: &Self::ArrayType, idx: usize) {
+        self.append(other.value_at(idx));
     }
 
     /// Finish build and return a new array.
-    fn finish(self) -> ArrayResult<Self::ArrayType>;
+    fn finish(self) -> Self::ArrayType;
 }
 
 /// A trait over all array.
@@ -181,7 +184,7 @@ pub trait Array: std::fmt::Debug + Send + Sync + Sized + 'static + Into<ArrayImp
 
     /// Check if an element is `null` or not.
     fn is_null(&self, idx: usize) -> bool {
-        self.null_bitmap().is_set(idx).map(|v| !v).unwrap()
+        !self.null_bitmap().is_set(idx)
     }
 
     /// # Safety
@@ -207,7 +210,7 @@ pub trait Array: std::fmt::Debug + Send + Sync + Sized + 'static + Into<ArrayImp
         self.len() == 0
     }
 
-    fn create_builder(&self, capacity: usize) -> ArrayResult<ArrayBuilderImpl>;
+    fn create_builder(&self, capacity: usize) -> ArrayBuilderImpl;
 
     fn array_meta(&self) -> ArrayMeta {
         ArrayMeta::Simple
@@ -224,20 +227,34 @@ pub enum ArrayMeta {
     List { datatype: Box<DataType> },
 }
 
+impl From<&DataType> for ArrayMeta {
+    fn from(data_type: &DataType) -> Self {
+        match data_type {
+            DataType::Struct(struct_type) => ArrayMeta::Struct {
+                children: struct_type.fields.clone().into(),
+            },
+            DataType::List { datatype } => ArrayMeta::List {
+                datatype: datatype.clone(),
+            },
+            _ => ArrayMeta::Simple,
+        }
+    }
+}
+
 /// Implement `compact` on array, which removes element according to `visibility`.
 trait CompactableArray: Array {
     /// Select some elements from `Array` based on `visibility` bitmap.
     /// `cardinality` is only used to decide capacity of the new `Array`.
-    fn compact(&self, visibility: &Bitmap, cardinality: usize) -> ArrayResult<Self>;
+    fn compact(&self, visibility: &Bitmap, cardinality: usize) -> Self;
 }
 
 impl<A: Array> CompactableArray for A {
-    fn compact(&self, visibility: &Bitmap, cardinality: usize) -> ArrayResult<Self> {
+    fn compact(&self, visibility: &Bitmap, cardinality: usize) -> Self {
         use itertools::Itertools;
         let mut builder = A::Builder::with_meta(cardinality, self.array_meta());
         for (elem, visible) in self.iter().zip_eq(visibility.iter()) {
             if visible {
-                builder.append(elem)?;
+                builder.append(elem);
             }
         }
         builder.finish()
@@ -247,16 +264,15 @@ impl<A: Array> CompactableArray for A {
 /// `for_all_variants` includes all variants of our array types. If you added a new array
 /// type inside the project, be sure to add a variant here.
 ///
-/// Every tuple has four elements, where
-/// `{ enum variant name, function suffix name, array type, builder type }`
+/// It is used to simplify the boilerplate code of repeating all array types, while each type
+/// has exactly the same code.
 ///
-/// There are typically two ways of using this macro, pass token or pass no token.
-/// See the following implementations for example.
+/// To use it, you need to provide a macro, whose input is `{ enum variant name, function suffix
+/// name, array type, builder type }` tuples. Refer to the following implementations as examples.
 #[macro_export]
 macro_rules! for_all_variants {
-    ($macro:ident $(, $x:tt)*) => {
+    ($macro:ident) => {
         $macro! {
-            [$($x),*],
             { Int16, int16, I16Array, I16ArrayBuilder },
             { Int32, int32, I32Array, I32ArrayBuilder },
             { Int64, int64, I64Array, I64ArrayBuilder },
@@ -277,14 +293,16 @@ macro_rules! for_all_variants {
 
 /// Define `ArrayImpl` with macro.
 macro_rules! array_impl_enum {
-    ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+    ( $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
         /// `ArrayImpl` embeds all possible array in `array` module.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub enum ArrayImpl {
             $( $variant_name($array) ),*
         }
     };
 }
+
+for_all_variants! { array_impl_enum }
 
 impl<T: PrimitiveArrayItemType> From<PrimitiveArray<T>> for ArrayImpl {
     fn from(arr: PrimitiveArray<T>) -> Self {
@@ -322,8 +340,6 @@ impl From<ListArray> for ArrayImpl {
     }
 }
 
-for_all_variants! { array_impl_enum }
-
 /// `impl_convert` implements several conversions for `Array` and `ArrayBuilder`.
 /// * `ArrayImpl -> &Array` with `impl.as_int16()`.
 /// * `ArrayImpl -> Array` with `impl.into_int16()`.
@@ -331,7 +347,7 @@ for_all_variants! { array_impl_enum }
 /// * `&ArrayImpl -> &Array` with `From` trait.
 /// * `ArrayBuilder -> ArrayBuilderImpl` with `From` trait.
 macro_rules! impl_convert {
-    ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+    ($( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
         $(
             paste! {
                 impl ArrayImpl {
@@ -359,6 +375,15 @@ macro_rules! impl_convert {
                     }
                 }
 
+                impl From<ArrayImpl> for $array {
+                    fn from(array: ArrayImpl) -> Self {
+                        match array {
+                            ArrayImpl::$variant_name(inner) => inner,
+                            other_array => panic!("cannot convert ArrayImpl::{} to concrete type {}", other_array.get_ident(), stringify!($variant_name))
+                        }
+                    }
+                }
+
                 impl From<$builder> for ArrayBuilderImpl {
                     fn from(builder: $builder) -> Self {
                         Self::$variant_name(builder)
@@ -373,7 +398,7 @@ for_all_variants! { impl_convert }
 
 /// Define `ArrayImplBuilder` with macro.
 macro_rules! array_builder_impl_enum {
-    ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+    ($( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
         /// `ArrayBuilderImpl` embeds all possible array in `array` module.
         #[derive(Debug)]
         pub enum ArrayBuilderImpl {
@@ -386,38 +411,38 @@ for_all_variants! { array_builder_impl_enum }
 
 /// Implements all `ArrayBuilder` functions with `for_all_variant`.
 macro_rules! impl_array_builder {
-    ([], $({ $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+    ($({ $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
         impl ArrayBuilderImpl {
-            pub fn append_array(&mut self, other: &ArrayImpl) -> ArrayResult<()> {
+            pub fn append_array(&mut self, other: &ArrayImpl) {
                 match self {
                     $( Self::$variant_name(inner) => inner.append_array(other.into()), )*
                 }
             }
 
-            pub fn append_null(&mut self) -> ArrayResult<()> {
+            pub fn append_null(&mut self) {
                 match self {
                     $( Self::$variant_name(inner) => inner.append(None), )*
                 }
             }
 
             /// Append a datum, return error while type not match.
-            pub fn append_datum(&mut self, datum: &Datum) -> ArrayResult<()> {
+            pub fn append_datum(&mut self, datum: &Datum) {
                 match datum {
                     None => self.append_null(),
                     Some(ref scalar) => match (self, scalar) {
                         $( (Self::$variant_name(inner), ScalarImpl::$variant_name(v)) => inner.append(Some(v.as_scalar_ref())), )*
-                        _ => bail!("Invalid datum type".to_string()),
+                        _ => panic!("Invalid datum type"),
                     },
                 }
             }
 
             /// Append a datum ref, return error while type not match.
-            pub fn append_datum_ref(&mut self, datum_ref: DatumRef<'_>) -> ArrayResult<()> {
+            pub fn append_datum_ref(&mut self, datum_ref: DatumRef<'_>) {
                 match datum_ref {
                     None => self.append_null(),
                     Some(scalar_ref) => match (self, scalar_ref) {
                         $( (Self::$variant_name(inner), ScalarRefImpl::$variant_name(v)) => inner.append(Some(v)), )*
-                        (this_builder, this_scalar_ref) => bail!(
+                        (this_builder, this_scalar_ref) => panic!(
                             "Failed to append datum, array builder type: {}, scalar ref type: {}",
                             this_builder.get_ident(),
                             this_scalar_ref.get_ident()
@@ -426,15 +451,21 @@ macro_rules! impl_array_builder {
                 }
             }
 
-            pub fn append_array_element(&mut self, other: &ArrayImpl, idx: usize) -> ArrayResult<()> {
+            pub fn append_array_element(&mut self, other: &ArrayImpl, idx: usize) {
                 match self {
                     $( Self::$variant_name(inner) => inner.append_array_element(other.into(), idx), )*
+                };
+            }
+
+            pub fn pop(&mut self) -> Option<()> {
+                match self {
+                    $( Self::$variant_name(inner) => inner.pop(), )*
                 }
             }
 
-            pub fn finish(self) -> ArrayResult<ArrayImpl> {
+            pub fn finish(self) -> ArrayImpl {
                 match self {
-                    $( Self::$variant_name(inner) => Ok(inner.finish()?.into()), )*
+                    $( Self::$variant_name(inner) => inner.finish().into(), )*
                 }
             }
 
@@ -451,7 +482,7 @@ for_all_variants! { impl_array_builder }
 
 /// Implements all `Array` functions with `for_all_variant`.
 macro_rules! impl_array {
-    ([], $({ $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+    ($({ $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
         impl ArrayImpl {
             /// Number of items in array.
             pub fn len(&self) -> usize {
@@ -496,9 +527,9 @@ macro_rules! impl_array {
             }
 
             /// Select some elements from `Array` based on `visibility` bitmap.
-            pub fn compact(&self, visibility: &Bitmap, cardinality: usize) -> ArrayResult<Self> {
+            pub fn compact(&self, visibility: &Bitmap, cardinality: usize) -> Self {
                 match self {
-                    $( Self::$variant_name(inner) => Ok(inner.compact(visibility, cardinality)?.into()), )*
+                    $( Self::$variant_name(inner) => inner.compact(visibility, cardinality).into(), )*
                 }
             }
 
@@ -548,7 +579,7 @@ macro_rules! impl_array {
                 }
             }
 
-            pub fn create_builder(&self, capacity: usize) -> ArrayResult<ArrayBuilderImpl> {
+            pub fn create_builder(&self, capacity: usize) -> ArrayBuilderImpl {
                 match self {
                     $( Self::$variant_name(inner) => inner.create_builder(capacity), )*
                 }
@@ -590,6 +621,7 @@ impl ArrayImpl {
             ProstArrayType::Interval => read_interval_unit_array(array, cardinality)?,
             ProstArrayType::Struct => StructArray::from_protobuf(array)?,
             ProstArrayType::List => ListArray::from_protobuf(array)?,
+            ProstArrayType::Unspecified => unreachable!(),
         };
         Ok(array)
     }
@@ -617,19 +649,19 @@ mod tests {
         let mut builder = A::Builder::with_meta(data.len(), data.array_meta());
         for i in 0..data.len() {
             if pred(data.value_at(i)) {
-                builder.append(data.value_at(i))?;
+                builder.append(data.value_at(i));
             }
         }
-        builder.finish()
+        Ok(builder.finish())
     }
 
     #[test]
     fn test_filter() {
         let mut builder = PrimitiveArrayBuilder::<i32>::new(0);
         for i in 0..=60 {
-            builder.append(Some(i as i32)).unwrap();
+            builder.append(Some(i));
         }
-        let array = filter(&builder.finish().unwrap(), |x| x.unwrap_or(0) >= 60).unwrap();
+        let array = filter(&builder.finish(), |x| x.unwrap_or(0) >= 60).unwrap();
         assert_eq!(array.iter().collect::<Vec<Option<i32>>>(), vec![Some(60)]);
     }
 
@@ -651,24 +683,24 @@ mod tests {
                 (Some(a), Some(b)) => Some(a.as_() + b.as_()),
                 _ => None,
             };
-            builder.append(item)?;
+            builder.append(item);
         }
-        builder.finish()
+        Ok(builder.finish())
     }
 
     #[test]
     fn test_vectorized_add() {
         let mut builder = PrimitiveArrayBuilder::<i32>::new(0);
         for i in 0..=60 {
-            builder.append(Some(i as i32)).unwrap();
+            builder.append(Some(i));
         }
-        let array1 = builder.finish().unwrap();
+        let array1 = builder.finish();
 
         let mut builder = PrimitiveArrayBuilder::<i16>::new(0);
         for i in 0..=60 {
-            builder.append(Some(i as i16)).unwrap();
+            builder.append(Some(i as i16));
         }
-        let array2 = builder.finish().unwrap();
+        let array2 = builder.finish();
 
         let final_array = vec_add(&array1, &array2).unwrap() as PrimitiveArray<i64>;
 

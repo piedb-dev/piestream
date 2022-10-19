@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use piestream_common::catalog::TableId;
+use std::sync::Arc;
+
 use piestream_common::util::sort_util::OrderPair;
+use piestream_storage::table::streaming_table::state_table::StateTable;
 
 use super::*;
 use crate::executor::AppendOnlyTopNExecutor;
@@ -22,45 +24,32 @@ pub struct AppendOnlyTopNExecutorBuilder;
 
 impl ExecutorBuilder for AppendOnlyTopNExecutorBuilder {
     fn new_boxed_executor(
-        mut params: ExecutorParams,
+        params: ExecutorParams,
         node: &StreamNode,
         store: impl StateStore,
         _stream: &mut LocalStreamManagerCore,
-    ) -> Result<BoxedExecutor> {
+    ) -> StreamResult<BoxedExecutor> {
         let node = try_match_expand!(node.get_node_body().unwrap(), NodeBody::AppendOnlyTopN)?;
-        let order_pairs: Vec<_> = node
-            .get_column_orders()
-            .iter()
-            .map(OrderPair::from_prost)
-            .collect();
-        let limit = if node.limit == 0 {
-            None
-        } else {
-            Some(node.limit as usize)
-        };
-        let cache_size = Some(1024);
-        let total_count = (0, 0);
-        let table_id_l = TableId::new(node.table_id_l);
-        let table_id_h = TableId::new(node.table_id_h);
-        let key_indices = node
-            .get_distribution_keys()
-            .iter()
-            .map(|key| *key as usize)
-            .collect::<Vec<_>>();
+        let [input]: [_; 1] = params.input.try_into().unwrap();
 
-        Ok(AppendOnlyTopNExecutor::new(
-            params.input.remove(0),
-            order_pairs,
-            (node.offset as usize, limit),
-            params.pk_indices,
-            store,
-            table_id_l,
-            table_id_h,
-            cache_size,
-            total_count,
-            params.executor_id,
-            key_indices,
-        )?
-        .boxed())
+        let table = node.get_table()?;
+        let vnodes = params.vnode_bitmap.map(Arc::new);
+        let state_table = StateTable::from_table_catalog(table, store, vnodes);
+        let order_pairs = table.get_pk().iter().map(OrderPair::from_prost).collect();
+        if node.with_ties {
+            unreachable!("Not supported yet. Banned in planner");
+        } else {
+            Ok(AppendOnlyTopNExecutor::new(
+                input,
+                params.actor_context,
+                order_pairs,
+                (node.offset as usize, node.limit as usize),
+                node.order_by_len as usize,
+                params.pk_indices,
+                params.executor_id,
+                state_table,
+            )?
+            .boxed())
+        }
     }
 }

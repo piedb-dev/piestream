@@ -13,18 +13,14 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use piestream_pb::plan_common::{
-    ColumnDesc as ProstColumnDesc, OrderType as ProstOrderType,
-    OrderedColumnDesc as ProstOrderedColumnDesc,
-};
+use piestream_pb::plan_common::ColumnDesc as ProstColumnDesc;
 
 use crate::catalog::Field;
 use crate::error::ErrorCode;
 use crate::types::DataType;
-use crate::util::sort_util::OrderType;
 
-/// Column ID is the unique identifier of a column in a table. Different from table ID,
-/// column ID is not globally unique.
+/// Column ID is the unique identifier of a column in a table. Different from table ID, column ID is
+/// not globally unique.
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ColumnId(i32);
 
@@ -51,11 +47,13 @@ impl From<i32> for ColumnId {
         Self::new(column_id)
     }
 }
+
 impl From<ColumnId> for i32 {
     fn from(id: ColumnId) -> i32 {
         id.0
     }
 }
+
 impl std::fmt::Display for ColumnId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -69,12 +67,6 @@ pub struct ColumnDesc {
     pub name: String, // for debugging
     pub field_descs: Vec<ColumnDesc>,
     pub type_name: String,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct OrderedColumnDesc {
-    pub column_desc: ColumnDesc,
-    pub order: OrderType,
 }
 
 impl ColumnDesc {
@@ -136,7 +128,6 @@ impl ColumnDesc {
         }
     }
 
-    #[cfg(test)]
     pub fn new_atomic(data_type: DataType, name: &str, column_id: i32) -> Self {
         Self {
             data_type,
@@ -147,20 +138,16 @@ impl ColumnDesc {
         }
     }
 
-    #[cfg(test)]
     pub fn new_struct(
         name: &str,
         column_id: i32,
         type_name: &str,
         fields: Vec<ColumnDesc>,
     ) -> Self {
-        let data_type = DataType::Struct {
-            fields: fields
-                .iter()
-                .map(|f| f.data_type.clone())
-                .collect_vec()
-                .into(),
-        };
+        let data_type = DataType::new_struct(
+            fields.iter().map(|f| f.data_type.clone()).collect_vec(),
+            fields.iter().map(|f| f.name.clone()).collect_vec(),
+        );
         Self {
             data_type,
             column_id: ColumnId::new(column_id),
@@ -220,30 +207,6 @@ impl From<&ColumnDesc> for ProstColumnDesc {
             name: c.name.clone(),
             field_descs: c.field_descs.iter().map(ColumnDesc::to_protobuf).collect(),
             type_name: c.type_name.clone(),
-        }
-    }
-}
-
-impl From<ProstOrderedColumnDesc> for OrderedColumnDesc {
-    fn from(prost: ProstOrderedColumnDesc) -> Self {
-        Self {
-            column_desc: prost.column_desc.unwrap().into(),
-            order: OrderType::from_prost(&ProstOrderType::from_i32(prost.order).unwrap()),
-        }
-    }
-}
-
-impl From<&ProstOrderedColumnDesc> for OrderedColumnDesc {
-    fn from(prost: &ProstOrderedColumnDesc) -> Self {
-        prost.clone().into()
-    }
-}
-
-impl From<&OrderedColumnDesc> for ProstOrderedColumnDesc {
-    fn from(c: &OrderedColumnDesc) -> Self {
-        Self {
-            column_desc: Some((&c.column_desc).into()),
-            order: c.order.to_prost().into(),
         }
     }
 }

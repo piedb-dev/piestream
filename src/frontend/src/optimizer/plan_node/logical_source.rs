@@ -16,27 +16,33 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use piestream_common::catalog::Schema;
+use piestream_common::catalog::{Field, Schema};
 use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::types::DataType;
+use piestream_common::util::sort_util::OrderType;
 
 use super::{
-    ColPrunable, LogicalFilter, LogicalProject, PlanBase, PlanRef, PredicatePushdown, StreamSource,
-    ToBatch, ToStream,
+    generic, ColPrunable, LogicalFilter, LogicalProject, PlanBase, PlanRef, PredicatePushdown,
+    StreamSource, ToBatch, ToStream,
 };
 use crate::catalog::source_catalog::SourceCatalog;
+use crate::optimizer::plan_node::utils::TableCatalogBuilder;
+use crate::optimizer::property::FunctionalDependencySet;
 use crate::session::OptimizerContextRef;
 use crate::utils::{ColIndexMapping, Condition};
+use crate::TableCatalog;
 
 /// `LogicalSource` returns contents of a table or other equivalent object
 #[derive(Debug, Clone)]
 pub struct LogicalSource {
     pub base: PlanBase,
-    pub source_catalog: Rc<SourceCatalog>,
+    pub core: generic::Source,
 }
 
 impl LogicalSource {
     pub fn new(source_catalog: Rc<SourceCatalog>, ctx: OptimizerContextRef) -> Self {
         let mut id_to_idx = HashMap::new();
+
         let fields = source_catalog
             .columns
             .iter()
@@ -50,13 +56,19 @@ impl LogicalSource {
             .pk_col_ids
             .iter()
             .map(|c| id_to_idx.get(c).copied())
-            .collect::<Option<Vec<_>>>()
-            .unwrap_or_default();
+            .collect::<Option<Vec<_>>>();
         let schema = Schema { fields };
-        let base = PlanBase::new_logical(ctx, schema, pk_indices);
+        let (functional_dependency, pk_indices) = match pk_indices {
+            Some(pk_indices) => (
+                FunctionalDependencySet::with_key(schema.len(), &pk_indices),
+                pk_indices,
+            ),
+            None => (FunctionalDependencySet::new(schema.len()), vec![]),
+        };
+        let base = PlanBase::new_logical(ctx, schema, pk_indices, functional_dependency);
         LogicalSource {
             base,
-            source_catalog,
+            core: generic::Source(source_catalog),
         }
     }
 
@@ -69,18 +81,44 @@ impl LogicalSource {
     }
 
     pub fn source_catalog(&self) -> Rc<SourceCatalog> {
-        self.source_catalog.clone()
+        self.core.0.clone()
+    }
+
+    pub fn infer_internal_table_catalog(&self) -> TableCatalog {
+        // note that source's internal table is to store partition_id -> offset mapping and its
+        // schema is irrelevant to input schema
+        let mut builder =
+            TableCatalogBuilder::new(self.ctx().inner().with_options.internal_table_subset());
+
+        let key = Field {
+            data_type: DataType::Varchar,
+            name: "partition_id".to_string(),
+            sub_fields: vec![],
+            type_name: "".to_string(),
+        };
+        let value = Field {
+            data_type: DataType::Varchar,
+            name: "offset".to_string(),
+            sub_fields: vec![],
+            type_name: "".to_string(),
+        };
+
+        let ordered_col_idx = builder.add_column(&key);
+        builder.add_column(&value);
+        builder.add_order_column(ordered_col_idx, OrderType::Ascending);
+
+        builder.build(vec![])
     }
 }
 
 impl_plan_tree_node_for_leaf! {LogicalSource}
 
 impl fmt::Display for LogicalSource {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "LogicalSource {{ source: {}, columns: [{}] }}",
-            self.source_catalog.name,
+            self.source_catalog().name,
             self.column_names().join(", ")
         )
     }

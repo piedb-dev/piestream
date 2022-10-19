@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::env;
 use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{anyhow, Result};
 use clap::StructOpt;
 use risedev::{
-    CompactorService, ComputeNodeService, ConfigExpander, FrontendService, MetaNodeService,
-    ServiceConfig,
+    CompactorService, ComputeNodeService, ConfigExpander, FrontendService, HummockInMemoryStrategy,
+    MetaNodeService, ServiceConfig,
 };
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -43,7 +45,7 @@ async fn load_risedev_config(
     Ok((steps, services))
 }
 
-pub enum PiestreamService {
+pub enum piestreamService {
     Compute(Vec<OsString>),
     Meta(Vec<OsString>),
     Frontend(Vec<OsString>),
@@ -53,16 +55,19 @@ pub enum PiestreamService {
 pub async fn playground() -> Result<()> {
     eprintln!("launching playground");
 
-    piestream_rt::oneshot_common();
-    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
-
-    // Enable tokio console for `./risedev p` by replacing the above statement to:
-    // piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new(false, true));
-
     let profile = if let Ok(profile) = std::env::var("PLAYGROUND_PROFILE") {
         profile.to_string()
     } else {
         "playground".to_string()
+    };
+    let force_shared_hummock_in_mem = std::env::var("FORCE_SHARED_HUMMOCK_IN_MEM").is_ok();
+
+    // TODO: may allow specifying the config file for the playground.
+    let apply_config_file = |cmd: &mut Command| {
+        let path = Path::new("src/config/piestream.toml");
+        if path.exists() {
+            cmd.arg("--config-path").arg(path);
+        }
     };
 
     let services = match load_risedev_config(&profile).await {
@@ -72,39 +77,69 @@ pub async fn playground() -> Result<()> {
                 profile
             );
             tracing::info!("steps: {:?}", steps);
+
+            let steps: Vec<_> = steps
+                .into_iter()
+                .map(|step| services.get(&step).expect("service not found"))
+                .collect();
+
+            let compute_node_count = steps
+                .iter()
+                .filter(|s| matches!(s, ServiceConfig::ComputeNode(_)))
+                .count();
+
             let mut rw_services = vec![];
             for step in steps {
-                match services.get(&step).expect("service not found") {
+                match step {
                     ServiceConfig::ComputeNode(c) => {
                         let mut command = Command::new("compute-node");
-                        ComputeNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(PiestreamService::Compute(
+                        ComputeNodeService::apply_command_args(
+                            &mut command,
+                            c,
+                            if force_shared_hummock_in_mem || compute_node_count > 1 {
+                                HummockInMemoryStrategy::Shared
+                            } else {
+                                HummockInMemoryStrategy::Isolated
+                            },
+                        )?;
+                        apply_config_file(&mut command);
+                        if c.enable_tiered_cache {
+                            let prefix_data = env::var("PREFIX_DATA")?;
+                            command.arg("--file-cache-dir").arg(
+                                PathBuf::from(prefix_data)
+                                    .join("filecache")
+                                    .join(c.port.to_string()),
+                            );
+                        }
+                        rw_services.push(piestreamService::Compute(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::MetaNode(c) => {
                         let mut command = Command::new("meta-node");
                         MetaNodeService::apply_command_args(&mut command, c)?;
-                        rw_services.push(PiestreamService::Meta(
+                        apply_config_file(&mut command);
+                        rw_services.push(piestreamService::Meta(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
-                    ServiceConfig::FrontendV2(c) => {
+                    ServiceConfig::Frontend(c) => {
                         let mut command = Command::new("frontend-node");
                         FrontendService::apply_command_args(&mut command, c)?;
-                        rw_services.push(PiestreamService::Frontend(
+                        rw_services.push(piestreamService::Frontend(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     ServiceConfig::Compactor(c) => {
                         let mut command = Command::new("compactor");
                         CompactorService::apply_command_args(&mut command, c)?;
-                        rw_services.push(PiestreamService::Compactor(
+                        apply_config_file(&mut command);
+                        rw_services.push(piestreamService::Compactor(
                             command.get_args().map(ToOwned::to_owned).collect(),
                         ));
                     }
                     _ => {
-                        return Err(anyhow!("unsupported service: {}", step));
+                        return Err(anyhow!("unsupported service: {:?}", step));
                     }
                 }
             }
@@ -113,16 +148,16 @@ pub async fn playground() -> Result<()> {
         Err(e) => {
             tracing::warn!("Failed to load risedev config. All components will be started using the default command line options.\n{}", e);
             vec![
-                PiestreamService::Meta(vec!["--backend".into(), "mem".into()]),
-                PiestreamService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
-                PiestreamService::Frontend(vec![]),
+                piestreamService::Meta(vec!["--backend".into(), "mem".into()]),
+                piestreamService::Compute(vec!["--state-store".into(), "hummock+memory".into()]),
+                piestreamService::Frontend(vec![]),
             ]
         }
     };
 
     for service in services {
         match service {
-            PiestreamService::Meta(mut opts) => {
+            piestreamService::Meta(mut opts) => {
                 opts.insert(0, "meta-node".into());
                 tracing::info!("starting meta-node thread with cli args: {:?}", opts);
                 let opts = piestream_meta::MetaNodeOpts::parse_from(opts);
@@ -136,7 +171,7 @@ pub async fn playground() -> Result<()> {
                 // wait for the service to be ready
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-            PiestreamService::Compute(mut opts) => {
+            piestreamService::Compute(mut opts) => {
                 opts.insert(0, "compute-node".into());
                 tracing::info!("starting compute-node thread with cli args: {:?}", opts);
                 let opts = piestream_compute::ComputeNodeOpts::parse_from(opts);
@@ -144,7 +179,7 @@ pub async fn playground() -> Result<()> {
                 let _compute_handle =
                     tokio::spawn(async move { piestream_compute::start(opts).await });
             }
-            PiestreamService::Frontend(mut opts) => {
+            piestreamService::Frontend(mut opts) => {
                 opts.insert(0, "frontend-node".into());
                 tracing::info!("starting frontend-node thread with cli args: {:?}", opts);
                 let opts = piestream_frontend::FrontendOpts::parse_from(opts);
@@ -152,7 +187,7 @@ pub async fn playground() -> Result<()> {
                 let _frontend_handle =
                     tokio::spawn(async move { piestream_frontend::start(opts).await });
             }
-            PiestreamService::Compactor(mut opts) => {
+            piestreamService::Compactor(mut opts) => {
                 opts.insert(0, "compactor".into());
                 tracing::info!("starting compactor thread with cli args: {:?}", opts);
                 let opts = piestream_compactor::CompactorOpts::parse_from(opts);
@@ -162,6 +197,8 @@ pub async fn playground() -> Result<()> {
             }
         }
     }
+
+    sync_point::sync_point!("CLUSTER_READY");
 
     // TODO: should we join all handles?
     // Currently, not all services can be shutdown gracefully, just quit on Ctrl-C now.

@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt;
 
 use itertools::Itertools;
-use piestream_common::catalog::{ColumnDesc, DatabaseId, OrderedColumnDesc, SchemaId, TableId};
+use piestream_common::catalog::{Field, Schema};
+use piestream_common::types::DataType;
 use piestream_common::util::sort_util::OrderType;
 use piestream_pb::plan_common::JoinType;
 use piestream_pb::stream_plan::stream_node::NodeBody;
 use piestream_pb::stream_plan::HashJoinNode;
 
-use super::{LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, StreamDeltaJoin, ToStreamProst};
-use crate::catalog::column_catalog::ColumnCatalog;
+use super::utils::TableCatalogBuilder;
+use super::{LogicalJoin, PlanBase, PlanRef, PlanTreeNodeBinary, StreamDeltaJoin, StreamNode};
 use crate::catalog::table_catalog::TableCatalog;
 use crate::expr::Expr;
-use crate::optimizer::plan_node::EqJoinPredicate;
+use crate::optimizer::plan_node::utils::IndicesDisplay;
+use crate::optimizer::plan_node::{EqJoinPredicate, EqJoinPredicateDisplay};
 use crate::optimizer::property::Distribution;
-use crate::utils::ColIndexMapping;
+use crate::stream_fragmenter::BuildFragmentGraphState;
 
 /// [`StreamHashJoin`] implements [`super::LogicalJoin`] with hash table. It builds a hash table
 /// from inner (right-side) relation and probes with data from outer (left-side) relation to
@@ -42,13 +43,6 @@ pub struct StreamHashJoin {
     /// non-equal parts to facilitate execution later
     eq_join_predicate: EqJoinPredicate,
 
-    /// Whether to force use delta join for this join node. If this is true, then indexes will
-    /// be create automatically when building the executors on meta service. For testing purpose
-    /// only. Will remove after we have fully support shared state and index.
-    is_delta: bool,
-
-    dist_key_l: Distribution,
-    dist_key_r: Distribution,
     /// Whether can optimize for append-only stream.
     /// It is true if input of both side is append-only
     is_append_only: bool,
@@ -66,21 +60,15 @@ impl StreamHashJoin {
         let dist = Self::derive_dist(
             logical.left().distribution(),
             logical.right().distribution(),
-            &logical
-                .l2i_col_mapping()
-                .composite(&logical.i2o_col_mapping()),
+            &logical,
         );
-
-        let dist_l = logical.left().distribution().clone();
-        let dist_r = logical.right().distribution().clone();
-
-        let force_delta = ctx.inner().session_ctx.config().get_delta_join();
 
         // TODO: derive from input
         let base = PlanBase::new_stream(
             ctx,
             logical.schema().clone(),
-            logical.base.pk_indices.to_vec(),
+            logical.base.logical_pk.to_vec(),
+            logical.functional_dependency().clone(),
             dist,
             append_only,
         );
@@ -89,9 +77,6 @@ impl StreamHashJoin {
             base,
             logical,
             eq_join_predicate,
-            is_delta: force_delta,
-            dist_key_l: dist_l,
-            dist_key_r: dist_r,
             is_append_only: append_only,
         }
     }
@@ -109,14 +94,37 @@ impl StreamHashJoin {
     pub(super) fn derive_dist(
         left: &Distribution,
         right: &Distribution,
-        side2o_mapping: &ColIndexMapping,
+        logical: &LogicalJoin,
     ) -> Distribution {
         match (left, right) {
             (Distribution::Single, Distribution::Single) => Distribution::Single,
             (Distribution::HashShard(_), Distribution::HashShard(_)) => {
-                side2o_mapping.rewrite_provided_distribution(left)
+                // we can not derive the hash distribution from the side where outer join can
+                // generate a NULL row
+                match logical.join_type() {
+                    JoinType::Unspecified => unreachable!(),
+                    JoinType::FullOuter => Distribution::SomeShard,
+                    JoinType::Inner
+                    | JoinType::LeftOuter
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti => {
+                        let l2o = logical
+                            .l2i_col_mapping()
+                            .composite(&logical.i2o_col_mapping());
+                        l2o.rewrite_provided_distribution(left)
+                    }
+                    JoinType::RightSemi | JoinType::RightAnti | JoinType::RightOuter => {
+                        let r2o = logical
+                            .r2i_col_mapping()
+                            .composite(&logical.i2o_col_mapping());
+                        r2o.rewrite_provided_distribution(right)
+                    }
+                }
             }
-            (_, _) => panic!(),
+            (_, _) => unreachable!(
+                "suspicious distribution: left: {:?}, right: {:?}",
+                left, right
+            ),
         }
     }
 
@@ -127,34 +135,54 @@ impl StreamHashJoin {
 }
 
 impl fmt::Display for StreamHashJoin {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut builder = if self.is_delta {
-            f.debug_struct("StreamDeltaHashJoin")
-        } else if self.is_append_only {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut builder = if self.is_append_only {
             f.debug_struct("StreamAppendOnlyHashJoin")
         } else {
             f.debug_struct("StreamHashJoin")
         };
-        builder
-            .field("type", &format_args!("{:?}", self.logical.join_type()))
-            .field("predicate", &format_args!("{}", self.eq_join_predicate()));
+
+        let verbose = self.base.ctx.is_explain_verbose();
+        builder.field("type", &format_args!("{:?}", self.logical.join_type()));
+
+        let mut concat_schema = self.left().schema().fields.clone();
+        concat_schema.extend(self.right().schema().fields.clone());
+        let concat_schema = Schema::new(concat_schema);
+        builder.field(
+            "predicate",
+            &format_args!(
+                "{}",
+                EqJoinPredicateDisplay {
+                    eq_join_predicate: self.eq_join_predicate(),
+                    input_schema: &concat_schema
+                }
+            ),
+        );
 
         if self.append_only() {
             builder.field("append_only", &format_args!("{}", true));
         }
-        if self
-            .logical
-            .output_indices()
-            .iter()
-            .copied()
-            .eq(0..self.logical.internal_column_num())
-        {
-            builder.field("output_indices", &format_args!("all"));
-        } else {
-            builder.field(
-                "output_indices",
-                &format_args!("{:?}", self.logical.output_indices()),
-            );
+        if verbose {
+            if self
+                .logical
+                .output_indices()
+                .iter()
+                .copied()
+                .eq(0..self.logical.internal_column_num())
+            {
+                builder.field("output", &format_args!("all"));
+            } else {
+                builder.field(
+                    "output",
+                    &format_args!(
+                        "{:?}",
+                        &IndicesDisplay {
+                            indices: self.logical.output_indices(),
+                            input_schema: &concat_schema,
+                        }
+                    ),
+                );
+            }
         }
 
         builder.finish()
@@ -180,48 +208,46 @@ impl PlanTreeNodeBinary for StreamHashJoin {
 
 impl_plan_tree_node_for_binary! { StreamHashJoin }
 
-impl ToStreamProst for StreamHashJoin {
-    fn to_stream_prost_body(&self) -> NodeBody {
+impl StreamNode for StreamHashJoin {
+    fn to_stream_prost_body(&self, state: &mut BuildFragmentGraphState) -> NodeBody {
+        let left_key_indices = self.eq_join_predicate.left_eq_indexes();
+        let right_key_indices = self.eq_join_predicate.right_eq_indexes();
+        let left_key_indices_prost = left_key_indices.iter().map(|idx| *idx as i32).collect_vec();
+        let right_key_indices_prost = right_key_indices
+            .iter()
+            .map(|idx| *idx as i32)
+            .collect_vec();
+
+        let (left_table, left_degree_table) =
+            infer_internal_and_degree_table_catalog(self.left(), left_key_indices);
+        let (right_table, right_degree_table) =
+            infer_internal_and_degree_table_catalog(self.right(), right_key_indices);
+
+        let (left_table, left_degree_table) = (
+            left_table.with_id(state.gen_table_id_wrapped()),
+            left_degree_table.with_id(state.gen_table_id_wrapped()),
+        );
+        let (right_table, right_degree_table) = (
+            right_table.with_id(state.gen_table_id_wrapped()),
+            right_degree_table.with_id(state.gen_table_id_wrapped()),
+        );
+
+        let null_safe_prost = self.eq_join_predicate.null_safes().into_iter().collect();
+
         NodeBody::HashJoin(HashJoinNode {
             join_type: self.logical.join_type() as i32,
-            left_key: self
-                .eq_join_predicate
-                .left_eq_indexes()
-                .iter()
-                .map(|v| *v as i32)
-                .collect(),
-            right_key: self
-                .eq_join_predicate
-                .right_eq_indexes()
-                .iter()
-                .map(|v| *v as i32)
-                .collect(),
+            left_key: left_key_indices_prost,
+            right_key: right_key_indices_prost,
+            null_safe: null_safe_prost,
             condition: self
                 .eq_join_predicate
                 .other_cond()
                 .as_expr_unless_true()
                 .map(|x| x.to_expr_proto()),
-            dist_key_l: self
-                .dist_key_l
-                .dist_column_indices()
-                .iter()
-                .map(|idx| *idx as u32)
-                .collect_vec(),
-            dist_key_r: self
-                .dist_key_r
-                .dist_column_indices()
-                .iter()
-                .map(|idx| *idx as u32)
-                .collect_vec(),
-            is_delta_join: self.is_delta,
-            left_table: Some(infer_internal_table_catalog(self.left()).to_prost(
-                SchemaId::placeholder() as u32,
-                DatabaseId::placeholder() as u32,
-            )),
-            right_table: Some(infer_internal_table_catalog(self.right()).to_prost(
-                SchemaId::placeholder() as u32,
-                DatabaseId::placeholder() as u32,
-            )),
+            left_table: Some(left_table.to_internal_table_prost()),
+            right_table: Some(right_table.to_internal_table_prost()),
+            left_degree_table: Some(left_degree_table.to_internal_table_prost()),
+            right_degree_table: Some(right_degree_table.to_internal_table_prost()),
             output_indices: self
                 .logical
                 .output_indices()
@@ -233,37 +259,63 @@ impl ToStreamProst for StreamHashJoin {
     }
 }
 
-fn infer_internal_table_catalog(input: PlanRef) -> TableCatalog {
+/// Return hash join internal table catalog and degree table catalog.
+fn infer_internal_and_degree_table_catalog(
+    input: PlanRef,
+    join_key_indices: Vec<usize>,
+) -> (TableCatalog, TableCatalog) {
     let base = input.plan_base();
     let schema = &base.schema;
-    let pk_indices = &base.pk_indices;
-    let columns = schema
-        .fields()
+
+    let internal_table_dist_keys = base.dist.dist_column_indices().to_vec();
+
+    // Find the dist key position in join key.
+    // FIXME(yuhao): currently the dist key position is not the exact position mapped to the join
+    // key when there are duplicate value in join key indices.
+    let degree_table_dist_keys = internal_table_dist_keys
         .iter()
-        .map(|field| ColumnCatalog {
-            column_desc: ColumnDesc::from_field_without_column_id(field),
-            is_hidden: false,
+        .map(|idx| {
+            join_key_indices
+                .iter()
+                .position(|v| v == idx)
+                .expect("join key should contain dist key.")
         })
         .collect_vec();
-    let mut order_desc = vec![];
-    for &idx in pk_indices {
-        order_desc.push(OrderedColumnDesc {
-            column_desc: columns[idx].column_desc.clone(),
-            order: OrderType::Ascending,
-        });
-    }
-    TableCatalog {
-        id: TableId::placeholder(),
-        associated_source_id: None,
-        name: String::new(),
-        columns,
-        order_desc,
-        pks: pk_indices.clone(),
-        distribution_keys: base.dist.dist_column_indices().to_vec(),
-        is_index_on: None,
-        appendonly: input.append_only(),
-        owner: piestream_common::catalog::DEFAULT_SUPPER_USER.to_string(),
-        vnode_mapping: None,
-        properties: HashMap::default(),
-    }
+
+    // The pk of hash join internal and degree table should be join_key + input_pk.
+    let mut pk_indices = join_key_indices;
+    // TODO(yuhao): dedup the dist key and pk.
+    pk_indices.extend(&base.logical_pk);
+
+    // Build internal table
+    let mut internal_table_catalog_builder =
+        TableCatalogBuilder::new(base.ctx.inner().with_options.internal_table_subset());
+    let internal_columns_fields = schema.fields().to_vec();
+
+    internal_columns_fields.iter().for_each(|field| {
+        internal_table_catalog_builder.add_column(field);
+    });
+
+    pk_indices.iter().for_each(|idx| {
+        internal_table_catalog_builder.add_order_column(*idx, OrderType::Ascending)
+    });
+
+    // Build degree table.
+    let mut degree_table_catalog_builder =
+        TableCatalogBuilder::new(base.ctx.inner().with_options.internal_table_subset());
+
+    let degree_column_field = Field::with_name(DataType::Int64, "_degree");
+
+    pk_indices.iter().enumerate().for_each(|(order_idx, idx)| {
+        degree_table_catalog_builder.add_column(&internal_columns_fields[*idx]);
+        degree_table_catalog_builder.add_order_column(order_idx, OrderType::Ascending)
+    });
+    degree_table_catalog_builder.add_column(&degree_column_field);
+    degree_table_catalog_builder
+        .set_value_indices(vec![degree_table_catalog_builder.columns().len() - 1]);
+
+    (
+        internal_table_catalog_builder.build(internal_table_dist_keys),
+        degree_table_catalog_builder.build(degree_table_dist_keys),
+    )
 }

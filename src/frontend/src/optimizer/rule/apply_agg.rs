@@ -12,42 +12,129 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use piestream_common::types::DataType;
+use piestream_expr::expr::AggKind;
 use piestream_pb::plan_common::JoinType;
 
 use super::{BoxedRule, Rule};
-use crate::optimizer::plan_node::{LogicalAgg, PlanTreeNodeBinary, PlanTreeNodeUnary};
+use crate::expr::{ExprImpl, ExprType, FunctionCall, InputRef};
+use crate::optimizer::plan_node::{LogicalAgg, LogicalApply, LogicalFilter, LogicalProject};
 use crate::optimizer::PlanRef;
+use crate::utils::{ColIndexMapping, Condition};
 
 /// Push `LogicalApply` down `LogicalAgg`.
-pub struct ApplyAgg {}
-impl Rule for ApplyAgg {
+pub struct ApplyAggRule {}
+impl Rule for ApplyAggRule {
     fn apply(&self, plan: PlanRef) -> Option<PlanRef> {
-        let apply = plan.as_logical_apply()?;
-        assert_eq!(apply.join_type(), JoinType::Inner);
-        let right = apply.right();
-        let agg = right.as_logical_agg()?;
+        let apply: &LogicalApply = plan.as_logical_apply()?;
+        let (left, right, on, join_type, correlated_id, correlated_indices, max_one_row) =
+            apply.clone().decompose();
+        assert_eq!(join_type, JoinType::Inner);
+        let agg: &LogicalAgg = right.as_logical_agg()?;
+        let (mut agg_calls, agg_group_key, agg_input) = agg.clone().decompose();
+        let is_scalar_agg = agg_group_key.is_empty();
+        let agg_input_len = agg_input.schema().len();
+        let apply_left_len = left.schema().len();
 
-        // Insert all the columns of `LogicalApply`'s left at the beginning of `LogicalAgg`.
-        let apply_left_len = apply.left().schema().len();
-        let mut group_keys: Vec<usize> = (0..apply_left_len).collect();
-        let (mut agg_calls, agg_group_keys, _) = agg.clone().decompose();
-        group_keys.extend(agg_group_keys.into_iter().map(|key| key + apply_left_len));
+        if !is_scalar_agg && max_one_row {
+            // We can only eliminate max_one_row for scalar aggregation.
+            return None;
+        }
 
-        // Shift index of agg_calls' `InputRef` with `apply_left_len`.
-        agg_calls.iter_mut().for_each(|agg_call| {
-            agg_call.inputs.iter_mut().for_each(|input_ref| {
-                input_ref.shift_with_offset(apply_left_len as isize);
+        let input = if is_scalar_agg {
+            // add a constant column to help convert count(*) to count(c) where c is non-nullable.
+            let mut exprs: Vec<ExprImpl> = agg_input
+                .schema()
+                .data_types()
+                .into_iter()
+                .enumerate()
+                .map(|(i, data_type)| InputRef::new(i, data_type).into())
+                .collect();
+            exprs.push(ExprImpl::literal_int(1));
+            LogicalProject::create(agg_input, exprs)
+        } else {
+            agg_input
+        };
+
+        let node = if is_scalar_agg {
+            // LOJ Apply need to be converted to cross Apply.
+            let left_len = left.schema().len();
+            let eq_predicates = left
+                .schema()
+                .data_types()
+                .into_iter()
+                .enumerate()
+                .map(|(i, data_type)| {
+                    let left = InputRef::new(i, data_type.clone());
+                    let right = InputRef::new(i + left_len, data_type);
+                    // use null-safe equal
+                    FunctionCall::new_unchecked(
+                        ExprType::IsNotDistinctFrom,
+                        vec![left.into(), right.into()],
+                        DataType::Boolean,
+                    )
+                    .into()
+                })
+                .collect();
+            LogicalApply::new(
+                left.clone(),
+                input,
+                JoinType::LeftOuter,
+                Condition::true_cond(),
+                correlated_id,
+                correlated_indices,
+                false,
+            )
+            .translate_apply(left, eq_predicates)
+        } else {
+            LogicalApply::new(
+                left,
+                input,
+                JoinType::Inner,
+                Condition::true_cond(),
+                correlated_id,
+                correlated_indices,
+                false,
+            )
+            .into()
+        };
+
+        let group_agg = {
+            // shift index of agg_calls' `InputRef` with `apply_left_len`.
+            let offset = apply_left_len as isize;
+            let mut shift_index = ColIndexMapping::with_shift_offset(agg_input_len, offset);
+            agg_calls.iter_mut().for_each(|agg_call| {
+                agg_call.inputs.iter_mut().for_each(|input_ref| {
+                    input_ref.shift_with_offset(offset);
+                });
+                agg_call
+                    .order_by_fields
+                    .iter_mut()
+                    .for_each(|o| o.input.shift_with_offset(offset));
+                agg_call.filter = agg_call.filter.clone().rewrite_expr(&mut shift_index);
             });
-        });
+            if is_scalar_agg {
+                // convert count(*) to count(1).
+                let pos_of_constant_column = node.schema().len() - 1;
+                agg_calls.iter_mut().for_each(|agg_call| {
+                    if agg_call.agg_kind == AggKind::Count && agg_call.inputs.is_empty() {
+                        let input_ref = InputRef::new(pos_of_constant_column, DataType::Int32);
+                        agg_call.inputs.push(input_ref);
+                    }
+                });
+            }
+            let mut group_keys: Vec<usize> = (0..apply_left_len).collect();
+            group_keys.extend(agg_group_key.into_iter().map(|key| key + apply_left_len));
+            LogicalAgg::new(agg_calls, group_keys, node).into()
+        };
 
-        let new_apply = apply.clone_with_left_right(apply.left(), agg.input());
-        let new_agg = LogicalAgg::new(agg_calls, group_keys, new_apply.into());
-        Some(new_agg.into())
+        let filter = LogicalFilter::create(group_agg, on);
+        Some(filter)
     }
 }
 
-impl ApplyAgg {
+impl ApplyAggRule {
     pub fn create() -> BoxedRule {
-        Box::new(ApplyAgg {})
+        Box::new(ApplyAggRule {})
     }
 }

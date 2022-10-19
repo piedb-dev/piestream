@@ -14,13 +14,18 @@
 
 pub mod hummock_version_ext;
 
+use parse_display::Display;
+
 use crate::CompactionGroupId;
 
 pub type StateTableId = u32;
 
 /// A compaction task's `StaticCompactionGroupId` indicates the compaction group that all its input
 /// SSTs belong to.
+#[derive(FromPrimitive, Display)]
 pub enum StaticCompactionGroupId {
+    /// Create a new compaction group.
+    NewCompactionGroup = 0,
     /// All shared buffer local compaction task goes to here. Meta service will never see this
     /// value. Note that currently we've restricted the compaction task's input by `via
     /// compact_shared_buffer_by_compaction_group`
@@ -29,6 +34,8 @@ pub enum StaticCompactionGroupId {
     StateDefault = 2,
     /// All MVs goes to here.
     MaterializedView = 3,
+    /// Larger than any `StaticCompactionGroupId`.
+    End = 4,
 }
 
 impl From<StaticCompactionGroupId> for CompactionGroupId {

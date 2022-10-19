@@ -21,9 +21,9 @@ pub type Result<T> = std::result::Result<T, RpcError>;
 #[derive(Error, Debug)]
 pub enum RpcError {
     #[error("Transport error: {0}")]
-    TrasnportError(#[from] tonic::transport::Error),
+    TransportError(#[from] tonic::transport::Error),
 
-    #[error("gRPC status: {0}")]
+    #[error("gRPC error ({}): {}", .0.code(), .0.message())]
     GrpcStatus(#[from] tonic::Status),
 
     #[error(transparent)]
@@ -32,6 +32,9 @@ pub enum RpcError {
 
 impl From<RpcError> for RwError {
     fn from(r: RpcError) -> Self {
-        ErrorCode::RpcError(r.into()).into()
+        match r {
+            RpcError::GrpcStatus(status) => status.into(),
+            _ => ErrorCode::RpcError(r.into()).into(),
+        }
     }
 }

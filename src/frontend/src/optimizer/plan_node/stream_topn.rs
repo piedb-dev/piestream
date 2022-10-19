@@ -16,8 +16,9 @@ use std::fmt;
 
 use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
-use super::{LogicalTopN, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
-use crate::optimizer::property::{Distribution, FieldOrder};
+use super::{LogicalTopN, PlanBase, PlanRef, PlanTreeNodeUnary, StreamNode};
+use crate::optimizer::property::{Distribution, Order};
+use crate::stream_fragmenter::BuildFragmentGraphState;
 
 /// `StreamTopN` implements [`super::LogicalTopN`] to find the top N elements with a heap
 #[derive(Debug, Clone)]
@@ -28,6 +29,8 @@ pub struct StreamTopN {
 
 impl StreamTopN {
     pub fn new(logical: LogicalTopN) -> Self {
+        assert!(logical.group_key().is_empty());
+        assert!(logical.limit() > 0);
         let ctx = logical.base.ctx.clone();
         let dist = match logical.input().distribution() {
             Distribution::Single => Distribution::Single,
@@ -37,27 +40,38 @@ impl StreamTopN {
         let base = PlanBase::new_stream(
             ctx,
             logical.schema().clone(),
-            logical.input().pk_indices().to_vec(),
+            logical.input().logical_pk().to_vec(),
+            logical.functional_dependency().clone(),
             dist,
             false,
         );
         StreamTopN { base, logical }
     }
+
+    pub fn limit(&self) -> usize {
+        self.logical.limit()
+    }
+
+    pub fn offset(&self) -> usize {
+        self.logical.offset()
+    }
+
+    pub fn with_ties(&self) -> bool {
+        self.logical.with_ties()
+    }
+
+    pub fn topn_order(&self) -> &Order {
+        self.logical.topn_order()
+    }
 }
 
 impl fmt::Display for StreamTopN {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut builder = if self.input().append_only() {
-            f.debug_struct("StreamAppendOnlyTopN")
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.input().append_only() {
+            self.logical.fmt_with_name(f, "StreamAppendOnlyTopN")
         } else {
-            f.debug_struct("StreamTopN")
-        };
-
-        builder
-            .field("order", &format_args!("{}", self.logical.topn_order()))
-            .field("limit", &format_args!("{}", self.logical.limit()))
-            .field("offset", &format_args!("{}", self.logical.offset()))
-            .finish()
+            self.logical.fmt_with_name(f, "StreamTopN")
+        }
     }
 }
 
@@ -73,26 +87,24 @@ impl PlanTreeNodeUnary for StreamTopN {
 
 impl_plan_tree_node_for_unary! { StreamTopN }
 
-impl ToStreamProst for StreamTopN {
-    fn to_stream_prost_body(&self) -> ProstStreamNode {
+impl StreamNode for StreamTopN {
+    fn to_stream_prost_body(&self, state: &mut BuildFragmentGraphState) -> ProstStreamNode {
         use piestream_pb::stream_plan::*;
-        let column_orders = self
-            .logical
-            .topn_order()
-            .field_order
-            .iter()
-            .map(FieldOrder::to_protobuf)
-            .collect();
-
         let topn_node = TopNNode {
-            column_orders,
-            limit: self.logical.limit() as u64,
-            offset: self.logical.offset() as u64,
-            distribution_keys: vec![], // TODO: seems unnecessary
-            ..Default::default()
+            limit: self.limit() as u64,
+            offset: self.offset() as u64,
+            with_ties: self.with_ties(),
+            table: Some(
+                self.logical
+                    .infer_internal_table_catalog(None)
+                    .with_id(state.gen_table_id_wrapped())
+                    .to_internal_table_prost(),
+            ),
+            order_by_len: self.topn_order().len() as u32,
         };
-
-        if self.input().append_only() {
+        // TODO: support with ties for append only TopN
+        // <https://github.com/piestreamlabs/piestream/issues/5642>
+        if self.input().append_only() && !self.with_ties() {
             ProstStreamNode::AppendOnlyTopN(topn_node)
         } else {
             ProstStreamNode::TopN(topn_node)

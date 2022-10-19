@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_stack_trace::StackTrace;
 use futures::{pin_mut, StreamExt};
 use futures_async_stream::try_stream;
 use piestream_common::array::{Op, StreamChunk};
-use piestream_common::catalog::{OrderedColumnDesc, Schema};
-use piestream_storage::table::storage_table::{StorageTable, READ_ONLY};
+use piestream_common::catalog::Schema;
+use piestream_hummock_sdk::HummockReadEpoch;
+use piestream_storage::table::batch_table::storage_table::StorageTable;
 use piestream_storage::table::TableIter;
 use piestream_storage::StateStore;
 
@@ -26,16 +28,12 @@ use crate::executor::BoxedMessageStream;
 
 pub struct BatchQueryExecutor<S: StateStore> {
     /// The [`StorageTable`] that needs to be queried
-    table: StorageTable<S, READ_ONLY>,
+    table: StorageTable<S>,
 
     /// The number of tuples in one [`StreamChunk`]
     batch_size: usize,
 
     info: ExecutorInfo,
-
-    /// public key field descriptors. Used to decode pk into datums
-    /// for dedup pk encoding.
-    pk_descs: Vec<OrderedColumnDesc>,
 }
 
 impl<S> BatchQueryExecutor<S>
@@ -44,17 +42,11 @@ where
 {
     const DEFAULT_BATCH_SIZE: usize = 100;
 
-    pub fn new(
-        table: StorageTable<S, READ_ONLY>,
-        batch_size: Option<usize>,
-        info: ExecutorInfo,
-        pk_descs: Vec<OrderedColumnDesc>,
-    ) -> Self {
+    pub fn new(table: StorageTable<S>, batch_size: Option<usize>, info: ExecutorInfo) -> Self {
         Self {
             table,
             batch_size: batch_size.unwrap_or(Self::DEFAULT_BATCH_SIZE),
             info,
-            pk_descs,
         }
     }
 
@@ -62,12 +54,13 @@ where
     async fn execute_inner(self, epoch: u64) {
         let iter = self
             .table
-            .batch_dedup_pk_iter(epoch, &self.pk_descs)
+            .batch_iter(HummockReadEpoch::Committed(epoch))
             .await?;
         pin_mut!(iter);
 
         while let Some(data_chunk) = iter
             .collect_data_chunk(self.schema(), Some(self.batch_size))
+            .stack_trace("batch_query_executor_collect_chunk")
             .await?
         {
             let ops = vec![Op::Insert; data_chunk.capacity()];
@@ -89,7 +82,7 @@ where
         &self.info.schema
     }
 
-    fn pk_indices(&self) -> super::PkIndicesRef {
+    fn pk_indices(&self) -> super::PkIndicesRef<'_> {
         &self.info.pk_indices
     }
 
@@ -108,9 +101,6 @@ mod test {
     use std::vec;
 
     use futures_async_stream::for_await;
-    use piestream_common::catalog::{ColumnDesc, ColumnId};
-    use piestream_common::types::DataType;
-    use piestream_common::util::sort_util::OrderType;
 
     use super::*;
     use crate::executor::mview::test_utils::gen_basic_table;
@@ -127,23 +117,7 @@ mod test {
             identity: "BatchQuery".to_owned(),
         };
 
-        let pk_descs = vec![
-            OrderedColumnDesc {
-                column_desc: ColumnDesc::unnamed(ColumnId::from(0), DataType::Int32),
-                order: OrderType::Ascending,
-            },
-            OrderedColumnDesc {
-                column_desc: ColumnDesc::unnamed(ColumnId::from(1), DataType::Int32),
-                order: OrderType::Descending,
-            },
-        ];
-
-        let executor = Box::new(BatchQueryExecutor::new(
-            table,
-            Some(test_batch_size),
-            info,
-            pk_descs,
-        ));
+        let executor = Box::new(BatchQueryExecutor::new(table, Some(test_batch_size), info));
 
         let stream = executor.execute_with_epoch(u64::MAX);
         let mut batch_cnt = 0;

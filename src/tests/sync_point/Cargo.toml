@@ -1,0 +1,28 @@
+[package]
+name = "piestream_sync_point_test"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "1"
+itertools = "0.10"
+piestream_cmd_all = { path = "../../cmd_all" }
+piestream_common = { path = "../../common" }
+piestream_object_store = { path = "../../object_store" }
+piestream_pb = { path = "../../prost" }
+piestream_rpc_client = { path = "../../rpc_client" }
+serial_test = "0.9"
+sync-point = { path = "../../utils/sync-point" }
+tokio = { version = "0.2", package = "madsim-tokio", features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "time",
+    "signal",
+    "fs",
+] }
+
+[features]
+sync_point = ["sync-point/sync_point"]

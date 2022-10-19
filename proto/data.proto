@@ -3,7 +3,6 @@ syntax = "proto3";
 package data;
 
 import "common.proto";
-import "source.proto";
 
 option optimize_for = SPEED;
 
@@ -15,7 +14,7 @@ message IntervalUnit {
 
 message DataType {
   enum IntervalType {
-    INVALID = 0;
+    UNSPECIFIED = 0;
     YEAR = 1;
     MONTH = 2;
     DAY = 3;
@@ -31,12 +30,13 @@ message DataType {
     MINUTE_TO_SECOND = 13;
   }
   enum TypeName {
-    INT16 = 0;
-    INT32 = 1;
-    INT64 = 2;
-    FLOAT = 3;
-    DOUBLE = 4;
-    BOOLEAN = 5;
+    TYPE_UNSPECIFIED = 0;
+    INT16 = 1;
+    INT32 = 2;
+    INT64 = 3;
+    FLOAT = 4;
+    DOUBLE = 5;
+    BOOLEAN = 6;
     VARCHAR = 7;
     DECIMAL = 8;
     TIME = 9;
@@ -61,6 +61,8 @@ message DataType {
   // For list type it only contains 1 element which is the inner item type of the List.
   // For example, `ARRAY<INTEGER>` will be represented as `vec![DataType::Int32]`.
   repeated DataType field_type = 6;
+  // Name of the fields if it is a struct type. For other types it will be empty.
+  repeated string field_names = 7;
 }
 
 message StructArrayData {
@@ -75,20 +77,21 @@ message ListArrayData {
 }
 
 enum ArrayType {
-  INT16 = 0;
-  INT32 = 1;
-  INT64 = 2;
-  FLOAT32 = 3;
-  FLOAT64 = 4;
-  UTF8 = 5;
-  BOOL = 6;
-  DECIMAL = 7;
-  DATE = 8;
-  TIME = 9;
-  TIMESTAMP = 10;
-  INTERVAL = 11;
-  STRUCT = 12;
-  LIST = 13;
+  UNSPECIFIED = 0;
+  INT16 = 1;
+  INT32 = 2;
+  INT64 = 3;
+  FLOAT32 = 4;
+  FLOAT64 = 5;
+  UTF8 = 6;
+  BOOL = 7;
+  DECIMAL = 8;
+  DATE = 9;
+  TIME = 10;
+  TIMESTAMP = 11;
+  INTERVAL = 12;
+  STRUCT = 13;
+  LIST = 14;
 }
 
 message Array {
@@ -112,17 +115,11 @@ message DataChunk {
 }
 
 enum Op {
-  INSERT = 0;
-  DELETE = 1;
-  UPDATE_INSERT = 2;
-  UPDATE_DELETE = 3;
-}
-
-message StreamMessage {
-  oneof stream_message {
-    StreamChunk stream_chunk = 1;
-    Barrier barrier = 2;
-  }
+  OP_UNSPECIFIED = 0;
+  INSERT = 1;
+  DELETE = 2;
+  UPDATE_INSERT = 3;
+  UPDATE_DELETE = 4;
 }
 
 message StreamChunk {
@@ -132,43 +129,9 @@ message StreamChunk {
   repeated Column columns = 3;
 }
 
-message StopMutation {
-  repeated uint32 actors = 1;
-}
-
-message DispatcherMutation {
-  uint32 actor_id = 1;
-  uint64 dispatcher_id = 2;
-  repeated common.ActorInfo info = 3;
-}
-
-message UpdateMutation {
-  repeated DispatcherMutation mutations = 1;
-}
-
-message AddMutation {
-  repeated DispatcherMutation mutations = 1;
-  map<uint32, source.ConnectorSplits> actor_splits = 2;
-}
-
-message SourceChangeSplitMutation {
-  map<uint32, source.ConnectorSplits> actor_splits = 2;
-}
-
 message Epoch {
   uint64 curr = 1;
   uint64 prev = 2;
-}
-
-message Barrier {
-  Epoch epoch = 1;
-  oneof mutation {
-    StopMutation stop = 3;
-    UpdateMutation update = 4;
-    AddMutation add = 5;
-    SourceChangeSplitMutation splits = 7;
-  }
-  bytes span = 6;
 }
 
 message Terminate {}

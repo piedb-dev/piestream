@@ -51,7 +51,7 @@ pub(crate) use boolean;
 macro_rules! struct_type {
     ($macro:ident) => {
         $macro! {
-            piestream_common::types::DataType::Struct{fields:_},
+            piestream_common::types::DataType::Struct{ .. },
             piestream_common::array::StructArray
         }
     };
@@ -63,7 +63,7 @@ pub(crate) use struct_type;
 macro_rules! list {
     ($macro:ident) => {
         $macro! {
-            piestream_common::types::DataType::List{datatype:_},
+            piestream_common::types::DataType::List{ .. },
             piestream_common::array::ListArray
         }
     };

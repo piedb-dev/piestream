@@ -15,9 +15,10 @@
 use std::fmt;
 
 use itertools::Itertools;
-use piestream_common::catalog::Schema;
+use parse_display::Display;
+use piestream_common::catalog::{FieldDisplay, Schema};
 use piestream_common::error::Result;
-use piestream_common::util::sort_util::OrderType;
+use piestream_common::util::sort_util::{OrderPair, OrderType};
 use piestream_pb::plan_common::{ColumnOrder, OrderType as ProstOrderType};
 
 use super::super::plan_node::*;
@@ -40,6 +41,10 @@ impl Order {
             .map(FieldOrder::to_protobuf)
             .collect_vec()
     }
+
+    pub fn len(&self) -> usize {
+        self.field_order.len()
+    }
 }
 
 impl fmt::Display for Order {
@@ -55,7 +60,42 @@ impl fmt::Display for Order {
     }
 }
 
-#[derive(Clone)]
+pub struct OrderDisplay<'a> {
+    pub order: &'a Order,
+    pub input_schema: &'a Schema,
+}
+
+impl OrderDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let that = self.order;
+        f.write_str("[")?;
+        for (i, field_order) in that.field_order.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            FieldOrderDisplay {
+                field_order,
+                input_schema: self.input_schema,
+            }
+            .fmt(f)?;
+        }
+        f.write_str("]")
+    }
+}
+
+impl fmt::Display for OrderDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt(f)
+    }
+}
+
+impl fmt::Debug for OrderDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt(f)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct FieldOrder {
     pub index: usize,
     pub direct: Direction,
@@ -64,6 +104,29 @@ pub struct FieldOrder {
 impl std::fmt::Debug for FieldOrder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "${} {}", self.index, self.direct)
+    }
+}
+
+pub struct FieldOrderDisplay<'a> {
+    pub field_order: &'a FieldOrder,
+    pub input_schema: &'a Schema,
+}
+
+impl FieldOrderDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let that = self.field_order;
+        write!(
+            f,
+            "{} {}",
+            FieldDisplay(self.input_schema.fields.get(that.index).unwrap()),
+            that.direct
+        )
+    }
+}
+
+impl fmt::Debug for FieldOrderDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt(f)
     }
 }
 
@@ -88,6 +151,22 @@ impl FieldOrder {
             index: self.index as u32,
         }
     }
+
+    pub fn from_protobuf(column_order: &ColumnOrder) -> Self {
+        let order_type: ProstOrderType = ProstOrderType::from_i32(column_order.order_type).unwrap();
+        Self {
+            direct: Direction::from_protobuf(&order_type),
+            index: column_order.index as usize,
+        }
+    }
+
+    // TODO: unify them
+    pub fn to_order_pair(&self) -> OrderPair {
+        OrderPair {
+            column_idx: self.index,
+            order_type: self.direct.to_order(),
+        }
+    }
 }
 
 impl fmt::Display for FieldOrder {
@@ -96,7 +175,8 @@ impl fmt::Display for FieldOrder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Display, Clone, Eq, PartialEq, Copy, Hash)]
+#[display(style = "UPPERCASE")]
 pub enum Direction {
     Asc,
     Desc,
@@ -113,23 +193,29 @@ impl From<Direction> for OrderType {
     }
 }
 
-impl fmt::Display for Direction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            Direction::Asc => "ASC",
-            Direction::Desc => "DESC",
-            Direction::Any => "ANY",
-        };
-        f.write_str(s)
-    }
-}
-
 impl Direction {
-    pub fn to_protobuf(&self) -> ProstOrderType {
+    pub fn to_protobuf(self) -> ProstOrderType {
         match self {
             Self::Asc => ProstOrderType::Ascending,
             Self::Desc => ProstOrderType::Descending,
             _ => unimplemented!(),
+        }
+    }
+
+    pub fn from_protobuf(order_type: &ProstOrderType) -> Self {
+        match order_type {
+            ProstOrderType::Ascending => Self::Asc,
+            ProstOrderType::Descending => Self::Desc,
+            ProstOrderType::OrderUnspecified => unreachable!(),
+        }
+    }
+
+    // TODO: unify them
+    pub fn to_order(self) -> OrderType {
+        match self {
+            Self::Asc => OrderType::Ascending,
+            Self::Desc => OrderType::Descending,
+            _ => unreachable!(),
         }
     }
 }

@@ -1,7 +1,8 @@
+![piestream Logo](./docs/images/logo-title.svg)
 
 [![Slack](https://badgen.net/badge/Slack/Join%20piestream/0abd59?icon=slack)](https://join.slack.com/t/piestream-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw)
 [![Build status](https://badge.buildkite.com/9394d2bca0f87e2e97aa78b25f765c92d4207c0b65e7f6648f.svg)](https://buildkite.com/singularity-data/main)
-[![codecov](https://codecov.io/gh/singularity-data/piestream/branch/main/graph/badge.svg?token=EB44K9K38B)](https://codecov.io/gh/singularity-data/piestream)
+[![codecov](https://codecov.io/gh/piestreamlabs/piestream/branch/main/graph/badge.svg?token=EB44K9K38B)](https://codecov.io/gh/piestreamlabs/piestream)
 
 piestream is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. piestream consumes streaming data, performs continuous queries, and updates results dynamically. As a database system, piestream maintains results inside its own storage and allows users to access data efficiently.
 
@@ -19,20 +20,18 @@ There are two ways to install piestream: use a pre-built package or compile from
 
 ```shell
 # Download the pre-built binary
-wget https://github.com/singularity-data/piestream/releases/download/v0.1.8/piestream-v0.1.8-x86_64-unknown-linux.tar.gz
+wget https://github.com/piestreamlabs/piestream/releases/download/v0.1.13/piestream-v0.1.13-x86_64-unknown-linux.tar.gz
 # Unzip the binary
-tar xvf piestream-v0.1.8-x86_64-unknown-linux.tar.gz
+tar xvf piestream-v0.1.13-x86_64-unknown-linux.tar.gz
 # Start piestream in single-binary playground mode
 ./piestream playground
 ```
 
 **Use Docker (Linux, macOS)**
 
-Currently, only x86_64 is supported. We will provide arm64 builds in the future.
-
 ```shell
 # Start piestream in single-binary playground mode
-docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/singularity-data/piestream:latest playground
+docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/piestreamlabs/piestream:v0.1.13 playground
 ```
 
 **Compile from Source with [RiseDev](docs/developer-guide.md#set-up-the-development-environment) (Linux and macOS)**
@@ -41,7 +40,7 @@ docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/singularity-data/
 # Install Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Clone the repo
-git clone https://github.com/singularity-data/piestream.git && cd piestream
+git clone https://github.com/piestreamlabs/piestream.git && cd piestream
 # Compile and start the playground
 ./risedev playground
 ```
@@ -61,7 +60,7 @@ psql -h localhost -p 4566 -d dev -U root
 
 ```sql
 /* create a table */
-create table t1(v1 int not null);
+create table t1(v1 int);
 
 /* create a materialized view based on the previous table */
 create materialized view mv1 as select sum(v1) as sum_v1 from t1;

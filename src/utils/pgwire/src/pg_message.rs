@@ -17,10 +17,11 @@ use std::ffi::CStr;
 use std::io::{Error, ErrorKind, IoSlice, Result, Write};
 
 use byteorder::{BigEndian, ByteOrder};
-/// Part of code learned from https://github.com/zenithdb/zenith/blob/main/zenith_utils/src/pq_proto.rs.
+/// Part of code learned from <https://github.com/zenithdb/zenith/blob/main/zenith_utils/src/pq_proto.rs>.
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+use crate::error_or_notice::ErrorOrNoticeMessage;
 use crate::pg_field_descriptor::{PgFieldDescriptor, TypeOid};
 use crate::pg_response::StatementType;
 use crate::pg_server::BoxedError;
@@ -38,8 +39,9 @@ pub enum FeMessage {
     Execute(FeExecuteMessage),
     Close(FeCloseMessage),
     Sync,
-    CancelQuery,
+    CancelQuery(FeCancelMessage),
     Terminate,
+    Flush,
 }
 
 pub struct FeStartupMessage {
@@ -57,6 +59,12 @@ impl FeStartupMessage {
         }?;
         let mut map = HashMap::new();
         let config: Vec<&str> = config.split('\0').collect();
+        if config.len() % 2 == 1 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Invalid input config: odd number of config pairs",
+            ));
+        }
         config.chunks(2).for_each(|chunk| {
             map.insert(chunk[0].to_string(), chunk[1].to_string());
         });
@@ -71,8 +79,16 @@ pub struct FeQueryMessage {
 
 #[derive(Debug)]
 pub struct FeBindMessage {
-    pub format_codes: Vec<i16>,
-    pub result_format_codes: Vec<i16>,
+    // param_format_code:
+    //  false: text
+    //  true: binary
+    pub param_format_code: bool,
+
+    // result_format_code:
+    //  false: text
+    //  true: binary
+    pub result_format_code: bool,
+
     pub params: Vec<Bytes>,
     pub portal_name: Bytes,
     pub statement_name: Bytes,
@@ -87,7 +103,7 @@ pub struct FeExecuteMessage {
 #[derive(Debug)]
 pub struct FeParseMessage {
     pub statement_name: Bytes,
-    pub query_string: Bytes,
+    pub sql_bytes: Bytes,
     pub type_ids: Vec<i32>,
 }
 
@@ -100,21 +116,37 @@ pub struct FePasswordMessage {
 pub struct FeDescribeMessage {
     // 'S' to describe a prepared statement; or 'P' to describe a portal.
     pub kind: u8,
-    pub query_name: Bytes,
+    pub name: Bytes,
 }
 
 #[derive(Debug)]
 pub struct FeCloseMessage {
     pub kind: u8,
-    pub query_name: Bytes,
+    pub name: Bytes,
+}
+
+pub struct FeCancelMessage {
+    pub target_process_id: i32,
+    pub target_secret_key: i32,
+}
+
+impl FeCancelMessage {
+    pub fn parse(mut buf: Bytes) -> Result<FeMessage> {
+        let target_process_id = buf.get_i32();
+        let target_secret_key = buf.get_i32();
+        Ok(FeMessage::CancelQuery(Self {
+            target_process_id,
+            target_secret_key,
+        }))
+    }
 }
 
 impl FeDescribeMessage {
     pub fn parse(mut buf: Bytes) -> Result<FeMessage> {
         let kind = buf.get_u8();
-        let query_name = read_null_terminated(&mut buf)?;
+        let name = read_null_terminated(&mut buf)?;
 
-        Ok(FeMessage::Describe(FeDescribeMessage { query_name, kind }))
+        Ok(FeMessage::Describe(FeDescribeMessage { kind, name }))
     }
 }
 
@@ -141,7 +173,20 @@ impl FeBindMessage {
         let statement_name = read_null_terminated(&mut buf)?;
         // Read FormatCode
         let len = buf.get_i16();
-        let format_codes = (0..len).map(|_| buf.get_i16()).collect();
+
+        let param_format_code = if len == 0 || len == 1 {
+            if len == 0 {
+                false
+            } else {
+                buf.get_i16() == 1
+            }
+        } else {
+            let first_value = buf.get_i16();
+            for _ in 1..len {
+                assert!(buf.get_i16() == first_value,"Only support uniform param format (TEXT or BINARY), can't support mix format now.");
+            }
+            first_value == 1
+        };
         // Read Params
         let len = buf.get_i16();
         let params = (0..len)
@@ -152,12 +197,20 @@ impl FeBindMessage {
             .collect();
         // Read ResultFormatCode
         let len = buf.get_i16();
-        let result_format_codes = (0..len).map(|_| buf.get_i16()).collect();
+
+        assert!(len==0||len==1,"Only support default result format(len==0) or uniform result format(len==1), can't support mix format now.");
+
+        let result_format_code = if len == 0 {
+            // default format:text
+            false
+        } else {
+            buf.get_i16() == 1
+        };
 
         Ok(FeMessage::Bind(FeBindMessage {
-            format_codes,
+            param_format_code,
+            result_format_code,
             params,
-            result_format_codes,
             portal_name,
             statement_name,
         }))
@@ -179,14 +232,14 @@ impl FeExecuteMessage {
 impl FeParseMessage {
     pub fn parse(mut buf: Bytes) -> Result<FeMessage> {
         let statement_name = read_null_terminated(&mut buf)?;
-        let query_string = read_null_terminated(&mut buf)?;
+        let sql_bytes = read_null_terminated(&mut buf)?;
         let nparams = buf.get_i16();
 
         let type_ids: Vec<i32> = (0..nparams).map(|_| buf.get_i32()).collect();
 
         Ok(FeMessage::Parse(FeParseMessage {
             statement_name,
-            query_string,
+            sql_bytes,
             type_ids,
         }))
     }
@@ -220,8 +273,8 @@ impl FeQueryMessage {
 impl FeCloseMessage {
     pub fn parse(mut buf: Bytes) -> Result<FeMessage> {
         let kind = buf.get_u8();
-        let query_name = read_null_terminated(&mut buf)?;
-        Ok(FeMessage::Close(FeCloseMessage { kind, query_name }))
+        let name = read_null_terminated(&mut buf)?;
+        Ok(FeMessage::Close(FeCloseMessage { kind, name }))
     }
 }
 
@@ -237,7 +290,6 @@ impl FeMessage {
             stream.read_exact(&mut payload).await?;
         }
         let sql_bytes = Bytes::from(payload);
-
         match val {
             b'Q' => Ok(FeMessage::Query(FeQueryMessage { sql_bytes })),
             b'P' => FeParseMessage::parse(sql_bytes),
@@ -248,6 +300,7 @@ impl FeMessage {
             b'X' => Ok(FeMessage::Terminate),
             b'C' => FeCloseMessage::parse(sql_bytes),
             b'p' => FePasswordMessage::parse(sql_bytes),
+            b'H' => Ok(FeMessage::Flush),
             _ => Err(std::io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Unsupported tag of regular message: {}", val),
@@ -273,7 +326,7 @@ impl FeStartupMessage {
             )?)),
             80877103 => Ok(FeMessage::Ssl),
             // Cancel request code.
-            80877102 => Ok(FeMessage::CancelQuery),
+            80877102 => FeCancelMessage::parse(Bytes::from(payload)),
             _ => Err(std::io::Error::new(
                 ErrorKind::InvalidInput,
                 format!(
@@ -306,12 +359,14 @@ fn read_null_terminated(buf: &mut Bytes) -> Result<Bytes> {
 
 /// Message sent from server to psql client. Implement `write` (how to serialize it into psql
 /// buffer).
+/// Ref: <https://www.postgresql.org/docs/current/protocol-message-formats.html>
 #[derive(Debug)]
 pub enum BeMessage<'a> {
     AuthenticationOk,
     AuthenticationCleartextPassword,
-    AuthenticationMD5Password(&'a [u8; 4]),
+    AuthenticationMd5Password(&'a [u8; 4]),
     CommandComplete(BeCommandCompleteMessage),
+    NoticeResponse(&'a str),
     // Single byte - used in response to SSLRequest/GSSENCRequest.
     EncryptionResponse,
     EmptyQueryResponse,
@@ -326,6 +381,9 @@ pub enum BeMessage<'a> {
     RowDescription(&'a [PgFieldDescriptor]),
     ErrorResponse(BoxedError),
     CloseComplete,
+
+    // 0: process ID, 1: secret key
+    BackendKeyData((i32, i32)),
 }
 
 #[derive(Debug)]
@@ -338,7 +396,6 @@ pub enum BeParameterStatusMessage<'a> {
 #[derive(Debug)]
 pub struct BeCommandCompleteMessage {
     pub stmt_type: StatementType,
-    pub notice: Option<String>,
     pub rows_cnt: i32,
 }
 
@@ -373,7 +430,7 @@ impl<'a> BeMessage<'a> {
             //
             // The 4-byte random salt will be used by client to send encrypted password as
             // concat('md5', md5(concat(md5(concat(password, username)), random-salt))).
-            BeMessage::AuthenticationMD5Password(salt) => {
+            BeMessage::AuthenticationMd5Password(salt) => {
                 buf.put_u8(b'R');
                 buf.put_i32(12);
                 buf.put_i32(5);
@@ -431,10 +488,6 @@ impl<'a> BeMessage<'a> {
                 let rows_cnt = cmd.rows_cnt;
                 let stmt_type = cmd.stmt_type;
                 let mut tag = "".to_owned();
-                if let Some(notice) = &cmd.notice {
-                    tag.push_str(notice);
-                    tag.push('\n');
-                }
                 tag.push_str(&stmt_type.to_string());
                 if stmt_type == StatementType::INSERT {
                     tag.push_str(" 0");
@@ -448,6 +501,17 @@ impl<'a> BeMessage<'a> {
                     write_cstr(buf, tag.as_bytes())?;
                     Ok(())
                 })?;
+            }
+
+            // NoticeResponse
+            // +-----+-----------+------------------+------------------+
+            // | 'N' | int32 len | byte1 field type | str field value  |
+            // +-----+-----------+------------------+-+----------------+
+            // description of the fields can be found here:
+            // https://www.postgresql.org/docs/current/protocol-error-fields.html
+            BeMessage::NoticeResponse(notice) => {
+                buf.put_u8(b'N');
+                write_err_or_notice(buf, &ErrorOrNoticeMessage::notice(notice));
             }
 
             // DataRow
@@ -465,7 +529,7 @@ impl<'a> BeMessage<'a> {
                     for val_opt in vals.values() {
                         if let Some(val) = val_opt {
                             buf.put_u32(val.len() as u32);
-                            buf.put_slice(val.as_bytes());
+                            buf.put_slice(val);
                         } else {
                             buf.put_i32(-1);
                         }
@@ -474,6 +538,7 @@ impl<'a> BeMessage<'a> {
                 })
                 .unwrap();
             }
+
             // RowDescription
             // +-----+-----------+--------------+-------+-----+-------+
             // | 'T' | int32 len | int16 colNum | field | ... | field |
@@ -554,7 +619,8 @@ impl<'a> BeMessage<'a> {
             }
 
             BeMessage::EncryptionResponse => {
-                buf.put_u8(b'N');
+                // Now we support simple ssl, so say yes.
+                buf.put_u8(b'S');
             }
 
             // EmptyQueryResponse
@@ -572,20 +638,17 @@ impl<'a> BeMessage<'a> {
 
                 // 'E' signalizes ErrorResponse messages
                 buf.put_u8(b'E');
+                let msg = error.to_string();
+                write_err_or_notice(buf, &ErrorOrNoticeMessage::internal_error(&msg));
+            }
+
+            BeMessage::BackendKeyData((process_id, secret_key)) => {
+                buf.put_u8(b'K');
                 write_body(buf, |buf| {
-                    buf.put_u8(b'S'); // severity
-                    write_cstr(buf, &Bytes::from("ERROR"))?;
-
-                    buf.put_u8(b'C'); // SQLSTATE error code
-                    write_cstr(buf, &Bytes::from("XX000"))?;
-
-                    buf.put_u8(b'M'); // the message
-                    write_cstr(buf, error.to_string().as_bytes())?;
-
-                    buf.put_u8(0); // terminator
+                    buf.put_i32(*process_id);
+                    buf.put_i32(*secret_key);
                     Ok(())
-                })
-                .unwrap();
+                })?;
             }
         }
 
@@ -645,14 +708,32 @@ fn write_cstr(buf: &mut BytesMut, s: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Safe write error or notice message.
+fn write_err_or_notice(buf: &mut BytesMut, msg: &ErrorOrNoticeMessage<'_>) {
+    write_body(buf, |buf| {
+        buf.put_u8(b'S'); // severity
+        write_cstr(buf, msg.severity.as_str().as_bytes())?;
+
+        buf.put_u8(b'C'); // SQLSTATE error code
+        write_cstr(buf, msg.state.code().as_bytes())?;
+
+        buf.put_u8(b'M'); // the message
+        write_cstr(buf, msg.message.as_bytes())?;
+
+        buf.put_u8(0); // terminator
+        Ok(())
+    })
+    .unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
 
     use crate::pg_message::FeQueryMessage;
 
-    #[tokio::test]
-    async fn test_get_sql() {
+    #[test]
+    fn test_get_sql() {
         let fe = FeQueryMessage {
             sql_bytes: Bytes::from(vec![255, 255, 255, 255, 255, 255, 0]),
         };

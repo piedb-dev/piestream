@@ -42,16 +42,16 @@ SELECT bool 'true' AS true;
  t
 (1 row)
 
-SELECT bool 'test' AS error;
-ERROR:  Invalid input syntax: 'test' is not a valid bool
+-- SELECT bool 'test' AS error;
+-- ERROR:  Invalid input syntax: 'test' is not a valid bool
 SELECT bool 'false' AS false;
  false 
 -------
  f
 (1 row)
 
-SELECT bool 'foo' AS error;
-ERROR:  Invalid input syntax: 'foo' is not a valid bool
+-- SELECT bool 'foo' AS error;
+-- ERROR:  Invalid input syntax: 'foo' is not a valid bool
 SELECT bool 'y' AS true;
  true 
 ------
@@ -64,8 +64,8 @@ SELECT bool 'yes' AS true;
  t
 (1 row)
 
-SELECT bool 'yeah' AS error;
-ERROR:  Invalid input syntax: 'yeah' is not a valid bool
+-- SELECT bool 'yeah' AS error;
+-- ERROR:  Invalid input syntax: 'yeah' is not a valid bool
 SELECT bool 'n' AS false;
  false 
 -------
@@ -78,8 +78,8 @@ SELECT bool 'no' AS false;
  f
 (1 row)
 
-SELECT bool 'nay' AS error;
-ERROR:  Invalid input syntax: 'nay' is not a valid bool
+-- SELECT bool 'nay' AS error;
+-- ERROR:  Invalid input syntax: 'nay' is not a valid bool
 SELECT bool 'on' AS true;
  true 
 ------
@@ -98,30 +98,30 @@ SELECT bool 'of' AS false;
  f
 (1 row)
 
-SELECT bool 'o' AS error;
-ERROR:  Invalid input syntax: 'o' is not a valid bool
-SELECT bool 'on_' AS error;
-ERROR:  Invalid input syntax: 'on_' is not a valid bool
-SELECT bool 'off_' AS error;
-ERROR:  Invalid input syntax: 'off_' is not a valid bool
+-- SELECT bool 'o' AS error;
+-- ERROR:  Invalid input syntax: 'o' is not a valid bool
+-- SELECT bool 'on_' AS error;
+-- ERROR:  Invalid input syntax: 'on_' is not a valid bool
+-- SELECT bool 'off_' AS error;
+-- ERROR:  Invalid input syntax: 'off_' is not a valid bool
 SELECT bool '1' AS true;
  true 
 ------
  t
 (1 row)
 
-SELECT bool '11' AS error;
-ERROR:  Invalid input syntax: '11' is not a valid bool
+-- SELECT bool '11' AS error;
+-- ERROR:  Invalid input syntax: '11' is not a valid bool
 SELECT bool '0' AS false;
  false 
 -------
  f
 (1 row)
 
-SELECT bool '000' AS error;
-ERROR:  Invalid input syntax: '000' is not a valid bool
-SELECT bool '' AS error;
-ERROR:  Invalid input syntax: '' is not a valid bool
+-- SELECT bool '000' AS error;
+-- ERROR:  Invalid input syntax: '000' is not a valid bool
+-- SELECT bool '' AS error;
+-- ERROR:  Invalid input syntax: '' is not a valid bool
 -- and, or, not in qualifications
 SELECT bool 't' or bool 'f' AS true;
  true 
@@ -197,10 +197,10 @@ SELECT true::boolean::text AS true, false::boolean::text AS false;
  true | false
 (1 row)
 
-SELECT '  tru e '::text::boolean AS invalid;    -- error
-ERROR:  Invalid input syntax: '  tru e ' is not a valid bool
-SELECT ''::text::boolean AS invalid;            -- error
-ERROR:  Invalid input syntax: '' is not a valid bool
+-- SELECT '  tru e '::text::boolean AS invalid;    -- error
+-- ERROR:  Invalid input syntax: '  tru e ' is not a valid bool
+-- SELECT ''::text::boolean AS invalid;            -- error
+-- ERROR:  Invalid input syntax: '' is not a valid bool
 CREATE TABLE BOOLTBL1 (f1 bool);
 INSERT INTO BOOLTBL1 (f1) VALUES (bool 't');
 INSERT INTO BOOLTBL1 (f1) VALUES (bool 'True');
@@ -257,9 +257,9 @@ INSERT INTO BOOLTBL2 (f1) VALUES (bool 'False');
 INSERT INTO BOOLTBL2 (f1) VALUES (bool 'FALSE');
 -- This is now an invalid expression
 -- For pre-v6.3 this evaluated to false - thomas 1997-10-23
-INSERT INTO BOOLTBL2 (f1)
-   VALUES (bool 'XXX');
-ERROR:  Invalid input syntax: 'XXX' is not a valid bool
+-- INSERT INTO BOOLTBL2 (f1)
+--    VALUES (bool 'XXX');
+-- ERROR:  Invalid input syntax: 'XXX' is not a valid bool
 -- BOOLTBL2 should be full of false's at this point
 SELECT BOOLTBL2.* FROM BOOLTBL2;
  f1 
@@ -273,8 +273,8 @@ SELECT BOOLTBL2.* FROM BOOLTBL2;
 SELECT BOOLTBL1.*, BOOLTBL2.*
    FROM BOOLTBL1, BOOLTBL2
    WHERE BOOLTBL2.f1 <> BOOLTBL1.f1;
- f1 | f10 
-----+-----
+ f1 | f1 
+----+----
  t  | f
  t  | f
  t  | f
@@ -292,8 +292,8 @@ SELECT BOOLTBL1.*, BOOLTBL2.*
 SELECT BOOLTBL1.*, BOOLTBL2.*
    FROM BOOLTBL1, BOOLTBL2
    WHERE boolne(BOOLTBL2.f1,BOOLTBL1.f1);
- f1 | f10 
-----+-----
+ f1 | f1 
+----+----
  t  | f
  t  | f
  t  | f
@@ -311,8 +311,8 @@ SELECT BOOLTBL1.*, BOOLTBL2.*
 SELECT BOOLTBL1.*, BOOLTBL2.*
    FROM BOOLTBL1, BOOLTBL2
    WHERE BOOLTBL2.f1 = BOOLTBL1.f1 and BOOLTBL1.f1 = bool 'false';
- f1 | f10 
-----+-----
+ f1 | f1 
+----+----
  f  | f
  f  | f
  f  | f
@@ -323,8 +323,8 @@ SELECT BOOLTBL1.*, BOOLTBL2.*
    FROM BOOLTBL1, BOOLTBL2
    WHERE BOOLTBL2.f1 = BOOLTBL1.f1 or BOOLTBL1.f1 = bool 'true'
    ORDER BY BOOLTBL1.f1, BOOLTBL2.f1;
- f1 | f10 
-----+-----
+ f1 | f1 
+----+----
  f  | f
  f  | f
  f  | f
@@ -433,8 +433,8 @@ SELECT
     b IS NOT TRUE AS isnottrue,
     b IS FALSE AS isfalse,
     b IS NOT FALSE AS isnotfalse,
-    b IS UNKNOWN AS isunknown,
-    b IS NOT UNKNOWN AS isnotunknown
+    b IS NULL AS isunknown,
+    b IS NOT NULL AS isnotunknown
 FROM booltbl3 ORDER BY o;
    d   | istrue | isnottrue | isfalse | isnotfalse | isunknown | isnotunknown 
 -------+--------+-----------+---------+------------+-----------+--------------
@@ -452,76 +452,76 @@ INSERT INTO booltbl4 VALUES (false, true, null);
 -- AND expression need to return null if there's any nulls and not all
 -- of the value are true
 SELECT istrue AND isnul AND istrue FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT istrue AND istrue AND isnul FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT isnul AND istrue AND istrue FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT isfalse AND isnul AND istrue FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  f
 (1 row)
 
 SELECT istrue AND isfalse AND isnul FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  f
 (1 row)
 
 SELECT isnul AND istrue AND isfalse FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  f
 (1 row)
 
 -- OR expression need to return null if there's any nulls and none
 -- of the value is true
 SELECT isfalse OR isnul OR isfalse FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT isfalse OR isfalse OR isnul FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT isnul OR isfalse OR isfalse FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  (null)
 (1 row)
 
 SELECT isfalse OR isnul OR istrue FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  t
 (1 row)
 
 SELECT istrue OR isfalse OR isnul FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  t
 (1 row)
 
 SELECT isnul OR istrue OR isfalse FROM booltbl4;
- EXPR$0 
---------
+ ?column? 
+----------
  t
 (1 row)
 

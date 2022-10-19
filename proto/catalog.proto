@@ -2,23 +2,32 @@ syntax = "proto3";
 
 package catalog;
 
-import "common.proto";
+import "expr.proto";
 import "plan_common.proto";
 
 option optimize_for = SPEED;
+
+// The rust prost library always treats uint64 as required and message as optional.
+// In order to allow `row_id_index` as optional field in `StreamSourceInfo` and `TableSourceInfo`,
+// we wrap uint64 inside this message.
+message ColumnIndex {
+  uint64 index = 1;
+}
 
 message StreamSourceInfo {
   map<string, string> properties = 1;
   plan_common.RowFormatType row_format = 2;
   string row_schema_location = 3;
-  int32 row_id_index = 4;
+  ColumnIndex row_id_index = 4;
   repeated plan_common.ColumnCatalog columns = 5;
   repeated int32 pk_column_ids = 6;
 }
 
 message TableSourceInfo {
-  repeated plan_common.ColumnCatalog columns = 1;
-  map<string, string> properties = 2;
+  ColumnIndex row_id_index = 1;
+  repeated plan_common.ColumnCatalog columns = 2;
+  repeated int32 pk_column_ids = 3;
+  map<string, string> properties = 4;
 }
 
 message Source {
@@ -30,7 +39,7 @@ message Source {
     StreamSourceInfo stream_source = 5;
     TableSourceInfo table_source = 6;
   }
-  string owner = 7;
+  uint32 owner = 7;
 }
 
 message Sink {
@@ -38,43 +47,62 @@ message Sink {
   uint32 schema_id = 2;
   uint32 database_id = 3;
   string name = 4;
-  string mv_name = 5;
+  uint32 associated_table_id = 5;
   map<string, string> properties = 6;
-  string owner = 7;
+  uint32 owner = 7;
+  repeated uint32 dependent_relations = 8;
 }
 
-/// See `TableCatalog` struct in frontend crate for more information.
+message Index {
+  uint32 id = 1;
+  uint32 schema_id = 2;
+  uint32 database_id = 3;
+  string name = 4;
+  uint32 owner = 5;
+  uint32 index_table_id = 6;
+  uint32 primary_table_id = 7;
+  // Only `InputRef` type index is supported Now.
+  // The index of `InputRef` is the column index of the primary table.
+  repeated expr.ExprNode index_item = 8;
+}
+
+// See `TableCatalog` struct in frontend crate for more information.
 message Table {
   uint32 id = 1;
   uint32 schema_id = 2;
   uint32 database_id = 3;
   string name = 4;
   repeated plan_common.ColumnCatalog columns = 5;
-  repeated int32 order_column_ids = 6;
-  repeated plan_common.OrderType orders = 7;
+  repeated plan_common.ColumnOrder pk = 6;
   repeated uint32 dependent_relations = 8;
   oneof optional_associated_source_id {
     uint32 associated_source_id = 9;
   }
   bool is_index = 10;
-  uint32 index_on_id = 11;
-  repeated int32 distribution_keys = 12;
-  repeated int32 pk = 13;
+  repeated int32 distribution_key = 12;
+  // pk_indices of the corresponding materialize operator's output.
+  repeated int32 stream_key = 13;
   bool appendonly = 14;
-  string owner = 15;
-  common.ParallelUnitMapping mapping = 16;
-  map<string, string> properties = 17;
+  uint32 owner = 15;
+  map<string, string> properties = 16;
+  uint32 fragment_id = 17;
+  // an optional column index which is the vnode of each row computed by the table's consistent hash distribution
+  ColumnIndex vnode_col_idx = 18;
+  // The column indices which are stored in the state store's value with row-encoding.
+  // Currently is not supported yet and expected to be `[0..columns.len()]`.
+  repeated int32 value_indices = 19;
+  string definition = 20;
 }
 
 message Schema {
   uint32 id = 1;
   uint32 database_id = 2;
   string name = 3;
-  string owner = 4;
+  uint32 owner = 4;
 }
 
 message Database {
   uint32 id = 1;
   string name = 2;
-  string owner = 3;
+  uint32 owner = 3;
 }

@@ -14,39 +14,25 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
-use async_trait::async_trait;
-use parking_lot::{Mutex, MutexGuard};
+use itertools::Itertools;
+use parking_lot::Mutex;
 use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
-use piestream_common::ensure;
 use piestream_common::error::ErrorCode::{ConnectorError, InternalError, ProtocolError};
 use piestream_common::error::{Result, RwError};
 use piestream_common::types::DataType;
-use piestream_common::util::epoch::UNIX_SINGULARITY_DATE_EPOCH;
-use piestream_connector::ConnectorProperties;
-use piestream_pb::catalog::StreamSourceInfo;
+use piestream_connector::source::ConnectorProperties;
+use piestream_pb::catalog::{StreamSourceInfo, TableSourceInfo};
 use piestream_pb::plan_common::RowFormatType;
+use piestream_pb::stream_plan::source_node::Info as ProstSourceInfo;
 
 use crate::monitor::SourceMetrics;
-use crate::row_id::{RowId, RowIdGenerator};
-use crate::table_v2::TableSourceV2;
+use crate::table::TableSource;
 use crate::{ConnectorSource, SourceFormat, SourceImpl, SourceParserImpl};
 
-pub type SourceRef = Arc<SourceImpl>;
-
-/// The local source manager on the compute node.
-#[async_trait]
-pub trait SourceManager: Debug + Sync + Send {
-    async fn create_source(&self, table_id: &TableId, info: StreamSourceInfo) -> Result<()>;
-    fn create_table_source(&self, table_id: &TableId, columns: Vec<ColumnDesc>) -> Result<()>;
-
-    fn get_source(&self, source_id: &TableId) -> Result<SourceDesc>;
-    fn drop_source(&self, source_id: &TableId) -> Result<()>;
-
-    /// Clear sources, this is used when failover happens.
-    fn clear_sources(&self) -> Result<()>;
-}
+pub type SourceDescRef = Arc<SourceDesc>;
+type WeakSourceDescRef = Weak<SourceDesc>;
 
 /// `SourceColumnDesc` is used to describe a column in the Source and is used as the column
 /// counterpart in `StreamScan`
@@ -55,7 +41,27 @@ pub struct SourceColumnDesc {
     pub name: String,
     pub data_type: DataType,
     pub column_id: ColumnId,
+    pub fields: Vec<ColumnDesc>,
+    /// Now `skip_parse` is used to indicate whether the column is a row id column.
     pub skip_parse: bool,
+}
+
+impl SourceColumnDesc {
+    /// Create a [`SourceColumnDesc`] without composite types.
+    #[track_caller]
+    pub fn simple(name: impl Into<String>, data_type: DataType, column_id: ColumnId) -> Self {
+        assert!(
+            !matches!(data_type, DataType::List { .. } | DataType::Struct(..)),
+            "called `SourceColumnDesc::simple` with a composite type."
+        );
+        Self {
+            name: name.into(),
+            data_type,
+            column_id,
+            fields: vec![],
+            skip_parse: false,
+        }
+    }
 }
 
 impl From<&ColumnDesc> for SourceColumnDesc {
@@ -64,55 +70,172 @@ impl From<&ColumnDesc> for SourceColumnDesc {
             name: c.name.clone(),
             data_type: c.data_type.clone(),
             column_id: c.column_id,
+            fields: c.field_descs.clone(),
             skip_parse: false,
         }
     }
 }
 
+impl From<&SourceColumnDesc> for ColumnDesc {
+    fn from(s: &SourceColumnDesc) -> Self {
+        ColumnDesc {
+            data_type: s.data_type.clone(),
+            column_id: s.column_id,
+            name: s.name.clone(),
+            field_descs: s.fields.clone(),
+            type_name: "".to_string(),
+        }
+    }
+}
+
 /// `SourceDesc` is used to describe a `Source`
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct SourceDesc {
-    pub source: SourceRef,
+    pub source: SourceImpl,
     pub format: SourceFormat,
     pub columns: Vec<SourceColumnDesc>,
     pub metrics: Arc<SourceMetrics>,
 
-    // The column index of row ID. By default it's 0, which means the first column is row ID.
-    // TODO: change to Option<usize> when pk supported in the future.
-    pub row_id_index: usize,
-    pub row_id_generator: Arc<Mutex<RowIdGenerator>>,
+    // The column index of row ID. If the primary key is specified by users, this will be `None`.
+    pub row_id_index: Option<usize>,
+    pub pk_column_ids: Vec<i32>,
 }
 
-impl SourceDesc {
-    pub fn next_row_id(&self) -> RowId {
-        self.row_id_generator.as_ref().lock().next()
-    }
+pub type TableSourceManagerRef = Arc<TableSourceManager>;
 
-    pub fn next_row_id_batch(&self, length: usize) -> Vec<RowId> {
-        let mut guard = self.row_id_generator.as_ref().lock();
-        guard.next_batch(length)
-    }
-}
-
-pub type SourceManagerRef = Arc<dyn SourceManager>;
-
-#[derive(Debug, Default)]
-pub struct MemSourceManager {
-    sources: Mutex<HashMap<TableId, SourceDesc>>,
-    /// Located worker id.
-    worker_id: u32,
+#[derive(Debug)]
+pub struct TableSourceManager {
+    sources: Mutex<HashMap<TableId, WeakSourceDescRef>>,
     /// local source metrics
     metrics: Arc<SourceMetrics>,
+    /// The capacity of the chunks in the channel that connects between `ConnectorSource` and
+    /// `SourceExecutor`.
+    connector_message_buffer_size: usize,
 }
 
-#[async_trait]
-impl SourceManager for MemSourceManager {
-    async fn create_source(&self, source_id: &TableId, info: StreamSourceInfo) -> Result<()> {
+impl TableSourceManager {
+    pub fn get_source(&self, source_id: &TableId) -> Result<SourceDescRef> {
+        let sources = self.sources.lock();
+        sources
+            .get(source_id)
+            .and_then(|weak_ref| weak_ref.upgrade())
+            .ok_or_else(|| {
+                InternalError(format!("Get source table id not exists: {:?}", source_id)).into()
+            })
+    }
+
+    pub fn insert_source(
+        &self,
+        source_id: &TableId,
+        info: &TableSourceInfo,
+    ) -> Result<SourceDescRef> {
+        let mut sources = self.sources.lock();
+        sources.drain_filter(|_, weak_ref| weak_ref.strong_count() == 0);
+        if let Some(strong_ref) = sources
+            .get(source_id)
+            .and_then(|weak_ref| weak_ref.upgrade())
+        {
+            Ok(strong_ref)
+        } else {
+            let columns = info
+                .columns
+                .iter()
+                .cloned()
+                .map(|c| ColumnDesc::from(c.column_desc.unwrap()))
+                .collect_vec();
+            let row_id_index = info.row_id_index.as_ref().map(|index| index.index as _);
+            let pk_column_ids = info.pk_column_ids.clone();
+
+            // Table sources do not need columns and format
+            let strong_ref = Arc::new(SourceDesc {
+                columns: columns.iter().map(SourceColumnDesc::from).collect(),
+                source: SourceImpl::Table(TableSource::new(columns)),
+                format: SourceFormat::Invalid,
+                row_id_index,
+                pk_column_ids,
+                metrics: self.metrics.clone(),
+            });
+            sources.insert(*source_id, Arc::downgrade(&strong_ref));
+            Ok(strong_ref)
+        }
+    }
+
+    /// For recovery, clear all sources' weak references.
+    pub fn clear_sources(&self) {
+        self.sources.lock().clear()
+    }
+
+    fn metrics(&self) -> Arc<SourceMetrics> {
+        self.metrics.clone()
+    }
+
+    fn msg_buf_size(&self) -> usize {
+        self.connector_message_buffer_size
+    }
+}
+
+impl Default for TableSourceManager {
+    fn default() -> Self {
+        TableSourceManager {
+            sources: Default::default(),
+            metrics: Default::default(),
+            connector_message_buffer_size: 16,
+        }
+    }
+}
+
+impl TableSourceManager {
+    pub fn new(metrics: Arc<SourceMetrics>, connector_message_buffer_size: usize) -> Self {
+        TableSourceManager {
+            sources: Mutex::new(HashMap::new()),
+            metrics,
+            connector_message_buffer_size,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SourceDescBuilder {
+    id: TableId,
+    info: ProstSourceInfo,
+    mgr: TableSourceManagerRef,
+}
+
+impl SourceDescBuilder {
+    pub fn new(id: TableId, info: &ProstSourceInfo, mgr: &TableSourceManagerRef) -> Self {
+        Self {
+            id,
+            info: info.clone(),
+            mgr: mgr.clone(),
+        }
+    }
+
+    pub async fn build(&self) -> Result<SourceDescRef> {
+        let Self { id, info, mgr } = self;
+        match &info {
+            ProstSourceInfo::TableSource(info) => Self::build_table_source(mgr, id, info),
+            ProstSourceInfo::StreamSource(info) => Self::build_stream_source(mgr, info).await,
+        }
+    }
+
+    fn build_table_source(
+        mgr: &TableSourceManagerRef,
+        table_id: &TableId,
+        info: &TableSourceInfo,
+    ) -> Result<SourceDescRef> {
+        mgr.insert_source(table_id, info)
+    }
+
+    async fn build_stream_source(
+        mgr: &TableSourceManagerRef,
+        info: &StreamSourceInfo,
+    ) -> Result<SourceDescRef> {
         let format = match info.get_row_format()? {
             RowFormatType::Json => SourceFormat::Json,
             RowFormatType::Protobuf => SourceFormat::Protobuf,
             RowFormatType::DebeziumJson => SourceFormat::DebeziumJson,
             RowFormatType::Avro => SourceFormat::Avro,
+            RowFormatType::RowUnspecified => unreachable!(),
         };
 
         if format == SourceFormat::Protobuf && info.row_schema_location.is_empty() {
@@ -129,136 +252,53 @@ impl SourceManager for MemSourceManager {
             return Err(source_parser_rs.err().unwrap());
         };
 
-        let columns = info
+        let mut columns: Vec<_> = info
             .columns
             .iter()
-            .enumerate()
-            .map(|(idx, c)| {
-                let c = c.column_desc.as_ref().unwrap().clone();
-                SourceColumnDesc {
-                    name: c.name.clone(),
-                    data_type: DataType::from(&c.column_type.unwrap()),
-                    column_id: ColumnId::from(c.column_id),
-                    skip_parse: idx as i32 == info.row_id_index,
-                }
-            })
-            .collect::<Vec<SourceColumnDesc>>();
-
+            .map(|c| SourceColumnDesc::from(&ColumnDesc::from(c.column_desc.as_ref().unwrap())))
+            .collect();
+        let row_id_index = info.row_id_index.as_ref().map(|row_id_index| {
+            columns[row_id_index.index as usize].skip_parse = true;
+            row_id_index.index as usize
+        });
+        let pk_column_ids = info.pk_column_ids.clone();
         assert!(
-            info.row_id_index >= 0,
-            "expected row_id_index >= 0, got {}",
-            info.row_id_index
+            !pk_column_ids.is_empty(),
+            "source should have at least one pk column"
         );
-        let row_id_index = info.row_id_index as usize;
 
-        let config = ConnectorProperties::extract(info.properties)
-            .map_err(|e| RwError::from(ConnectorError(e.to_string())))?;
+        let config = ConnectorProperties::extract(info.properties.clone())
+            .map_err(|e| RwError::from(ConnectorError(e.into())))?;
 
         let source = SourceImpl::Connector(ConnectorSource {
             config,
             columns: columns.clone(),
             parser,
+            connector_message_buffer_size: mgr.msg_buf_size(),
         });
 
-        let desc = SourceDesc {
-            source: Arc::new(source),
+        Ok(Arc::new(SourceDesc {
+            source,
             format,
             columns,
             row_id_index,
-            row_id_generator: Arc::new(Mutex::new(RowIdGenerator::with_epoch(
-                self.worker_id,
-                *UNIX_SINGULARITY_DATE_EPOCH,
-            ))),
-            metrics: self.metrics.clone(),
-        };
-
-        let mut tables = self.get_sources()?;
-        ensure!(
-            !tables.contains_key(source_id),
-            "Source id already exists: {:?}",
-            source_id
-        );
-        tables.insert(*source_id, desc);
-
-        Ok(())
-    }
-
-    fn create_table_source(&self, table_id: &TableId, columns: Vec<ColumnDesc>) -> Result<()> {
-        let mut sources = self.get_sources()?;
-
-        ensure!(
-            !sources.contains_key(table_id),
-            "Source id already exists: {:?}",
-            table_id
-        );
-
-        let source_columns = columns.iter().map(SourceColumnDesc::from).collect();
-        let source = SourceImpl::TableV2(TableSourceV2::new(columns));
-
-        // Table sources do not need columns and format
-        let desc = SourceDesc {
-            source: Arc::new(source),
-            columns: source_columns,
-            format: SourceFormat::Invalid,
-            row_id_index: 0, // always use the first column as row_id
-            row_id_generator: Arc::new(Mutex::new(RowIdGenerator::with_epoch(
-                self.worker_id,
-                *UNIX_SINGULARITY_DATE_EPOCH,
-            ))),
-            metrics: self.metrics.clone(),
-        };
-
-        sources.insert(*table_id, desc);
-        Ok(())
-    }
-
-    fn get_source(&self, table_id: &TableId) -> Result<SourceDesc> {
-        let sources = self.get_sources()?;
-        sources.get(table_id).cloned().ok_or_else(|| {
-            InternalError(format!("Get source table id not exists: {:?}", table_id)).into()
-        })
-    }
-
-    fn drop_source(&self, table_id: &TableId) -> Result<()> {
-        let mut sources = self.get_sources()?;
-        ensure!(
-            sources.contains_key(table_id),
-            "Source does not exist: {:?}",
-            table_id
-        );
-        sources.remove(table_id);
-        Ok(())
-    }
-
-    fn clear_sources(&self) -> Result<()> {
-        let mut sources = self.get_sources()?;
-        sources.clear();
-        Ok(())
-    }
-}
-
-impl MemSourceManager {
-    pub fn new(worker_id: u32, metrics: Arc<SourceMetrics>) -> Self {
-        MemSourceManager {
-            sources: Mutex::new(HashMap::new()),
-            worker_id,
-            metrics,
-        }
-    }
-
-    fn get_sources(&self) -> Result<MutexGuard<HashMap<TableId, SourceDesc>>> {
-        Ok(self.sources.lock())
+            pk_column_ids,
+            metrics: mgr.metrics(),
+        }))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use piestream_common::catalog::{ColumnDesc, ColumnId, Field, Schema, TableId};
     use piestream_common::error::Result;
     use piestream_common::types::DataType;
-    use piestream_connector::kinesis::config::kinesis_demo_properties;
-    use piestream_pb::catalog::StreamSourceInfo;
+    use piestream_connector::source::kinesis::config::kinesis_demo_properties;
+    use piestream_pb::catalog::{ColumnIndex, StreamSourceInfo, TableSourceInfo};
     use piestream_pb::plan_common::ColumnCatalog;
+    use piestream_pb::stream_plan::source_node::Info;
     use piestream_storage::memory::MemoryStateStore;
     use piestream_storage::Keyspace;
 
@@ -282,14 +322,16 @@ mod tests {
             properties,
             row_format: 0,
             row_schema_location: "".to_string(),
-            row_id_index: 0,
+            row_id_index: Some(ColumnIndex { index: 0 }),
             pk_column_ids: vec![0],
             columns,
         };
         let source_id = TableId::default();
 
-        let mem_source_manager = MemSourceManager::default();
-        let source = mem_source_manager.create_source(&source_id, info).await;
+        let mem_source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
+        let source_builder =
+            SourceDescBuilder::new(source_id, &Info::StreamSource(info), &mem_source_manager);
+        let source = source_builder.build().await;
 
         assert!(source.is_ok());
 
@@ -297,7 +339,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_table_source_v2() -> Result<()> {
+    async fn test_table_source() -> Result<()> {
         let table_id = TableId::default();
 
         let schema = Schema {
@@ -307,34 +349,55 @@ mod tests {
             ],
         };
 
-        let table_columns = schema
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| ColumnDesc {
-                data_type: f.data_type.clone(),
-                column_id: ColumnId::from(i as i32), // use column index as column id
-                name: f.name.clone(),
-                field_descs: vec![],
-                type_name: "".to_string(),
-            })
-            .collect();
+        let info = TableSourceInfo {
+            row_id_index: None,
+            columns: schema
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| ColumnCatalog {
+                    column_desc: Some(
+                        ColumnDesc {
+                            data_type: f.data_type.clone(),
+                            column_id: ColumnId::from(i as i32), // use column index as column id
+                            name: f.name.clone(),
+                            field_descs: vec![],
+                            type_name: "".to_string(),
+                        }
+                        .to_protobuf(),
+                    ),
+                    is_hidden: false,
+                })
+                .collect(),
+            pk_column_ids: vec![1],
+            properties: Default::default(),
+        };
 
         let _keyspace = Keyspace::table_root(MemoryStateStore::new(), &table_id);
 
-        let mem_source_manager = MemSourceManager::default();
-        let res = mem_source_manager.create_table_source(&table_id, table_columns);
+        let mem_source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
+        let mut source_builder =
+            SourceDescBuilder::new(table_id, &Info::TableSource(info), &mem_source_manager);
+        let res = source_builder.build().await;
         assert!(res.is_ok());
 
         // get source
         let get_source_res = mem_source_manager.get_source(&table_id);
         assert!(get_source_res.is_ok());
 
-        // drop source
-        let drop_source_res = mem_source_manager.drop_source(&table_id);
-        assert!(drop_source_res.is_ok());
-        let get_source_res = mem_source_manager.get_source(&table_id);
-        assert!(get_source_res.is_err());
+        // drop all replicas of TableId(0)
+        drop(res);
+        drop(get_source_res);
+        // failed to get_source
+        let result = mem_source_manager.get_source(&table_id);
+        assert!(result.is_err());
+
+        source_builder.id = TableId::new(1u32);
+        let _new_source = source_builder.build().await;
+
+        assert_eq!(mem_source_manager.sources.lock().len(), 1);
+        mem_source_manager.clear_sources();
+        assert!(mem_source_manager.sources.lock().is_empty());
 
         Ok(())
     }

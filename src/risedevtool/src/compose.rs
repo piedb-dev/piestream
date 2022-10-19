@@ -23,9 +23,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CompactorConfig, CompactorService, ComputeNodeConfig, ComputeNodeService, EtcdConfig,
-    EtcdService, FrontendConfig, FrontendService, GrafanaConfig, GrafanaGen, MetaNodeConfig,
-    MetaNodeService, MinioConfig, MinioService, PrometheusConfig, PrometheusGen, PrometheusService,
-    RedPandaConfig,
+    EtcdService, FrontendConfig, FrontendService, GrafanaConfig, GrafanaGen,
+    HummockInMemoryStrategy, MetaNodeConfig, MetaNodeService, MinioConfig, MinioService,
+    PrometheusConfig, PrometheusGen, PrometheusService, RedPandaConfig,
 };
 
 #[serde_with::skip_serializing_none]
@@ -73,6 +73,7 @@ pub struct DockerImageConfig {
     pub etcd: String,
 }
 
+#[derive(Debug)]
 pub struct ComposeConfig {
     /// Docker compose image config
     pub image: DockerImageConfig,
@@ -150,8 +151,15 @@ fn health_check_port(port: u16) -> HealthCheck {
 impl Compose for ComputeNodeConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("compute-node");
-        ComputeNodeService::apply_command_args(&mut command, self)?;
+        ComputeNodeService::apply_command_args(
+            &mut command,
+            self,
+            HummockInMemoryStrategy::Disallowed,
+        )?;
         command.arg("--config-path").arg("/piestream.toml");
+        if self.enable_tiered_cache {
+            command.arg("--file-cache-dir").arg("/filecache");
+        }
 
         std::fs::copy(
             Path::new("src").join("config").join("piestream.toml"),
@@ -168,9 +176,12 @@ impl Compose for ComputeNodeConfig {
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
                 .into_iter()
                 .collect(),
-            volumes: [("./piestream.toml:/piestream.toml".to_string())]
-                .into_iter()
-                .collect(),
+            volumes: [
+                ("./piestream.toml:/piestream.toml".to_string()),
+                format!("{}:/filecache", self.id),
+            ]
+            .into_iter()
+            .collect(),
             command,
             expose: vec![self.port.to_string(), self.exporter_port.to_string()],
             depends_on: provide_meta_node
@@ -220,13 +231,16 @@ impl Compose for FrontendConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("frontend-node");
         FrontendService::apply_command_args(&mut command, self)?;
+        command.arg("--config-path").arg("/piestream.toml");
         let command = get_cmd_args(&command, true)?;
-
         let provide_meta_node = self.provide_meta_node.as_ref().unwrap();
 
         Ok(ComposeService {
             image: config.image.piestream.clone(),
             environment: [("RUST_BACKTRACE".to_string(), "1".to_string())]
+                .into_iter()
+                .collect(),
+            volumes: [("./piestream.toml:/piestream.toml".to_string())]
                 .into_iter()
                 .collect(),
             command,
@@ -315,19 +329,18 @@ impl Compose for RedPandaConfig {
     fn compose(&self, config: &ComposeConfig) -> Result<ComposeService> {
         let mut command = Command::new("redpanda");
 
-        command.args(vec![
-            "start",
-            "--smp",
-            "4",
-            "--reserve-memory",
-            "0M",
-            "--memory",
-            "4G",
-            "--overprovisioned",
-            "--node-id",
-            "0",
-            "--check=false",
-        ]);
+        command
+            .arg("start")
+            .arg("--smp")
+            .arg(self.cpus.to_string())
+            .arg("--reserve-memory")
+            .arg("0")
+            .arg("--memory")
+            .arg(&self.memory)
+            .arg("--overprovisioned")
+            .arg("--node-id")
+            .arg("0")
+            .arg("--check=false");
 
         command.arg("--kafka-addr").arg(format!(
             "PLAINTEXT://0.0.0.0:{},OUTSIDE://0.0.0.0:{}",

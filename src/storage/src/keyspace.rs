@@ -15,12 +15,13 @@
 use std::future::Future;
 use std::ops::RangeBounds;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use piestream_common::catalog::TableId;
-use piestream_hummock_sdk::key::prefixed_range;
+use piestream_hummock_sdk::key::{prefixed_range, table_prefix};
 
 use crate::error::StorageResult;
-use crate::store::ReadOptions;
+use crate::store::{ReadOptions, WriteOptions};
+use crate::write_batch::KeySpaceWriteBatch;
 use crate::{StateStore, StateStoreIter};
 
 /// Provides API to read key-value pairs of a prefix in the storage backend.
@@ -34,7 +35,7 @@ pub struct Keyspace<S: StateStore> {
     table_id: TableId,
 }
 
-// FIX: ReadOptions with ttl
+// TODO: remove storage interface from keyspace, and and call it directly in storage_table
 impl<S: StateStore> Keyspace<S> {
     /// Creates a shared root [`Keyspace`] for all executors of the same operator.
     ///
@@ -44,39 +45,12 @@ impl<S: StateStore> Keyspace<S> {
 
     /// Creates a root [`Keyspace`] for a table.
     pub fn table_root(store: S, id: &TableId) -> Self {
-        let prefix = {
-            let mut buf = BytesMut::with_capacity(5);
-            buf.put_u8(b't');
-            buf.put_u32(id.table_id);
-            buf.to_vec()
-        };
+        let prefix = table_prefix(id.table_id);
         Self {
             store,
             prefix,
             table_id: *id,
         }
-    }
-
-    /// Appends more bytes to the prefix and returns a new `Keyspace`
-    #[must_use]
-    pub fn append(&self, mut bytes: Vec<u8>) -> Self {
-        let mut prefix = self.prefix.clone();
-        prefix.append(&mut bytes);
-        Self {
-            store: self.store.clone(),
-            prefix,
-            table_id: self.table_id,
-        }
-    }
-
-    #[must_use]
-    pub fn append_u8(&self, val: u8) -> Self {
-        self.append(val.to_be_bytes().to_vec())
-    }
-
-    #[must_use]
-    pub fn append_u16(&self, val: u16) -> Self {
-        self.append(val.to_be_bytes().to_vec())
     }
 
     /// Treats the keyspace as a single key, and returns the key.
@@ -86,17 +60,8 @@ impl<S: StateStore> Keyspace<S> {
 
     /// Treats the keyspace as a single key, and gets its value.
     /// The returned value is based on a snapshot corresponding to the given `epoch`
-    pub async fn value(&self, epoch: u64) -> StorageResult<Option<Bytes>> {
-        self.store
-            .get(
-                &self.prefix,
-                ReadOptions {
-                    epoch,
-                    table_id: Some(self.table_id),
-                    ttl: None,
-                },
-            )
-            .await
+    pub async fn value(&self, read_options: ReadOptions) -> StorageResult<Option<Bytes>> {
+        self.store.get(&self.prefix, true, read_options).await
     }
 
     /// Concatenates this keyspace and the given key to produce a prefixed key.
@@ -106,16 +71,14 @@ impl<S: StateStore> Keyspace<S> {
 
     /// Gets from the keyspace with the `prefixed_key` of given key.
     /// The returned value is based on a snapshot corresponding to the given `epoch`.
-    pub async fn get(&self, key: impl AsRef<[u8]>, epoch: u64) -> StorageResult<Option<Bytes>> {
+    pub async fn get(
+        &self,
+        key: impl AsRef<[u8]>,
+        check_bloom_filter: bool,
+        read_options: ReadOptions,
+    ) -> StorageResult<Option<Bytes>> {
         self.store
-            .get(
-                &self.prefixed_key(key),
-                ReadOptions {
-                    epoch,
-                    table_id: Some(self.table_id),
-                    ttl: None,
-                },
-            )
+            .get(&self.prefixed_key(key), check_bloom_filter, read_options)
             .await
     }
 
@@ -125,9 +88,10 @@ impl<S: StateStore> Keyspace<S> {
     pub async fn scan(
         &self,
         limit: Option<usize>,
-        epoch: u64,
+        read_options: ReadOptions,
     ) -> StorageResult<Vec<(Bytes, Bytes)>> {
-        self.scan_with_range::<_, &[u8]>(.., limit, epoch).await
+        self.scan_with_range::<_, &[u8]>(.., limit, read_options)
+            .await
     }
 
     /// Scans `limit` keys from the given `range` in this keyspace and get their values.
@@ -139,25 +103,14 @@ impl<S: StateStore> Keyspace<S> {
         &self,
         range: R,
         limit: Option<usize>,
-        epoch: u64,
+        read_options: ReadOptions,
     ) -> StorageResult<Vec<(Bytes, Bytes)>>
     where
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
         let range = prefixed_range(range, &self.prefix);
-        let mut pairs = self
-            .store
-            .scan(
-                range,
-                limit,
-                ReadOptions {
-                    epoch,
-                    table_id: Some(self.table_id),
-                    ttl: None,
-                },
-            )
-            .await?;
+        let mut pairs = self.store.scan(None, range, limit, read_options).await?;
         pairs
             .iter_mut()
             .for_each(|(k, _v)| *k = k.slice(self.prefix.len()..));
@@ -166,8 +119,12 @@ impl<S: StateStore> Keyspace<S> {
 
     /// Gets an iterator of this keyspace.
     /// The returned iterator will iterate data from a snapshot corresponding to the given `epoch`.
-    pub async fn iter(&self, epoch: u64) -> StorageResult<StripPrefixIterator<S::Iter>> {
-        self.iter_with_range::<_, &[u8]>(.., epoch).await
+    pub async fn iter(
+        &self,
+        read_options: ReadOptions,
+    ) -> StorageResult<StripPrefixIterator<S::Iter>> {
+        self.iter_with_range::<_, &[u8]>(None, .., read_options)
+            .await
     }
 
     /// Gets an iterator of the given `range` in this keyspace.
@@ -176,39 +133,39 @@ impl<S: StateStore> Keyspace<S> {
     /// **Note**: the `range` should not be prepended with the prefix of this keyspace.
     pub async fn iter_with_range<R, B>(
         &self,
+        prefix_hint: Option<Vec<u8>>,
         range: R,
-        epoch: u64,
+        read_options: ReadOptions,
     ) -> StorageResult<StripPrefixIterator<S::Iter>>
     where
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
         let range = prefixed_range(range, &self.prefix);
-        let iter = self
-            .store
-            .iter(
-                range,
-                ReadOptions {
-                    epoch,
-                    table_id: Some(self.table_id),
-                    ttl: None,
-                },
-            )
-            .await?;
+        let prefix_hint =
+            prefix_hint.map(|prefix_hint| [self.prefix.to_vec(), prefix_hint].concat());
+
+        let iter = self.store.iter(prefix_hint, range, read_options).await?;
         let strip_prefix_iterator = StripPrefixIterator {
             iter,
             prefix_len: self.prefix.len(),
         };
+
         Ok(strip_prefix_iterator)
     }
 
     /// Gets the underlying state store.
-    pub fn state_store(&self) -> S {
-        self.store.clone()
+    pub fn state_store(&self) -> &S {
+        &self.store
     }
 
     pub fn table_id(&self) -> TableId {
         self.table_id
+    }
+
+    pub fn start_write_batch(&self, option: WriteOptions) -> KeySpaceWriteBatch<'_, S> {
+        let write_batch = self.store.start_write_batch(option);
+        write_batch.prefixify(self)
     }
 }
 

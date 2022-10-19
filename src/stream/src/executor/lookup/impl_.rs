@@ -16,19 +16,20 @@ use futures::{pin_mut, StreamExt};
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use piestream_common::array::{Row, RowRef};
-use piestream_common::catalog::{ColumnDesc, Schema, TableId};
-use piestream_common::error::Result;
-use piestream_common::util::sort_util::{OrderPair, OrderType};
-use piestream_storage::table::state_table::StateTable;
+use piestream_common::catalog::{ColumnDesc, Schema};
+use piestream_common::util::epoch::EpochPair;
+use piestream_common::util::sort_util::OrderPair;
+use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
 use super::sides::{stream_lookup_arrange_prev_epoch, stream_lookup_arrange_this_epoch};
+use crate::cache::LruManagerRef;
 use crate::common::StreamChunkBuilder;
-use crate::executor::error::StreamExecutorError;
+use crate::executor::error::{StreamExecutorError, StreamExecutorResult};
 use crate::executor::lookup::cache::LookupCache;
 use crate::executor::lookup::sides::{ArrangeJoinSide, ArrangeMessage, StreamJoinSide};
 use crate::executor::lookup::LookupExecutor;
-use crate::executor::{Barrier, Epoch, Executor, Message, PkIndices, PROCESSING_WINDOW_SIZE};
+use crate::executor::{Barrier, Executor, Message, PkIndices};
 
 /// Parameters for [`LookupExecutor`].
 pub struct LookupExecutorParams<S: StateStore> {
@@ -40,11 +41,6 @@ pub struct LookupExecutorParams<S: StateStore> {
     /// `MaterializeExecutor`.
     pub stream: Box<dyn Executor>,
 
-    /// The state store and table id for arrangement. [`LookupExecutor`] will use these to
-    /// construct state table to read the state of arrangement side.
-    pub arrangement_store: S,
-
-    pub arrangement_table_id: TableId,
     /// Should be the same as [`ColumnDesc`] in the arrangement.
     ///
     /// From the perspective of arrangements, `arrangement_col_descs` include all columns of the
@@ -62,7 +58,7 @@ pub struct LookupExecutorParams<S: StateStore> {
     /// * The only element is the order rule for `a`, which is the join key. Join keys should
     ///   always come first.
     ///
-    /// For the MV pks, they will only be contained in `arrangement_col_descs`, without being part
+    /// For the MV pk, they will only be contained in `arrangement_col_descs`, without being part
     /// of this `arrangement_order_rules`.
     pub arrangement_order_rules: Vec<OrderPair>,
 
@@ -104,6 +100,14 @@ pub struct LookupExecutorParams<S: StateStore> {
 
     /// The join keys on the arrangement side.
     pub arrange_join_key_indices: Vec<usize>,
+
+    pub state_table: StateTable<S>,
+
+    pub lru_manager: Option<LruManagerRef>,
+
+    pub cache_size: usize,
+
+    pub chunk_size: usize,
 }
 
 impl<S: StateStore> LookupExecutor<S> {
@@ -111,8 +115,6 @@ impl<S: StateStore> LookupExecutor<S> {
         let LookupExecutorParams {
             arrangement,
             stream,
-            arrangement_store,
-            arrangement_table_id,
             arrangement_col_descs,
             arrangement_order_rules,
             pk_indices,
@@ -121,6 +123,10 @@ impl<S: StateStore> LookupExecutor<S> {
             arrange_join_key_indices,
             schema: output_schema,
             column_mapping,
+            state_table,
+            lru_manager,
+            cache_size,
+            chunk_size,
         } = params;
 
         let output_column_length = stream.schema().len() + arrangement.schema().len();
@@ -141,8 +147,8 @@ impl<S: StateStore> LookupExecutor<S> {
         let schema = Schema::new(schema_fields);
 
         let chunk_data_types = schema.data_types();
-        let arrangement_datatypes = arrangement.schema().data_types();
-        let stream_datatypes = stream.schema().data_types();
+        let arrangement_data_types = arrangement.schema().data_types();
+        let stream_data_types = stream.schema().data_types();
 
         let arrangement_pk_indices = arrangement.pk_indices().to_vec();
         let stream_pk_indices = stream.pk_indices().to_vec();
@@ -175,12 +181,7 @@ impl<S: StateStore> LookupExecutor<S> {
         let key_indices_mapping = arrangement_order_rules
             .iter()
             .map(|x| x.column_idx) // the required column idx in this position
-            .map(|x| {
-                arrange_join_key_indices
-                    .iter()
-                    .position(|y| *y == x)
-                    .unwrap()
-            }) // the position of the item in join keys
+            .filter_map(|x| arrange_join_key_indices.iter().position(|y| *y == x)) // the position of the item in join keys
             .map(|x| stream_join_key_indices[x]) // the actual column idx in stream
             .collect_vec();
 
@@ -198,15 +199,6 @@ impl<S: StateStore> LookupExecutor<S> {
             "mismatched output schema"
         );
 
-        // `arrangement_pk_indices` indicates the primary key in arrangement, usually row_id. Chain
-        // with join key to get relational pk. arrangement: [ a (join key/sort key) | b
-        // (value) | row_id]. The arrangement pk_indices is [2], arrange_join_key_indices will be
-        // [0], so relational pk will be [0, 2].
-        let relational_pk_indices = arrange_join_key_indices
-            .clone()
-            .into_iter()
-            .chain(arrangement_pk_indices.clone().into_iter())
-            .collect_vec();
         Self {
             chunk_data_types,
             schema: output_schema,
@@ -217,27 +209,21 @@ impl<S: StateStore> LookupExecutor<S> {
             stream: StreamJoinSide {
                 key_indices: stream_join_key_indices,
                 pk_indices: stream_pk_indices,
-                col_types: stream_datatypes,
+                col_types: stream_data_types,
             },
             arrangement: ArrangeJoinSide {
-                pk_indices: arrangement_pk_indices.clone(),
-                col_types: arrangement_datatypes,
-                col_descs: arrangement_col_descs.clone(),
+                pk_indices: arrangement_pk_indices,
+                col_types: arrangement_data_types,
+                col_descs: arrangement_col_descs,
                 order_rules: arrangement_order_rules,
                 key_indices: arrange_join_key_indices,
                 use_current_epoch,
-                state_table: StateTable::new(
-                    arrangement_store,
-                    arrangement_table_id,
-                    arrangement_col_descs,
-                    vec![OrderType::Ascending; relational_pk_indices.len()],
-                    Some(arrangement_pk_indices),
-                    relational_pk_indices,
-                ),
+                state_table,
             },
             column_mapping,
             key_indices_mapping,
-            lookup_cache: LookupCache::new(),
+            lookup_cache: LookupCache::new(lru_manager, cache_size),
+            chunk_size,
         }
     }
 
@@ -272,9 +258,11 @@ impl<S: StateStore> LookupExecutor<S> {
                         // arrange barrier. So we flush now.
                         self.lookup_cache.flush();
                     }
-                    self.process_barrier(barrier.clone())
-                        .await
-                        .map_err(StreamExecutorError::eval_error)?;
+
+                    // Use the new stream barrier epoch as new cache epoch
+                    self.lookup_cache.update_epoch(barrier.epoch.curr);
+
+                    self.process_barrier(barrier.clone()).await?;
                     if self.arrangement.use_current_epoch {
                         // When lookup this epoch, stream side barrier always come after arrangement
                         // ready, so we can forward barrier now.
@@ -303,45 +291,28 @@ impl<S: StateStore> LookupExecutor<S> {
                     }
                 }
                 ArrangeMessage::Stream(chunk) => {
-                    let last_barrier = self
-                        .last_barrier
-                        .as_ref()
-                        .expect("data received before a barrier");
-                    let lookup_epoch = if self.arrangement.use_current_epoch {
-                        last_barrier.epoch.curr
-                    } else {
-                        last_barrier.epoch.prev
-                    };
-                    let chunk = chunk.compact().map_err(StreamExecutorError::eval_error)?;
+                    let chunk = chunk.compact();
                     let (chunk, ops) = chunk.into_parts();
 
                     let mut builder = StreamChunkBuilder::new(
-                        PROCESSING_WINDOW_SIZE,
+                        self.chunk_size,
                         &self.chunk_data_types,
                         0,
                         self.stream.col_types.len(),
-                    )
-                    .map_err(StreamExecutorError::eval_error)?;
+                    )?;
 
                     for (op, row) in ops.iter().zip_eq(chunk.rows()) {
-                        for matched_row in self
-                            .lookup_one_row(&row, lookup_epoch)
-                            .await
-                            .map_err(StreamExecutorError::eval_error)?
-                        {
+                        for matched_row in self.lookup_one_row(&row).await? {
                             tracing::trace!(target: "events::stream::lookup::put", "{:?} {:?}", row, matched_row);
 
-                            if let Some(chunk) = builder
-                                .append_row(*op, &row, &matched_row)
-                                .map_err(StreamExecutorError::eval_error)?
-                            {
+                            if let Some(chunk) = builder.append_row(*op, &row, &matched_row)? {
                                 yield Message::Chunk(chunk.reorder_columns(&self.column_mapping));
                             }
                         }
                         // TODO: support outer join (return null if no rows are matched)
                     }
 
-                    if let Some(chunk) = builder.take().map_err(StreamExecutorError::eval_error)? {
+                    if let Some(chunk) = builder.take()? {
                         yield Message::Chunk(chunk.reorder_columns(&self.column_mapping));
                     }
                 }
@@ -350,7 +321,8 @@ impl<S: StateStore> LookupExecutor<S> {
     }
 
     /// Store the barrier.
-    async fn process_barrier(&mut self, barrier: Barrier) -> Result<()> {
+    #[expect(clippy::unused_async)]
+    async fn process_barrier(&mut self, barrier: Barrier) -> StreamExecutorResult<()> {
         if self.last_barrier.is_none() {
             assert_ne!(barrier.epoch.prev, 0, "lookup requires prev epoch != 0");
 
@@ -368,27 +340,35 @@ impl<S: StateStore> LookupExecutor<S> {
             // data. Therefore, it is also okay to simply set prev epoch to 0.
 
             self.last_barrier = Some(Barrier {
-                epoch: Epoch {
+                epoch: EpochPair {
                     prev: 0,
                     curr: barrier.epoch.curr,
                 },
                 ..barrier
             });
+
+            self.arrangement.state_table.init_epoch(barrier.epoch);
             return Ok(());
         } else {
+            // there is no write operation on the arrangement table by the lookup executor, so here
+            // the `state_table::commit(epoch)` just means the data in the epoch will be visible by
+            // the lookup executor
+            // TODO(st1page): maybe we should not use state table here.
+
+            self.arrangement
+                .state_table
+                .commit_no_data_expected(barrier.epoch);
+
             self.last_barrier = Some(barrier)
         }
+
         Ok(())
     }
 
     /// Lookup all rows corresponding to a join key in shared buffer.
-    async fn lookup_one_row(
-        &mut self,
-        stream_row: &RowRef<'_>,
-        lookup_epoch: u64,
-    ) -> Result<Vec<Row>> {
+    async fn lookup_one_row(&mut self, stream_row: &RowRef<'_>) -> StreamExecutorResult<Vec<Row>> {
         // fast-path for empty look-ups.
-        if lookup_epoch == 0 {
+        if self.arrangement.state_table.epoch() == 0 {
             return Ok(vec![]);
         }
 
@@ -404,16 +384,26 @@ impl<S: StateStore> LookupExecutor<S> {
         let mut all_rows = vec![];
         // Drop the stream.
         {
-            let all_data_iter = self
-                .arrangement
-                .state_table
-                .iter_with_pk_prefix(&lookup_row, lookup_epoch)
-                .await?
-                .fuse();
+            let all_data_iter = match self.arrangement.use_current_epoch {
+                true => {
+                    self.arrangement
+                        .state_table
+                        .iter_with_pk_prefix(&lookup_row)
+                        .await?
+                }
+                false => {
+                    self.arrangement
+                        .state_table
+                        .iter_prev_epoch_with_pk_prefix(&lookup_row)
+                        .await?
+                }
+            };
+
             pin_mut!(all_data_iter);
             while let Some(inner) = all_data_iter.next().await {
-                let ret = inner?;
-                all_rows.push(ret.into_owned());
+                // Only need value (include storage pk).
+                let row = inner.unwrap().into_owned();
+                all_rows.push(row);
             }
         }
 

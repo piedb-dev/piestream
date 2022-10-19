@@ -12,20 +12,6 @@ message Field {
   string name = 2;
 }
 
-message DatabaseRefId {
-  int32 database_id = 1;
-}
-
-message SchemaRefId {
-  DatabaseRefId database_ref_id = 1;
-  int32 schema_id = 2;
-}
-
-message TableRefId {
-  SchemaRefId schema_ref_id = 1;
-  int32 table_id = 2;
-}
-
 message ColumnDesc {
   data.DataType column_type = 1;
   int32 column_id = 2;
@@ -39,40 +25,37 @@ message ColumnDesc {
   string type_name = 5;
 }
 
-message OrderedColumnDesc {
-  ColumnDesc column_desc = 1;
-  OrderType order = 2;
-}
-
 message ColumnCatalog {
   ColumnDesc column_desc = 1;
   bool is_hidden = 2;
 }
 
-message CellBasedTableDesc {
+message StorageTableDesc {
   uint32 table_id = 1;
   repeated ColumnDesc columns = 2;
   // TODO: may refactor primary key representations
-  repeated OrderedColumnDesc order_key = 3;
-  repeated uint32 pk_indices = 4;
-  repeated uint32 dist_key_indices = 5;
+  repeated ColumnOrder pk = 3;
+  repeated uint32 dist_key_indices = 4;
+  uint32 retention_seconds = 5;
+  repeated uint32 value_indices = 6;
 }
 
 enum JoinType {
   // Note that it comes from Calcite's JoinRelType.
   // DO NOT HAVE direction for SEMI and ANTI now.
-  INNER = 0;
-  LEFT_OUTER = 1;
-  RIGHT_OUTER = 2;
-  FULL_OUTER = 3;
-  LEFT_SEMI = 4;
-  LEFT_ANTI = 5;
-  RIGHT_SEMI = 6;
-  RIGHT_ANTI = 7;
+  UNSPECIFIED = 0;
+  INNER = 1;
+  LEFT_OUTER = 2;
+  RIGHT_OUTER = 3;
+  FULL_OUTER = 4;
+  LEFT_SEMI = 5;
+  LEFT_ANTI = 6;
+  RIGHT_SEMI = 7;
+  RIGHT_ANTI = 8;
 }
 
 enum OrderType {
-  INVALID = 0;
+  ORDER_UNSPECIFIED = 0;
   ASCENDING = 1;
   DESCENDING = 2;
 }
@@ -84,8 +67,9 @@ message ColumnOrder {
 }
 
 enum RowFormatType {
-  JSON = 0;
-  PROTOBUF = 1;
-  DEBEZIUM_JSON = 2;
-  AVRO = 3;
+  ROW_UNSPECIFIED = 0;
+  JSON = 1;
+  PROTOBUF = 2;
+  DEBEZIUM_JSON = 3;
+  AVRO = 4;
 }

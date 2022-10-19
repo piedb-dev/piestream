@@ -16,19 +16,20 @@ use std::ops::Bound::*;
 use std::ops::{Bound, RangeBounds};
 use std::{ptr, u64};
 
-use bytes::{Buf, BufMut};
+use bytes::{Buf, BufMut, BytesMut};
 
 use super::version_cmp::VersionedComparator;
+use crate::HummockEpoch;
 
-pub type Epoch = u64;
-const EPOCH_LEN: usize = std::mem::size_of::<Epoch>();
+const EPOCH_LEN: usize = std::mem::size_of::<HummockEpoch>();
+pub const TABLE_PREFIX_LEN: usize = 5;
 
 /// Converts user key to full key by appending `u64::MAX - epoch` to the user key.
 ///
 /// In this way, the keys can be comparable even with the epoch, and a key with a larger
 /// epoch will be smaller and thus be sorted to an upper position.
-pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
-    let res = (Epoch::MAX - epoch).to_be();
+pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: HummockEpoch) -> Vec<u8> {
+    let res = (HummockEpoch::MAX - epoch).to_be();
     user_key.reserve(EPOCH_LEN);
     let buf = user_key.chunk_mut();
 
@@ -57,15 +58,15 @@ pub fn split_key_epoch(full_key: &[u8]) -> (&[u8], &[u8]) {
 
 /// Extracts epoch part from key
 #[inline(always)]
-pub fn get_epoch(full_key: &[u8]) -> Epoch {
-    let mut epoch: Epoch = 0;
+pub fn get_epoch(full_key: &[u8]) -> HummockEpoch {
+    let mut epoch: HummockEpoch = 0;
 
     // TODO: check whether this hack improves performance
     unsafe {
         let src = &full_key[full_key.len() - EPOCH_LEN..];
         ptr::copy_nonoverlapping(src.as_ptr(), &mut epoch as *mut _ as *mut u8, EPOCH_LEN);
     }
-    Epoch::MAX - Epoch::from_be(epoch)
+    HummockEpoch::MAX - HummockEpoch::from_be(epoch)
 }
 
 /// Extract user key without epoch part
@@ -84,7 +85,7 @@ pub fn get_table_id(full_key: &[u8]) -> Option<u32> {
     }
 }
 
-pub fn extract_table_id_and_epoch(full_key: &[u8]) -> (Option<u32>, Epoch) {
+pub fn extract_table_id_and_epoch(full_key: &[u8]) -> (Option<u32>, HummockEpoch) {
     match get_table_id(full_key) {
         Some(table_id) => {
             let epoch = get_epoch(full_key);
@@ -166,7 +167,7 @@ fn next_key_no_alloc(key: &[u8]) -> Option<(&[u8], u8)> {
 // End Copyright 2016 TiKV Project Authors. Licensed under Apache-2.0.
 
 /// Get the end bound of the given `prefix` when transforming it to a key range.
-fn end_bound_of_prefix(prefix: &[u8]) -> Bound<Vec<u8>> {
+pub fn end_bound_of_prefix(prefix: &[u8]) -> Bound<Vec<u8>> {
     if let Some((s, e)) = next_key_no_alloc(prefix) {
         let mut res = Vec::with_capacity(s.len() + 1);
         res.extend_from_slice(s);
@@ -174,6 +175,18 @@ fn end_bound_of_prefix(prefix: &[u8]) -> Bound<Vec<u8>> {
         Excluded(res)
     } else {
         Unbounded
+    }
+}
+
+/// Get the start bound of the given `prefix` when it is excluded from the range.
+pub fn start_bound_of_excluded_prefix(prefix: &[u8]) -> Bound<Vec<u8>> {
+    if let Some((s, e)) = next_key_no_alloc(prefix) {
+        let mut res = Vec::with_capacity(s.len() + 1);
+        res.extend_from_slice(s);
+        res.push(e);
+        Included(res)
+    } else {
+        panic!("the prefix is the maximum value")
     }
 }
 
@@ -193,7 +206,11 @@ pub fn prefixed_range<B: AsRef<[u8]>>(
 ) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let start = match range.start_bound() {
         Included(b) => Included([prefix, b.as_ref()].concat()),
-        Excluded(_) => unimplemented!(),
+        Excluded(b) => {
+            let b = b.as_ref();
+            assert!(!b.is_empty());
+            Excluded([prefix, b].concat())
+        }
         Unbounded => Included(prefix.to_vec()),
     };
 
@@ -208,6 +225,13 @@ pub fn prefixed_range<B: AsRef<[u8]>>(
     };
 
     (start, end)
+}
+
+pub fn table_prefix(table_id: u32) -> Vec<u8> {
+    let mut buf = BytesMut::with_capacity(TABLE_PREFIX_LEN);
+    buf.put_u8(b't');
+    buf.put_u32(table_id);
+    buf.to_vec()
 }
 
 /// [`FullKey`] can be created on either a `Vec<u8>` or a `&[u8]`.

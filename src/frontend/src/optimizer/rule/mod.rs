@@ -18,9 +18,13 @@ use super::PlanRef;
 
 /// A one-to-one transform for the [`PlanNode`](super::plan_node::PlanNode), every [`Rule`] should
 /// downcast and check if the node matches the rule.
-pub trait Rule: Send + Sync {
+pub trait Rule: Send + Sync + Description {
     /// return err(()) if not match
     fn apply(&self, plan: PlanRef) -> Option<PlanRef>;
+}
+
+pub trait Description {
+    fn description(&self) -> &str;
 }
 
 pub(super) type BoxedRule = Box<dyn Rule>;
@@ -49,3 +53,61 @@ mod translate_apply;
 pub use translate_apply::*;
 mod merge_multijoin;
 pub use merge_multijoin::*;
+mod max_one_row_elim;
+pub use max_one_row_elim::*;
+mod apply_join;
+pub use apply_join::*;
+mod apply_to_join;
+pub use apply_to_join::*;
+mod distinct_agg;
+pub use distinct_agg::*;
+mod index_selection;
+pub use index_selection::*;
+mod push_calculation_of_join;
+pub use push_calculation_of_join::*;
+mod join_commute;
+mod over_agg_to_topn;
+pub use join_commute::*;
+pub use over_agg_to_topn::*;
+
+#[macro_export]
+macro_rules! for_all_rules {
+    ($macro:ident) => {
+        $macro! {
+             {ApplyAggRule}
+            ,{ApplyFilterRule}
+            ,{ApplyProjRule}
+            ,{ApplyScanRule}
+            ,{ApplyJoinRule}
+            ,{ApplyToJoinRule}
+            ,{MaxOneRowEliminateRule}
+            ,{DistinctAggRule}
+            ,{IndexDeltaJoinRule}
+            ,{MergeMultiJoinRule}
+            ,{ProjectEliminateRule}
+            ,{ProjectJoinRule}
+            ,{ProjectMergeRule}
+            ,{PullUpCorrelatedPredicateRule}
+            ,{ReorderMultiJoinRule}
+            ,{TranslateApplyRule}
+            ,{PushCalculationOfJoinRule}
+            ,{IndexSelectionRule}
+            ,{OverAggToTopNRule}
+            ,{JoinCommuteRule}
+        }
+    };
+}
+
+macro_rules! impl_description {
+    ($( { $name:ident }),*) => {
+        paste::paste!{
+            $(impl Description for [<$name>] {
+                fn description(&self) -> &str {
+                    stringify!([<$name>])
+                }
+            })*
+        }
+    }
+}
+
+for_all_rules! {impl_description}

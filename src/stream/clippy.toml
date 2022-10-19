@@ -1,0 +1,32 @@
+disallowed-methods = [
+    { path = "std::iter::Iterator::zip", reason = "Please use Itertools::zip_eq instead." },
+    { path = "piestream_expr::expr::Expression::eval", reason = "Please use InfallibleExpression::eval_infallible instead." },
+    { path = "piestream_expr::expr::Expression::eval_row", reason = "Please use InfallibleExpression::eval_row_infallible instead." },
+
+    { path = "piestream_common::error::internal_err", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::internal_error", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::tonic_err", reason = "Please use per-crate error type instead." },
+]
+
+disallowed-types = [
+    { path = "piestream_common::error::ErrorCode", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::RwError", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::Result", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::ToRwResult", reason = "Please use per-crate error type instead." },
+    { path = "piestream_common::error::ToErrorStr", reason = "Please use per-crate error type instead." },
+
+]
+
+doc-valid-idents = [
+    "piestream",
+    "MinIO",
+    "ProtoBuf",
+    "BloomFilter",
+    "gRPC",
+    "PostgreSQL",
+    "MySQL",
+    "TopN",
+]
+
+avoid-breaking-exported-api = false
+upper-case-acronyms-aggressive = true

@@ -14,8 +14,6 @@
 
 use piestream_pb::hummock::{CompactTask, SstableInfo};
 
-use crate::HummockSSTableId;
-
 pub fn compact_task_to_string(compact_task: &CompactTask) -> String {
     use std::fmt::Write;
 
@@ -29,20 +27,20 @@ pub fn compact_task_to_string(compact_task: &CompactTask) -> String {
     writeln!(s, "Compaction watermark: {:?} ", compact_task.watermark).unwrap();
     writeln!(
         s,
-        "Compaction vnodemap size: {:?} ",
-        compact_task.vnode_mappings.len()
+        "Compaction target_file_size: {:?} ",
+        compact_task.target_file_size
     )
     .unwrap();
     writeln!(s, "Compaction # splits: {:?} ", compact_task.splits.len()).unwrap();
     writeln!(s, "Compaction task status: {:?} ", compact_task.task_status).unwrap();
-    s.push_str("Compaction SSTables structure: \n");
+    s.push_str("Compaction Sstables structure: \n");
     for level_entry in &compact_task.input_ssts {
-        let tables: Vec<(HummockSSTableId, String)> = level_entry
+        let tables: Vec<String> = level_entry
             .table_infos
             .iter()
-            .map(|table| (table.id, format!("{}KB", table.file_size / 1024)))
+            .map(|table| format!("[id: {}, {}KB]", table.id, table.file_size / 1024))
             .collect();
-        writeln!(s, "Level {:?}: {:?} ", level_entry.level_idx, tables).unwrap();
+        writeln!(s, "Level {:?} {:?} ", level_entry.level_idx, tables).unwrap();
     }
     s.push_str("Compaction task output: \n");
     for sst in &compact_task.sorted_output_ssts {
@@ -64,10 +62,25 @@ pub fn append_sstable_info_to_string(s: &mut String, sstable_info: &SstableInfo)
             hex::encode(key_range.right.as_slice())
         )
     };
-    writeln!(
-        s,
-        "SstableInfo: id={:?}, KeyRange={:?}, size={:?}",
-        sstable_info.id, key_range_str, sstable_info.file_size
-    )
-    .unwrap();
+    if sstable_info.stale_key_count > 0 {
+        let ratio = sstable_info.stale_key_count * 100 / sstable_info.total_key_count;
+        writeln!(
+            s,
+            "SstableInfo: id={:?}, KeyRange={:?}, size={:?}KB, delete_ratio={:?}%",
+            sstable_info.id,
+            key_range_str,
+            sstable_info.file_size / 1024,
+            ratio,
+        )
+        .unwrap();
+    } else {
+        writeln!(
+            s,
+            "SstableInfo: id={:?}, KeyRange={:?}, size={:?}KB",
+            sstable_info.id,
+            key_range_str,
+            sstable_info.file_size / 1024,
+        )
+        .unwrap();
+    }
 }

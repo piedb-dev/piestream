@@ -14,8 +14,7 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
-use piestream_common::catalog::{Schema, TableId};
-use piestream_storage::memory::MemoryStateStore;
+use piestream_common::catalog::Schema;
 use tokio::sync::mpsc;
 
 use super::error::StreamExecutorError;
@@ -99,7 +98,7 @@ impl MockSource {
 
     #[try_stream(ok = Message, error = StreamExecutorError)]
     async fn execute_inner(mut self: Box<Self>) {
-        let mut epoch = 0;
+        let mut epoch = 1;
 
         while let Some(msg) = self.rx.recv().await {
             epoch += 1;
@@ -121,7 +120,7 @@ impl Executor for MockSource {
         &self.schema
     }
 
-    fn pk_indices(&self) -> super::PkIndicesRef {
+    fn pk_indices(&self) -> super::PkIndicesRef<'_> {
         &self.pk_indices
     }
 
@@ -143,35 +142,101 @@ macro_rules! row_nonnull {
     };
 }
 
-/// Create a vector of memory keyspace with len `num_ks`.
-pub fn create_in_memory_keyspace_agg(num_ks: usize) -> Vec<(MemoryStateStore, TableId)> {
-    let mut returned_vec = vec![];
-    let mem_state = MemoryStateStore::new();
-    for idx in 0..num_ks {
-        returned_vec.push((mem_state.clone(), TableId::new(idx as u32)));
-    }
-    returned_vec
-}
+pub mod agg_executor {
+    use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_expr::expr::AggKind;
+    use piestream_storage::table::streaming_table::state_table::StateTable;
+    use piestream_storage::StateStore;
 
-pub mod global_simple_agg {
-    /// Infer column desc for state table.
-    /// The column desc layout is
-    /// [ `group_key` (only for hash agg) / `sort_key` (only for extreme) /
-    /// `value`(the agg call return type)].
-    /// This is the Row layout insert into state table.
-    /// For different agg call, different executor (hash agg or simple agg), the layout will be
-    /// different.
-    pub fn generate_column_descs(
+    use crate::common::StateTableColumnMapping;
+    use crate::executor::aggregation::{AggCall, AggStateStorage};
+    use crate::executor::{
+        ActorContextRef, BoxedExecutor, Executor, GlobalSimpleAggExecutor, PkIndices,
+    };
+
+    /// Create state table for the given agg call.
+    /// Should infer the schema in the same way as `LogicalAgg::infer_stream_agg_state`.
+    pub fn create_agg_state_table<S: StateStore>(
+        store: S,
+        table_id: TableId,
         agg_call: &AggCall,
-        group_keys: &[usize],
+        group_key_indices: &[usize],
         pk_indices: &[usize],
-        agg_schema: &Schema,
         input_ref: &dyn Executor,
-    ) -> Vec<ColumnDesc> {
-        let mut column_descs = Vec::with_capacity(group_keys.len() + 1);
-        let mut next_column_id = 0;
+    ) -> AggStateStorage<S> {
+        match agg_call.kind {
+            AggKind::Min | AggKind::Max if !agg_call.append_only => {
+                let input_fields = input_ref.schema().fields();
 
-        // Define a closure for DRY.
+                let mut column_descs = Vec::new();
+                let mut order_types = Vec::new();
+                let mut upstream_columns = Vec::new();
+
+                let mut next_column_id = 0;
+                let mut add_column = |upstream_idx: usize, data_type: DataType, order_type: OrderType| {
+                    upstream_columns.push(upstream_idx);
+                    column_descs.push(ColumnDesc::unnamed(
+                        ColumnId::new(next_column_id),
+                        data_type,
+                    ));
+                    next_column_id += 1;
+                    order_types.push(order_type);
+                };
+
+                for idx in group_key_indices {
+                    add_column(*idx, input_fields[*idx].data_type(), OrderType::Ascending);
+                }
+
+                add_column(agg_call.args.val_indices()[0], agg_call.args.arg_types()[0].clone(), if agg_call.kind == AggKind::Max {
+                    OrderType::Descending
+                } else {
+                    OrderType::Ascending
+                });
+
+                for idx in pk_indices {
+                    add_column(*idx, input_fields[*idx].data_type(), OrderType::Ascending);
+                }
+
+                let state_table = StateTable::new_without_distribution(
+                    store,
+                    table_id,
+                    column_descs,
+                    order_types.clone(),
+                    (0..order_types.len()).collect(),
+                );
+
+                AggStateStorage::MaterializedInput { table: state_table, mapping: StateTableColumnMapping::new(upstream_columns) }
+            }
+            AggKind::Min /* append only */
+            | AggKind::Max /* append only */
+            | AggKind::Sum
+            | AggKind::Count
+            | AggKind::Avg
+            | AggKind::ApproxCountDistinct => {
+                AggStateStorage::ResultValue
+            }
+            _ => {
+                panic!("no need to mock other agg kinds here");
+            }
+        }
+    }
+
+    /// Create result state table for agg executor.
+    pub fn create_result_table<S: StateStore>(
+        store: S,
+        table_id: TableId,
+        agg_calls: &[AggCall],
+        group_key_indices: &[usize],
+        input_ref: &dyn Executor,
+    ) -> StateTable<S> {
+        let input_fields = input_ref.schema().fields();
+
+        let mut column_descs = Vec::new();
+        let mut order_types = Vec::new();
+
+        let mut next_column_id = 0;
         let mut add_column_desc = |data_type: DataType| {
             column_descs.push(ColumnDesc::unnamed(
                 ColumnId::new(next_column_id),
@@ -180,108 +245,94 @@ pub mod global_simple_agg {
             next_column_id += 1;
         };
 
-        for (idx, _) in group_keys.iter().enumerate() {
-            add_column_desc(agg_schema.fields[idx].data_type.clone());
-        }
+        group_key_indices.iter().for_each(|idx| {
+            add_column_desc(input_fields[*idx].data_type());
+            order_types.push(OrderType::Ascending);
+        });
 
-        // For max, min, the table descs should include sort key.
-        // The added columns should be (sort_key, pk from input data).
-        if (agg_call.kind == AggKind::Max || agg_call.kind == AggKind::Min) && !agg_call.append_only
-        {
-            // Add value as part of sort key.
+        agg_calls.iter().for_each(|agg_call| {
             add_column_desc(agg_call.return_type.clone());
+        });
 
-            for pk_idx in pk_indices {
-                add_column_desc(input_ref.schema().fields[*pk_idx].data_type.clone());
-            }
-        }
-
-        // Agg value should also be part of state table.
-        add_column_desc(agg_call.return_type.clone());
-
-        column_descs
-    }
-
-    /// Generate state table for agg executor.
-    /// Relational pk = `table_desc.len` - 1.
-    /// it's test only.
-    pub fn generate_state_table<S: StateStore>(
-        store: S,
-        table_id: TableId,
-        agg_call: &AggCall,
-        group_keys: &[usize],
-        pk_indices: &[usize],
-        agg_schema: &Schema,
-        input_ref: &dyn Executor,
-    ) -> StateTable<S> {
-        let table_desc =
-            generate_column_descs(agg_call, group_keys, pk_indices, agg_schema, input_ref);
-        // Always leave 1 space for agg call value.
-        let relational_pk_len = table_desc.len() - 1;
-        let dist_keys: Vec<usize> = (0..group_keys.len()).collect();
-
-        StateTable::new(
+        StateTable::new_without_distribution(
             store,
             table_id,
-            table_desc,
-            // Primary key do not includes group key.
-            vec![
-                // Now we only infer order type for min/max in a naive way.
-                if agg_call.kind == AggKind::Max {
-                    OrderType::Descending
-                } else {
-                    OrderType::Ascending
-                };
-                relational_pk_len
-            ],
-            if dist_keys.is_empty() {
-                None
-            } else {
-                Some(dist_keys)
-            },
-            (0..relational_pk_len).collect(),
+            column_descs,
+            order_types,
+            (0..group_key_indices.len()).collect(),
         )
     }
-    use itertools::Itertools;
-    use piestream_common::catalog::{ColumnDesc, ColumnId, Schema, TableId};
-    use piestream_common::types::DataType;
-    use piestream_common::util::sort_util::OrderType;
-    use piestream_expr::expr::AggKind;
-    use piestream_storage::memory::MemoryStateStore;
-    use piestream_storage::table::state_table::StateTable;
-    use piestream_storage::StateStore;
 
-    use crate::executor::aggregation::{generate_agg_schema, AggCall};
-    use crate::executor::{BoxedExecutor, Executor, GlobalSimpleAggExecutor, PkIndices};
-
-    pub fn new_boxed_simple_agg_executor(
-        keyspace_gen: Vec<(MemoryStateStore, TableId)>,
+    pub fn new_boxed_simple_agg_executor<S: StateStore>(
+        ctx: ActorContextRef,
+        store: S,
         input: BoxedExecutor,
         agg_calls: Vec<AggCall>,
         pk_indices: PkIndices,
         executor_id: u64,
-        key_indices: Vec<usize>,
     ) -> Box<dyn Executor> {
-        let agg_schema = generate_agg_schema(input.as_ref(), &agg_calls, Some(&key_indices));
-        let state_tables = keyspace_gen
+        let agg_state_tables = agg_calls
             .iter()
-            .zip_eq(agg_calls.iter())
-            .map(|(ks, agg_call)| {
-                generate_state_table(
-                    ks.0.clone(),
-                    ks.1,
+            .enumerate()
+            .map(|(idx, agg_call)| {
+                create_agg_state_table(
+                    store.clone(),
+                    TableId::new(idx as u32),
                     agg_call,
-                    &key_indices,
+                    &[],
                     &pk_indices,
-                    &agg_schema,
                     input.as_ref(),
                 )
             })
             .collect();
+        let result_table = create_result_table(
+            store,
+            TableId::new(agg_calls.len() as u32),
+            &agg_calls,
+            &[],
+            input.as_ref(),
+        );
 
         Box::new(
-            GlobalSimpleAggExecutor::new(input, agg_calls, pk_indices, executor_id, state_tables)
-                .unwrap(),
+            GlobalSimpleAggExecutor::new(
+                ctx,
+                input,
+                agg_calls,
+                agg_state_tables,
+                result_table,
+                pk_indices,
+                executor_id,
+                1 << 10,
+            )
+            .unwrap(),
+        )
+    }
+}
+
+pub mod top_n_executor {
+    use itertools::Itertools;
+    use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
+    use piestream_common::types::DataType;
+    use piestream_common::util::sort_util::OrderType;
+    use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::streaming_table::state_table::StateTable;
+
+    pub fn create_in_memory_state_table(
+        data_types: &[DataType],
+        order_types: &[OrderType],
+        pk_indices: &[usize],
+    ) -> StateTable<MemoryStateStore> {
+        let column_descs = data_types
+            .iter()
+            .enumerate()
+            .map(|(id, data_type)| ColumnDesc::unnamed(ColumnId::new(id as i32), data_type.clone()))
+            .collect_vec();
+        StateTable::new_without_distribution(
+            MemoryStateStore::new(),
+            TableId::new(0),
+            column_descs,
+            order_types.to_vec(),
+            pk_indices.to_vec(),
         )
     }
 }

@@ -6,7 +6,9 @@ option optimize_for = SPEED;
 
 message Status {
   enum Code {
-    OK = 0;
+    UNSPECIFIED = 0;
+    OK = 1;
+    UNKNOWN_WORKER = 2;
   }
   Code code = 1;
   string message = 2;
@@ -24,61 +26,43 @@ message ActorInfo {
 }
 
 enum WorkerType {
-  FRONTEND = 0;
-  COMPUTE_NODE = 1;
-  RISE_CTL = 2;
-  COMPACTOR = 3;
-}
-
-enum ParallelUnitType {
-  SINGLE = 0;
-  HASH = 1;
+  UNSPECIFIED = 0;
+  FRONTEND = 1;
+  COMPUTE_NODE = 2;
+  RISE_CTL = 3;
+  COMPACTOR = 4;
 }
 
 message ParallelUnit {
   uint32 id = 1;
-  ParallelUnitType type = 2;
-  uint32 worker_node_id = 3;
+  uint32 worker_node_id = 2;
 }
 
 message WorkerNode {
   enum State {
-    STARTING = 0;
-    RUNNING = 1;
+    UNSPECIFIED = 0;
+    STARTING = 1;
+    RUNNING = 2;
   }
   uint32 id = 1;
   WorkerType type = 2;
   HostAddress host = 3;
   State state = 4;
-  // a mapping from logical key to parallel unit, with logical key as the index of array
   repeated ParallelUnit parallel_units = 5;
-}
-
-// A cluster can be either a set of OLAP compute nodes, or a set of streaming compute nodes.
-message Cluster {
-  uint32 id = 1;
-  repeated common.WorkerNode nodes = 2;
-  map<string, string> config = 3;
 }
 
 message Buffer {
   enum CompressionType {
-    INVALID = 0;
+    UNSPECIFIED = 0;
     NONE = 1;
   }
   CompressionType compression = 1;
   bytes body = 2;
 }
 
-// Vnode mapping for stream fragments / relational state tables. Stores mapping from virtual node to parallel unit id.
+// Vnode mapping for stream fragments. Stores mapping from virtual node to parallel unit id.
 message ParallelUnitMapping {
-  uint32 table_id = 1;
+  uint32 fragment_id = 1;
   repeated uint64 original_indices = 2;
   repeated uint32 data = 3;
-}
-
-// Bitmap that records whether vnodes are present.
-message VNodeBitmap {
-  uint32 table_id = 1;
-  Buffer bitmap = 2;
 }

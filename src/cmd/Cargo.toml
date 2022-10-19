@@ -1,24 +1,27 @@
 [package]
 name = "piestream_cmd"
-version = "0.1.10"
+version = "0.2.0-alpha"
 edition = "2021"
 
 [features]
-static-link = ["workspace-static-link"]
+static-link = ["workspace-config/enable-static-link"]
+static-log-level = ["workspace-config/enable-static-log-level"]
 
 [dependencies]
 anyhow = "1"
 clap = { version = "3", features = ["derive"] }
-log = { version = "0.4", features = ["release_max_level_info"] }
-madsim = "=0.2.0-alpha.3"
+global_stats_alloc = { path = "../utils/global_stats_alloc" }
+log = { version = "0.4" }
+piestream_compaction_test = { path = "../storage/compaction_test" }
 piestream_compactor = { path = "../storage/compactor" }
 piestream_compute = { path = "../compute" }
 piestream_ctl = { path = "../ctl" }
 piestream_frontend = { path = "../frontend" }
 piestream_meta = { path = "../meta" }
 piestream_rt = { path = "../utils/runtime" }
-tikv-jemallocator = "0.5"
-tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
+stats_alloc = "0.1"
+tikv-jemallocator = { version = "0.5", features = ["profiling", "stats"] }
+tokio = { version = "0.2", package = "madsim-tokio", features = [
     "rt",
     "rt-multi-thread",
     "sync",
@@ -26,12 +29,11 @@ tokio = { version = "=0.2.0-alpha.3", package = "madsim-tokio", features = [
     "time",
     "signal",
     "fs",
+    "tracing",
 ] }
-# remove this line after madsim-tokio adds tracing feature support
-tokio-polyfill = { version = "1", package = "tokio", default-features = false, features = ["tracing"] }
-tracing = { version = "0.1", features = ["release_max_level_info"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-workspace-static-link = { path = "../utils/static-link", optional = true, features = ["enabled"] }
+tracing = { version = "0.1" }
+workspace-config = { path = "../utils/workspace-config", optional = true }
+workspace-hack = { version = "0.2.0-alpha", path = "../workspace-hack" }
 
 [[bin]]
 name = "frontend"
@@ -52,3 +54,7 @@ path = "src/bin/compactor.rs"
 [[bin]]
 name = "risectl"
 path = "src/bin/ctl.rs"
+
+[[bin]]
+name = "compaction-test"
+path = "src/bin/compaction_test.rs"

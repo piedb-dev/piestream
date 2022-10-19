@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use futures::executor::block_on;
 use piestream_hummock_sdk::key::key_with_epoch;
 
 use crate::assert_bytes_eq;
 use crate::hummock::iterator::test_utils::mock_sstable_store;
-use crate::hummock::iterator::{HummockIterator, ReadOptions};
+use crate::hummock::iterator::HummockIterator;
+use crate::hummock::sstable::SstableIteratorReadOptions;
 use crate::hummock::test_utils::{
-    default_builder_opt_for_test, gen_test_sstable_data, test_key_of, test_value_of,
-    TEST_KEYS_COUNT,
+    default_builder_opt_for_test, default_writer_opt_for_test, gen_test_sstable,
+    gen_test_sstable_data, put_sst, test_key_of, test_value_of, TEST_KEYS_COUNT,
 };
 use crate::hummock::value::HummockValue;
-use crate::hummock::{CachePolicy, SSTableIterator, SSTableIteratorType, Sstable};
+use crate::hummock::{SstableIterator, SstableIteratorType};
 use crate::monitor::StoreLocalStatistic;
 
 #[tokio::test]
@@ -38,22 +38,22 @@ async fn test_failpoints_table_read() {
     // We should close buffer, so that table iterator must read in object_stores
     let kv_iter =
         (0..TEST_KEYS_COUNT).map(|i| (test_key_of(i), HummockValue::put(test_value_of(i))));
-    let (data, meta, _) = gen_test_sstable_data(default_builder_opt_for_test(), kv_iter);
-    let table = Sstable {
-        id: 0,
-        meta,
-        blocks: vec![],
-    };
-    sstable_store
-        .put(table, data, CachePolicy::NotFill)
-        .await
-        .unwrap();
+    let info = gen_test_sstable(
+        default_builder_opt_for_test(),
+        0,
+        kv_iter,
+        sstable_store.clone(),
+    )
+    .await;
 
     let mut stats = StoreLocalStatistic::default();
-    let mut sstable_iter = SSTableIterator::create(
-        block_on(sstable_store.sstable(0, &mut stats)).unwrap(),
+    let mut sstable_iter = SstableIterator::create(
+        sstable_store
+            .sstable(&info.get_sstable_info(), &mut stats)
+            .await
+            .unwrap(),
         sstable_store,
-        Arc::new(ReadOptions::default()),
+        Arc::new(SstableIteratorReadOptions::default()),
     );
     sstable_iter.rewind().await.unwrap();
 
@@ -78,53 +78,53 @@ async fn test_failpoints_table_read() {
 #[tokio::test]
 #[cfg(feature = "failpoints")]
 async fn test_failpoints_vacuum_and_metadata() {
-    let metadata_upload_err = "metadata_upload_err";
+    let data_upload_err = "data_upload_err";
     let mem_upload_err = "mem_upload_err";
     let mem_delete_err = "mem_delete_err";
     let sstable_store = mock_sstable_store();
     // when upload data is successful, but upload meta is fail and delete is fail
 
-    fail::cfg_callback(metadata_upload_err, move || {
+    fail::cfg_callback(data_upload_err, move || {
         fail::cfg(mem_upload_err, "return").unwrap();
         fail::cfg(mem_delete_err, "return").unwrap();
-        fail::remove(metadata_upload_err);
+        fail::remove(data_upload_err);
     })
     .unwrap();
 
+    let table_id = 0;
     let kv_iter =
         (0..TEST_KEYS_COUNT).map(|i| (test_key_of(i), HummockValue::put(test_value_of(i))));
-    let (data, meta, _) = gen_test_sstable_data(default_builder_opt_for_test(), kv_iter);
-    let table = Sstable {
-        id: 0,
-        meta: meta.clone(),
-        blocks: vec![],
-    };
-    let result = sstable_store
-        .put(table, data.clone(), CachePolicy::NotFill)
-        .await;
+    let (data, meta) = gen_test_sstable_data(default_builder_opt_for_test(), kv_iter).await;
+    let result = put_sst(
+        table_id,
+        data.clone(),
+        meta.clone(),
+        sstable_store.clone(),
+        default_writer_opt_for_test(),
+    )
+    .await;
     assert!(result.is_err());
 
-    fail::remove(metadata_upload_err);
+    fail::remove(data_upload_err);
     fail::remove(mem_delete_err);
     fail::remove(mem_upload_err);
 
-    let table = Sstable {
-        id: 0,
+    let info = put_sst(
+        table_id,
+        data,
         meta,
-        blocks: vec![],
-    };
-    let table_id = table.id;
-    sstable_store
-        .put(table, data, CachePolicy::NotFill)
-        .await
-        .unwrap();
+        sstable_store.clone(),
+        default_writer_opt_for_test(),
+    )
+    .await
+    .unwrap();
 
     let mut stats = StoreLocalStatistic::default();
 
-    let mut sstable_iter = SSTableIterator::create(
-        block_on(sstable_store.sstable(table_id, &mut stats)).unwrap(),
+    let mut sstable_iter = SstableIterator::create(
+        sstable_store.sstable(&info, &mut stats).await.unwrap(),
         sstable_store,
-        Arc::new(ReadOptions::default()),
+        Arc::new(SstableIteratorReadOptions::default()),
     );
     let mut cnt = 0;
     sstable_iter.rewind().await.unwrap();

@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use itertools::Itertools;
-use piestream_common::catalog::{DatabaseId, SchemaId};
 use piestream_pb::stream_plan::stream_node::NodeBody as ProstStreamNode;
 
-use super::logical_agg::PlanAggCall;
-use super::{LogicalAgg, PlanBase, PlanRef, PlanTreeNodeUnary, ToStreamProst};
+use super::generic::PlanAggCall;
+use super::{LogicalAgg, PlanBase, PlanRef, PlanTreeNodeUnary, StreamNode};
+use crate::optimizer::plan_node::PlanAggCallDisplay;
 use crate::optimizer::property::Distribution;
+use crate::stream_fragmenter::BuildFragmentGraphState;
 
 #[derive(Debug, Clone)]
 pub struct StreamGlobalSimpleAgg {
@@ -31,7 +31,7 @@ pub struct StreamGlobalSimpleAgg {
 impl StreamGlobalSimpleAgg {
     pub fn new(logical: LogicalAgg) -> Self {
         let ctx = logical.base.ctx.clone();
-        let pk_indices = logical.base.pk_indices.to_vec();
+        let pk_indices = logical.base.logical_pk.to_vec();
         let input = logical.input();
         let input_dist = input.distribution();
         let dist = match input_dist {
@@ -40,24 +40,34 @@ impl StreamGlobalSimpleAgg {
         };
 
         // Simple agg executor might change the append-only behavior of the stream.
-        let base = PlanBase::new_stream(ctx, logical.schema().clone(), pk_indices, dist, false);
+        let base = PlanBase::new_stream(
+            ctx,
+            logical.schema().clone(),
+            pk_indices,
+            logical.functional_dependency().clone(),
+            dist,
+            false,
+        );
         StreamGlobalSimpleAgg { base, logical }
     }
 
     pub fn agg_calls(&self) -> &[PlanAggCall] {
         self.logical.agg_calls()
     }
+
+    pub fn agg_calls_verbose_display(&self) -> Vec<PlanAggCallDisplay<'_>> {
+        self.logical.agg_calls_display()
+    }
 }
 
 impl fmt::Display for StreamGlobalSimpleAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut builder = if self.input().append_only() {
-            f.debug_struct("StreamAppendOnlyGlobalSimpleAgg")
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.input().append_only() {
+            self.logical
+                .fmt_with_name(f, "StreamAppendOnlyGlobalSimpleAgg")
         } else {
-            f.debug_struct("StreamGlobalSimpleAgg")
-        };
-        builder.field("aggs", &self.agg_calls());
-        builder.finish()
+            self.logical.fmt_with_name(f, "StreamGlobalSimpleAgg")
+        }
     }
 }
 
@@ -72,37 +82,35 @@ impl PlanTreeNodeUnary for StreamGlobalSimpleAgg {
 }
 impl_plan_tree_node_for_unary! { StreamGlobalSimpleAgg }
 
-impl ToStreamProst for StreamGlobalSimpleAgg {
-    fn to_stream_prost_body(&self) -> ProstStreamNode {
+impl StreamNode for StreamGlobalSimpleAgg {
+    fn to_stream_prost_body(&self, state: &mut BuildFragmentGraphState) -> ProstStreamNode {
         use piestream_pb::stream_plan::*;
-        let (internal_tables, column_mapping) = self.logical.infer_internal_table_catalog();
+        let result_table = self.logical.infer_result_table(None);
+        let agg_states = self.logical.infer_stream_agg_state(None);
+
         ProstStreamNode::GlobalSimpleAgg(SimpleAggNode {
             agg_calls: self
                 .agg_calls()
                 .iter()
                 .map(PlanAggCall::to_protobuf)
                 .collect(),
-            distribution_keys: self
+            distribution_key: self
                 .base
                 .dist
                 .dist_column_indices()
                 .iter()
                 .map(|idx| *idx as u32)
-                .collect_vec(),
-            internal_tables: internal_tables
-                .into_iter()
-                .map(|table_catalog| {
-                    table_catalog.to_prost(
-                        SchemaId::placeholder() as u32,
-                        DatabaseId::placeholder() as u32,
-                    )
-                })
-                .collect_vec(),
-            column_mapping: column_mapping
-                .into_iter()
-                .map(|(k, v)| (k as u32, v))
                 .collect(),
             is_append_only: self.input().append_only(),
+            agg_call_states: agg_states
+                .into_iter()
+                .map(|s| s.into_prost(state))
+                .collect(),
+            result_table: Some(
+                result_table
+                    .with_id(state.gen_table_id_wrapped())
+                    .to_internal_table_prost(),
+            ),
         })
     }
 }

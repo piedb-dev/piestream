@@ -13,15 +13,12 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::sync::Arc;
 
 use itertools::Itertools;
-use piestream_common::error::Result;
 use piestream_hummock_sdk::CompactionGroupId;
 
-use crate::hummock::compaction::level_selector::DynamicLevelSelector;
-use crate::hummock::compaction::{create_overlap_strategy, CompactStatus};
-use crate::model::MetadataModel;
+use crate::hummock::compaction::CompactStatus;
+use crate::model::{MetadataModel, MetadataModelResult};
 
 const HUMMOCK_COMPACTION_STATUS_CF_NAME: &str = "cf/hummock_compaction_status";
 
@@ -41,7 +38,7 @@ impl MetadataModel for CompactStatus {
         prost.borrow().into()
     }
 
-    fn key(&self) -> Result<Self::KeyType> {
+    fn key(&self) -> MetadataModelResult<Self::KeyType> {
         Ok(self.compaction_group_id)
     }
 }
@@ -51,7 +48,6 @@ impl From<&CompactStatus> for piestream_pb::hummock::CompactStatus {
         piestream_pb::hummock::CompactStatus {
             compaction_group_id: status.compaction_group_id,
             level_handlers: status.level_handlers.iter().map_into().collect(),
-            compaction_config: Some(status.compaction_config.clone()),
         }
     }
 }
@@ -64,17 +60,9 @@ impl From<CompactStatus> for piestream_pb::hummock::CompactStatus {
 
 impl From<&piestream_pb::hummock::CompactStatus> for CompactStatus {
     fn from(status: &piestream_pb::hummock::CompactStatus) -> Self {
-        let compaction_config = status.compaction_config.as_ref().cloned().unwrap();
-        let overlap_strategy = create_overlap_strategy(compaction_config.compaction_mode());
-        // Currently we only support DynamicLevelSelector. If we add more LevelSelector in the
-        // future, make sure to persist its type as well.
-        let compaction_selector =
-            DynamicLevelSelector::new(Arc::new(compaction_config.clone()), overlap_strategy);
         CompactStatus {
             compaction_group_id: status.compaction_group_id,
             level_handlers: status.level_handlers.iter().map_into().collect(),
-            compaction_config,
-            compaction_selector: Arc::new(compaction_selector),
         }
     }
 }

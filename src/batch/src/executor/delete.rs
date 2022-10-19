@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyhow::anyhow;
 use futures::future::try_join_all;
 use futures_async_stream::try_stream;
 use piestream_common::array::{ArrayBuilder, DataChunk, Op, PrimitiveArrayBuilder, StreamChunk};
 use piestream_common::catalog::{Field, Schema, TableId};
-use piestream_common::error::ErrorCode::InternalError;
-use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::error::{Result, RwError};
 use piestream_common::types::DataType;
 use piestream_pb::batch_plan::plan_node::NodeBody;
-use piestream_source::SourceManagerRef;
+use piestream_source::TableSourceManagerRef;
 
+use crate::error::BatchError;
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
 };
@@ -32,14 +33,19 @@ use crate::task::BatchTaskContext;
 pub struct DeleteExecutor {
     /// Target table id.
     table_id: TableId,
-    source_manager: SourceManagerRef,
+    source_manager: TableSourceManagerRef,
     child: BoxedExecutor,
     schema: Schema,
     identity: String,
 }
 
 impl DeleteExecutor {
-    pub fn new(table_id: TableId, source_manager: SourceManagerRef, child: BoxedExecutor) -> Self {
+    pub fn new(
+        table_id: TableId,
+        source_manager: TableSourceManagerRef,
+        child: BoxedExecutor,
+        identity: String,
+    ) -> Self {
         Self {
             table_id,
             source_manager,
@@ -48,7 +54,7 @@ impl DeleteExecutor {
             schema: Schema {
                 fields: vec![Field::unnamed(DataType::Int64)],
             },
-            identity: "DeleteExecutor".to_string(),
+            identity,
         }
     }
 }
@@ -71,7 +77,7 @@ impl DeleteExecutor {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
         let source_desc = self.source_manager.get_source(&self.table_id)?;
-        let source = source_desc.source.as_table_v2().expect("not table source");
+        let source = source_desc.source.as_table().expect("not table source");
 
         let mut notifiers = Vec::new();
 
@@ -90,20 +96,16 @@ impl DeleteExecutor {
         // Wait for all chunks to be taken / written.
         let rows_deleted = try_join_all(notifiers)
             .await
-            .map_err(|_| {
-                RwError::from(ErrorCode::InternalError(
-                    "failed to wait chunks to be written".to_owned(),
-                ))
-            })?
+            .map_err(|_| BatchError::Internal(anyhow!("failed to wait chunks to be written")))?
             .into_iter()
             .sum::<usize>();
 
         // create ret value
         {
             let mut array_builder = PrimitiveArrayBuilder::<i64>::new(1);
-            array_builder.append(Some(rows_deleted as i64))?;
+            array_builder.append(Some(rows_deleted as i64));
 
-            let array = array_builder.finish()?;
+            let array = array_builder.finish();
             let ret_chunk = DataChunk::new(vec![array.into()], 1);
 
             yield ret_chunk
@@ -114,24 +116,22 @@ impl DeleteExecutor {
 #[async_trait::async_trait]
 impl BoxedExecutorBuilder for DeleteExecutor {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
-        mut inputs: Vec<BoxedExecutor>,
+        source: &ExecutorBuilder<'_, C>,
+        inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
-        ensure!(inputs.len() == 1, "Delete executor should have 1 child!");
+        let [child]: [_; 1] = inputs.try_into().unwrap();
         let delete_node = try_match_expand!(
             source.plan_node().get_node_body().unwrap(),
             NodeBody::Delete
         )?;
 
-        let table_id = TableId::from(&delete_node.table_source_ref_id);
+        let table_id = TableId::new(delete_node.table_source_id);
 
         Ok(Box::new(Self::new(
             table_id,
-            source
-                .context()
-                .source_manager_ref()
-                .ok_or_else(|| InternalError("Source manager not found".to_string()))?,
-            inputs.remove(0),
+            source.context().source_manager(),
+            child,
+            source.plan_node().get_identity().clone(),
         )))
     }
 }
@@ -142,9 +142,10 @@ mod tests {
 
     use futures::StreamExt;
     use piestream_common::array::Array;
-    use piestream_common::catalog::{schema_test_utils, ColumnDesc, ColumnId};
+    use piestream_common::catalog::schema_test_utils;
     use piestream_common::test_prelude::DataChunkTestExt;
-    use piestream_source::{MemSourceManager, SourceManager, StreamSourceReader};
+    use piestream_source::table_test_utils::create_table_info;
+    use piestream_source::{SourceDescBuilder, TableSourceManager, TableSourceManagerRef};
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;
@@ -152,7 +153,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_executor() -> Result<()> {
-        let source_manager = Arc::new(MemSourceManager::default());
+        let source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
 
         // Schema for mock executor.
         let schema = schema_test_utils::ii();
@@ -160,19 +161,6 @@ mod tests {
 
         // Schema of the table
         let schema = schema_test_utils::ii();
-
-        let table_columns: Vec<_> = schema
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| ColumnDesc {
-                data_type: f.data_type.clone(),
-                column_id: ColumnId::from(i as i32), // use column index as column id
-                name: f.name.clone(),
-                field_descs: vec![],
-                type_name: "".to_string(),
-            })
-            .collect();
 
         mock_executor.add(DataChunk::from_pretty(
             "i  i
@@ -183,20 +171,26 @@ mod tests {
              9 10",
         ));
 
+        let info = create_table_info(&schema, None, vec![1]);
+
         // Create the table.
         let table_id = TableId::new(0);
-        source_manager.create_table_source(&table_id, table_columns.to_vec())?;
+        let source_builder = SourceDescBuilder::new(table_id, &info, &source_manager);
 
         // Create reader
-        let source_desc = source_manager.get_source(&table_id)?;
-        let source = source_desc.source.as_table_v2().unwrap();
-        let mut reader = source.stream_reader(vec![0.into(), 1.into()]).await?;
+        let source_desc = source_builder.build().await?;
+        let source = source_desc.source.as_table().unwrap();
+        let mut reader = source
+            .stream_reader(vec![0.into(), 1.into()])
+            .await?
+            .into_stream();
 
         // Delete
         let delete_executor = Box::new(DeleteExecutor::new(
             table_id,
             source_manager.clone(),
             Box::new(mock_executor),
+            "DeleteExecutor".to_string(),
         ));
 
         let handle = tokio::spawn(async move {
@@ -218,12 +212,12 @@ mod tests {
         });
 
         // Read
-        let chunk = reader.next().await?;
+        let chunk = reader.next().await.unwrap()?.chunk;
 
-        assert_eq!(chunk.chunk.ops().to_vec(), vec![Op::Delete; 5]);
+        assert_eq!(chunk.ops().to_vec(), vec![Op::Delete; 5]);
 
         assert_eq!(
-            chunk.chunk.columns()[0]
+            chunk.columns()[0]
                 .array()
                 .as_int32()
                 .iter()
@@ -232,7 +226,7 @@ mod tests {
         );
 
         assert_eq!(
-            chunk.chunk.columns()[1]
+            chunk.columns()[1]
                 .array()
                 .as_int32()
                 .iter()

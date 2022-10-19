@@ -19,35 +19,35 @@ pub struct ChainExecutorBuilder;
 
 impl ExecutorBuilder for ChainExecutorBuilder {
     fn new_boxed_executor(
-        mut params: ExecutorParams,
+        params: ExecutorParams,
         node: &StreamNode,
         _store: impl StateStore,
         stream: &mut LocalStreamManagerCore,
-    ) -> Result<BoxedExecutor> {
+    ) -> StreamResult<BoxedExecutor> {
         let node = try_match_expand!(node.get_node_body().unwrap(), NodeBody::Chain)?;
-        let snapshot = params.input.remove(1);
-        let mview = params.input.remove(0);
+        let [mview, snapshot]: [_; 2] = params.input.try_into().unwrap();
 
-        // TODO(MrCroxx): Use column_descs to get idx after mv planner can generate stable
-        // column_ids. Now simply treat column_id as column_idx.
-        // TODO(bugen): how can we know the way of mapping?
-        let column_idxs: Vec<usize> = node.column_ids.iter().map(|id| *id as usize).collect();
+        let upstream_indices: Vec<usize> = node
+            .upstream_column_indices
+            .iter()
+            .map(|&i| i as usize)
+            .collect();
 
         // For reporting the progress.
         let progress = stream
             .context
-            .register_create_mview_progress(params.actor_id);
+            .register_create_mview_progress(params.actor_context.id);
 
         // The batch query executor scans on a mapped adhoc mview table, thus we should directly use
         // its schema.
         let schema = snapshot.schema().clone();
 
         if node.disable_rearrange {
-            let executor = ChainExecutor::new(snapshot, mview, column_idxs, progress, schema);
+            let executor = ChainExecutor::new(snapshot, mview, upstream_indices, progress, schema);
             Ok(executor.boxed())
         } else {
             let executor =
-                RearrangedChainExecutor::new(snapshot, mview, column_idxs, progress, schema);
+                RearrangedChainExecutor::new(snapshot, mview, upstream_indices, progress, schema);
             Ok(executor.boxed())
         }
     }

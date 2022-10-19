@@ -32,11 +32,12 @@ pub struct LogicalLimit {
 }
 
 impl LogicalLimit {
-    fn new(input: PlanRef, limit: usize, offset: usize) -> Self {
+    pub fn new(input: PlanRef, limit: usize, offset: usize) -> Self {
         let ctx = input.ctx();
         let schema = input.schema().clone();
-        let pk_indices = input.pk_indices().to_vec();
-        let base = PlanBase::new_logical(ctx, schema, pk_indices);
+        let pk_indices = input.logical_pk().to_vec();
+        let functional_dependency = input.functional_dependency().clone();
+        let base = PlanBase::new_logical(ctx, schema, pk_indices, functional_dependency);
         LogicalLimit {
             base,
             input,
@@ -79,7 +80,7 @@ impl PlanTreeNodeUnary for LogicalLimit {
 }
 impl_plan_tree_node_for_unary! {LogicalLimit}
 impl fmt::Display for LogicalLimit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "LogicalLimit {{ limit: {}, offset: {} }}",

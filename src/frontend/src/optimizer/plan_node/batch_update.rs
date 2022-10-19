@@ -17,14 +17,13 @@ use std::fmt;
 use piestream_common::error::Result;
 use piestream_pb::batch_plan::plan_node::NodeBody;
 use piestream_pb::batch_plan::UpdateNode;
-use piestream_pb::plan_common::TableRefId;
 
 use super::{
     LogicalUpdate, PlanBase, PlanRef, PlanTreeNodeUnary, ToBatchProst, ToDistributedBatch,
 };
 use crate::expr::Expr;
 use crate::optimizer::plan_node::ToLocalBatch;
-use crate::optimizer::property::{Distribution, Order};
+use crate::optimizer::property::{Distribution, Order, RequiredDist};
 
 /// `BatchUpdate` implements [`LogicalUpdate`]
 #[derive(Debug, Clone)]
@@ -47,7 +46,7 @@ impl BatchUpdate {
 }
 
 impl fmt::Display for BatchUpdate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.logical.fmt_with_name(f, "BatchUpdate")
     }
 }
@@ -66,17 +65,14 @@ impl_plan_tree_node_for_unary! { BatchUpdate }
 
 impl ToDistributedBatch for BatchUpdate {
     fn to_distributed(&self) -> Result<PlanRef> {
-        let new_input = self.input().to_distributed()?;
+        let new_input = RequiredDist::single()
+            .enforce_if_not_satisfies(self.input().to_distributed()?, &Order::any())?;
         Ok(self.clone_with_input(new_input).into())
     }
 }
 
 impl ToBatchProst for BatchUpdate {
     fn to_batch_prost_body(&self) -> NodeBody {
-        let table_id = TableRefId {
-            table_id: self.logical.source_id().table_id() as i32,
-            ..Default::default()
-        };
         let exprs = self
             .logical
             .exprs()
@@ -85,7 +81,8 @@ impl ToBatchProst for BatchUpdate {
             .collect();
 
         NodeBody::Update(UpdateNode {
-            table_source_ref_id: Some(table_id),
+            table_source_id: self.logical.source_id().table_id(),
+            associated_mview_id: self.logical.associated_mview_id().table_id(),
             exprs,
         })
     }
@@ -93,6 +90,8 @@ impl ToBatchProst for BatchUpdate {
 
 impl ToLocalBatch for BatchUpdate {
     fn to_local(&self) -> Result<PlanRef> {
-        unreachable!()
+        let new_input = RequiredDist::single()
+            .enforce_if_not_satisfies(self.input().to_local()?, &Order::any())?;
+        Ok(self.clone_with_input(new_input).into())
     }
 }

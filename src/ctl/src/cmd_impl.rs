@@ -14,4 +14,7 @@
 
 pub mod bench;
 pub mod hummock;
+pub mod meta;
+pub mod profile;
 pub mod table;
+pub mod trace;

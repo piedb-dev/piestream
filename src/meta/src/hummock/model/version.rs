@@ -16,13 +16,13 @@ use prost::Message;
 use piestream_hummock_sdk::HummockVersionId;
 use piestream_pb::hummock::HummockVersion;
 
-use crate::model::MetadataModel;
+use crate::model::{MetadataModel, MetadataModelResult};
 
 /// Column family name for hummock version.
 /// `cf(hummock_version)`: `HummockVersionId` -> `HummockVersion`
 const HUMMOCK_VERSION_CF_NAME: &str = "cf/hummock_version";
 
-/// `HummockVersion` tracks `SSTables` in given version.
+/// `HummockVersion` tracks `Sstables` in given version.
 impl MetadataModel for HummockVersion {
     type KeyType = HummockVersionId;
     type ProstType = HummockVersion;
@@ -43,7 +43,7 @@ impl MetadataModel for HummockVersion {
         prost
     }
 
-    fn key(&self) -> piestream_common::error::Result<Self::KeyType> {
-        Ok(self.id)
+    fn key(&self) -> MetadataModelResult<Self::KeyType> {
+        Ok(0)
     }
 }

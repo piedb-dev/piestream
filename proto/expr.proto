@@ -3,12 +3,13 @@ syntax = "proto3";
 package expr;
 
 import "data.proto";
+import "plan_common.proto";
 
 option optimize_for = SPEED;
 
 message ExprNode {
   enum Type {
-    INVALID = 0;
+    UNSPECIFIED = 0;
     INPUT_REF = 1;
     CONSTANT_VALUE = 2;
     // arithmetics operators
@@ -39,6 +40,7 @@ message ExprNode {
     // date functions
     EXTRACT = 101;
     TUMBLE_START = 103;
+    TO_TIMESTAMP = 104;
     // other functions
     CAST = 201;
     SUBSTR = 202;
@@ -74,6 +76,8 @@ message ExprNode {
     BOOL_OUT = 228;
     OCTET_LENGTH = 229;
     BIT_LENGTH = 230;
+    OVERLAY = 231;
+    REGEXP_MATCH = 232;
 
     // Boolean comparison
     IS_TRUE = 301;
@@ -83,6 +87,7 @@ message ExprNode {
     IS_NULL = 305;
     IS_NOT_NULL = 306;
     IS_DISTINCT_FROM = 307;
+    IS_NOT_DISTINCT_FROM = 308;
     // Unary operators
     NEG = 401;
     // Nested selection operators
@@ -91,9 +96,15 @@ message ExprNode {
     ARRAY = 521;
     ARRAY_ACCESS = 522;
     ROW = 523;
+    // Array functions
+    ARRAY_CAT = 531;
+    ARRAY_APPEND = 532;
+    ARRAY_PREPEND = 533;
     // Search operator and Search ARGument
     SEARCH = 998;
     SARG = 999;
+    // Internal functions
+    VNODE = 1101;
   }
   Type expr_type = 1;
   data.DataType return_type = 3;
@@ -104,8 +115,53 @@ message ExprNode {
   }
 }
 
+message TableFunction {
+  enum Type {
+    UNSPECIFIED = 0;
+    GENERATE = 1;
+    UNNEST = 2;
+    REGEXP_MATCHES = 3;
+  }
+  Type function_type = 1;
+  repeated expr.ExprNode args = 2;
+  data.DataType return_type = 3;
+}
+
 message InputRefExpr {
   int32 column_idx = 1;
+}
+
+// The items which can occur in the select list of `ProjectSet` operator.
+//
+// When there are table functions in the SQL query `SELECT ...`, it will be planned as `ProjectSet`.
+// Otherwise it will be planned as `Project`.
+//
+// # Examples
+//
+// ```sql
+// # Project
+// select 1;
+//
+// # ProjectSet
+// select unnest(array[1,2,3]);
+//
+// # ProjectSet (table function & usual expression)
+// select unnest(array[1,2,3]), 1;
+//
+// # ProjectSet (multiple table functions)
+// select unnest(array[1,2,3]), unnest(array[4,5]);
+//
+// # ProjectSet over ProjectSet (table function as parameters of table function)
+// select unnest(regexp_matches(v1, 'a(\d)c(\d)', 'g')) from t;
+//
+// # Project over ProjectSet (table function as parameters of usual function)
+// select unnest(regexp_matches(v1, 'a(\d)c(\d)', 'g')) from t;
+// ```
+message ProjectSetSelectItem {
+  oneof select_item {
+    expr.ExprNode expr = 1;
+    expr.TableFunction table_function = 2;
+  }
 }
 
 message ConstantValue {
@@ -133,15 +189,16 @@ message FunctionCall {
 // Aggregate Function Calls for Aggregation
 message AggCall {
   enum Type {
-    INVALID = 0;
+    UNSPECIFIED = 0;
     SUM = 1;
     MIN = 2;
     MAX = 3;
     COUNT = 4;
     AVG = 5;
     STRING_AGG = 6;
-    SINGLE_VALUE = 7;
-    APPROX_COUNT_DISTINCT = 8;
+    APPROX_COUNT_DISTINCT = 7;
+    ARRAY_AGG = 8;
+    FIRST_VALUE = 9;
   }
   message Arg {
     InputRefExpr input = 1;
@@ -151,4 +208,12 @@ message AggCall {
   repeated Arg args = 2;
   data.DataType return_type = 3;
   bool distinct = 4;
+  message OrderByField {
+    InputRefExpr input = 1;
+    data.DataType type = 2;
+    plan_common.OrderType direction = 3;
+    bool nulls_first = 4;
+  }
+  repeated OrderByField order_by_fields = 5;
+  ExprNode filter = 6;
 }

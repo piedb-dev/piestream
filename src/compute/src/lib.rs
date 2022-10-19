@@ -12,30 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![warn(clippy::dbg_macro)]
-#![warn(clippy::disallowed_methods)]
-#![warn(clippy::doc_markdown)]
-#![warn(clippy::explicit_into_iter_loop)]
-#![warn(clippy::explicit_iter_loop)]
-#![warn(clippy::inconsistent_struct_constructor)]
-#![warn(clippy::unused_async)]
-#![warn(clippy::map_flatten)]
-#![warn(clippy::no_effect_underscore_binding)]
-#![warn(clippy::await_holding_lock)]
-#![deny(unused_must_use)]
-#![deny(rustdoc::broken_intra_doc_links)]
 #![feature(trait_alias)]
-#![feature(generic_associated_types)]
 #![feature(binary_heap_drain_sorted)]
+#![feature(generic_associated_types)]
+#![feature(let_else)]
+#![feature(generators)]
+#![feature(type_alias_impl_trait)]
 #![cfg_attr(coverage, feature(no_coverage))]
 
 #[macro_use]
-extern crate log;
+extern crate tracing;
 
 pub mod rpc;
 pub mod server;
 
 use clap::Parser;
+use serde::{Deserialize, Serialize};
 
 /// Command-line arguments for compute-node.
 #[derive(Parser, Debug)]
@@ -48,16 +40,15 @@ pub struct ComputeNodeOpts {
     #[clap(long)]
     pub client_address: Option<String>,
 
-    // TODO: This is currently unused.
-    #[clap(long)]
-    pub port: Option<u16>,
-
     #[clap(long, default_value = "hummock+memory")]
     pub state_store: String,
 
     #[clap(long, default_value = "127.0.0.1:1222")]
     pub prometheus_listener_addr: String,
 
+    /// Used for control the metrics level, similar to log level.
+    /// 0 = close metrics
+    /// >0 = open metrics
     #[clap(long, default_value = "0")]
     pub metrics_level: u32,
 
@@ -68,13 +59,28 @@ pub struct ComputeNodeOpts {
     #[clap(long, default_value = "")]
     pub config_path: String,
 
-    /// Enable reporting tracing information to jaeger
+    /// Enable reporting tracing information to jaeger.
     #[clap(long)]
     pub enable_jaeger_tracing: bool,
+
+    /// Enable async stack tracing for risectl.
+    #[clap(long)]
+    pub enable_async_stack_trace: bool,
+
+    /// Path to file cache data directory.
+    /// Left empty to disable file cache.
+    #[clap(long, default_value = "")]
+    pub file_cache_dir: String,
+
+    /// Enable managed lru cache, or use local lru cache.
+    #[clap(long)]
+    pub enable_managed_cache: bool,
 }
 
 use std::future::Future;
 use std::pin::Pin;
+
+use piestream_common::config::{BatchConfig, ServerConfig, StorageConfig, StreamingConfig};
 
 use crate::server::compute_node_serve;
 
@@ -91,13 +97,39 @@ pub fn start(opts: ComputeNodeOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> 
         let client_address = opts
             .client_address
             .as_ref()
-            .unwrap_or(&opts.host)
+            .unwrap_or_else(|| {
+                tracing::warn!("Client address is not specified, defaulting to host address");
+                &opts.host
+            })
             .parse()
             .unwrap();
         tracing::info!("Client address is {}", client_address);
 
-        let (join_handle, _shutdown_send) =
+        let (join_handle_vec, _shutdown_send) =
             compute_node_serve(listen_address, client_address, opts).await;
-        join_handle.await.unwrap();
+
+        for join_handle in join_handle_vec {
+            join_handle.await.unwrap();
+        }
     })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ComputeNodeConfig {
+    // For connection
+    #[serde(default)]
+    pub server: ServerConfig,
+
+    // Below for batch query.
+    #[serde(default)]
+    pub batch: BatchConfig,
+
+    // Below for streaming.
+    #[serde(default)]
+    pub streaming: StreamingConfig,
+
+    // Below for Hummock.
+    #[serde(default)]
+    pub storage: StorageConfig,
 }

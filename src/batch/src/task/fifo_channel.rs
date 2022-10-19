@@ -12,19 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Formatter};
 use std::future::Future;
 
 use piestream_common::array::DataChunk;
 use piestream_common::error::ErrorCode::InternalError;
-use piestream_common::error::{Result, ToRwResult};
+use piestream_common::error::Result;
 use tokio::sync::mpsc;
 
+use crate::error::BatchError::SenderError;
+use crate::error::Result as BatchResult;
 use crate::task::channel::{ChanReceiver, ChanReceiverImpl, ChanSender, ChanSenderImpl};
 use crate::task::data_chunk_in_channel::DataChunkInChannel;
-use crate::task::BOUNDED_BUFFER_SIZE;
-
 pub struct FifoSender {
     sender: mpsc::Sender<Option<DataChunkInChannel>>,
+}
+
+impl Debug for FifoSender {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FifoSender").finish()
+    }
 }
 
 pub struct FifoReceiver {
@@ -32,14 +39,14 @@ pub struct FifoReceiver {
 }
 
 impl ChanSender for FifoSender {
-    type SendFuture<'a> = impl Future<Output = Result<()>>;
+    type SendFuture<'a> = impl Future<Output = BatchResult<()>>;
 
     fn send(&mut self, chunk: Option<DataChunk>) -> Self::SendFuture<'_> {
-        async move {
+        async {
             self.sender
                 .send(chunk.map(DataChunkInChannel::new))
                 .await
-                .to_rw_result_with(|| "FifoSender::send".into())
+                .map_err(|_| SenderError)
         }
     }
 }
@@ -58,8 +65,8 @@ impl ChanReceiver for FifoReceiver {
     }
 }
 
-pub fn new_fifo_channel() -> (ChanSenderImpl, Vec<ChanReceiverImpl>) {
-    let (s, r) = mpsc::channel(BOUNDED_BUFFER_SIZE);
+pub fn new_fifo_channel(output_channel_size: usize) -> (ChanSenderImpl, Vec<ChanReceiverImpl>) {
+    let (s, r) = mpsc::channel(output_channel_size);
     (
         ChanSenderImpl::Fifo(FifoSender { sender: s }),
         vec![ChanReceiverImpl::Fifo(FifoReceiver { receiver: r })],
@@ -71,7 +78,7 @@ mod tests {
     async fn test_recv_not_fail_on_closed_channel() {
         use crate::task::fifo_channel::new_fifo_channel;
 
-        let (sender, mut receivers) = new_fifo_channel();
+        let (sender, mut receivers) = new_fifo_channel(64);
         assert_eq!(receivers.len(), 1);
         drop(sender);
 

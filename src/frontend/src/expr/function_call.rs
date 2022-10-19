@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use num_integer::Integer as _;
+use piestream_common::catalog::Schema;
 use piestream_common::error::{ErrorCode, Result};
 use piestream_common::types::DataType;
 
-use super::{align_types, cast_ok, infer_type, CastContext, Expr, ExprImpl, Literal};
-use crate::expr::ExprType;
+use super::{cast_ok, infer_type, CastContext, Expr, ExprImpl, Literal};
+use crate::expr::{ExprDisplay, ExprType};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct FunctionCall {
@@ -98,72 +98,7 @@ impl FunctionCall {
     // number of arguments are checked
     // [elsewhere](crate::expr::type_inference::build_type_derive_map).
     pub fn new(func_type: ExprType, mut inputs: Vec<ExprImpl>) -> Result<Self> {
-        let return_type = match func_type {
-            ExprType::Case => {
-                let len = inputs.len();
-                align_types(inputs.iter_mut().enumerate().filter_map(|(i, e)| {
-                    // `Case` organize `inputs` as (cond, res) pairs with a possible `else` res at
-                    // the end. So we align exprs at odd indices as well as the last one when length
-                    // is odd.
-                    match i.is_odd() || len.is_odd() && i == len - 1 {
-                        true => Some(e),
-                        false => None,
-                    }
-                }))
-            }
-            ExprType::In => {
-                align_types(inputs.iter_mut())?;
-                Ok(DataType::Boolean)
-            }
-            ExprType::Coalesce => {
-                if inputs.is_empty() {
-                    return Err(ErrorCode::BindError(format!(
-                        "Function `Coalesce` takes at least {} arguments ({} given)",
-                        1, 0
-                    ))
-                    .into());
-                }
-                align_types(inputs.iter_mut())
-            }
-            ExprType::ConcatWs => {
-                let expected = 2;
-                let actual = inputs.len();
-                if actual < expected {
-                    return Err(ErrorCode::BindError(format!(
-                        "Function `ConcatWs` takes at least {} arguments ({} given)",
-                        expected, actual
-                    ))
-                    .into());
-                }
-
-                inputs = inputs
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, input)| match i {
-                        // 0-th arg must be string
-                        0 => input.cast_implicit(DataType::Varchar),
-                        // subsequent can be any type, using the output format
-                        _ => input.cast_output(),
-                    })
-                    .try_collect()?;
-                Ok(DataType::Varchar)
-            }
-            ExprType::ConcatOp => {
-                inputs = inputs
-                    .into_iter()
-                    .map(|input| input.cast_explicit(DataType::Varchar))
-                    .try_collect()?;
-                Ok(DataType::Varchar)
-            }
-
-            _ => {
-                // TODO(xiangjin): move variadic functions above as part of `infer_type`, as its
-                // interface has been enhanced to support mutating (casting) inputs as well.
-                let ret;
-                (inputs, ret) = infer_type(func_type, inputs)?;
-                Ok(ret)
-            }
-        }?;
+        let return_type = infer_type(func_type, &mut inputs)?;
         Ok(Self {
             func_type,
             return_type,
@@ -173,6 +108,9 @@ impl FunctionCall {
 
     /// Create a cast expr over `child` to `target` type in `allows` context.
     pub fn new_cast(child: ExprImpl, target: DataType, allows: CastContext) -> Result<ExprImpl> {
+        if is_row_function(&child) {
+            return Self::cast_nested(child, target, allows);
+        }
         let source = child.return_type();
         if child.is_null() {
             Ok(Literal::new(None, target).into())
@@ -189,11 +127,45 @@ impl FunctionCall {
             .into())
         } else {
             Err(ErrorCode::BindError(format!(
-                "cannot cast type {:?} to {:?} in {:?} context",
+                "cannot cast type \"{}\" to \"{}\" in {:?} context",
                 source, target, allows
             ))
             .into())
         }
+    }
+
+    /// Cast a `ROW` expression to the target type. We intentionally disallow casting arbitrary
+    /// expressions, like `ROW(1)::STRUCT<i INTEGER>` to `STRUCT<VARCHAR>`, although an integer
+    /// is castible to VARCHAR. It's to simply the casting rules.
+    fn cast_nested(expr: ExprImpl, target_type: DataType, allows: CastContext) -> Result<ExprImpl> {
+        let func = *expr.into_function_call().unwrap();
+        let (fields, field_names) = if let DataType::Struct(t) = &target_type {
+            (t.fields.clone(), t.field_names.clone())
+        } else {
+            return Err(ErrorCode::BindError(format!(
+                "column is of type '{}' but expression is of type record",
+                target_type
+            ))
+            .into());
+        };
+        let (func_type, inputs, _) = func.decompose();
+        let msg = match fields.len().cmp(&inputs.len()) {
+            std::cmp::Ordering::Equal => {
+                let inputs = inputs
+                    .into_iter()
+                    .zip_eq(fields.to_vec())
+                    .map(|(e, t)| Self::new_cast(e, t, allows))
+                    .collect::<Result<Vec<_>>>()?;
+                let return_type = DataType::new_struct(
+                    inputs.iter().map(|i| i.return_type()).collect_vec(),
+                    field_names,
+                );
+                return Ok(FunctionCall::new_unchecked(func_type, inputs, return_type).into());
+            }
+            std::cmp::Ordering::Less => "Input has too few columns.",
+            std::cmp::Ordering::Greater => "Input has too many columns.",
+        };
+        Err(ErrorCode::BindError(format!("cannot cast record to {} ({})", target_type, msg)).into())
     }
 
     /// Construct a `FunctionCall` expr directly with the provided `return_type`, bypassing type
@@ -237,7 +209,12 @@ impl FunctionCall {
     pub fn inputs(&self) -> &[ExprImpl] {
         self.inputs.as_ref()
     }
+
+    pub fn inputs_mut(&mut self) -> &mut [ExprImpl] {
+        self.inputs.as_mut()
+    }
 }
+
 impl Expr for FunctionCall {
     fn return_type(&self) -> DataType {
         self.return_type.clone()
@@ -254,4 +231,115 @@ impl Expr for FunctionCall {
             })),
         }
     }
+}
+
+pub struct FunctionCallDisplay<'a> {
+    pub function_call: &'a FunctionCall,
+    pub input_schema: &'a Schema,
+}
+
+impl std::fmt::Debug for FunctionCallDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let that = self.function_call;
+        match &that.func_type {
+            ExprType::Cast => {
+                assert_eq!(that.inputs.len(), 1);
+                ExprDisplay {
+                    expr: &that.inputs[0],
+                    input_schema: self.input_schema,
+                }
+                .fmt(f)?;
+                write!(f, "::{:?}", that.return_type)
+            }
+            ExprType::Add => explain_verbose_binary_op(f, "+", &that.inputs, self.input_schema),
+            ExprType::Subtract => {
+                explain_verbose_binary_op(f, "-", &that.inputs, self.input_schema)
+            }
+            ExprType::Multiply => {
+                explain_verbose_binary_op(f, "*", &that.inputs, self.input_schema)
+            }
+            ExprType::Divide => explain_verbose_binary_op(f, "/", &that.inputs, self.input_schema),
+            ExprType::Modulus => explain_verbose_binary_op(f, "%", &that.inputs, self.input_schema),
+            ExprType::Equal => explain_verbose_binary_op(f, "=", &that.inputs, self.input_schema),
+            ExprType::NotEqual => {
+                explain_verbose_binary_op(f, "<>", &that.inputs, self.input_schema)
+            }
+            ExprType::LessThan => {
+                explain_verbose_binary_op(f, "<", &that.inputs, self.input_schema)
+            }
+            ExprType::LessThanOrEqual => {
+                explain_verbose_binary_op(f, "<=", &that.inputs, self.input_schema)
+            }
+            ExprType::GreaterThan => {
+                explain_verbose_binary_op(f, ">", &that.inputs, self.input_schema)
+            }
+            ExprType::GreaterThanOrEqual => {
+                explain_verbose_binary_op(f, ">=", &that.inputs, self.input_schema)
+            }
+            ExprType::And => explain_verbose_binary_op(f, "AND", &that.inputs, self.input_schema),
+            ExprType::Or => explain_verbose_binary_op(f, "OR", &that.inputs, self.input_schema),
+            ExprType::BitwiseShiftLeft => {
+                explain_verbose_binary_op(f, "<<", &that.inputs, self.input_schema)
+            }
+            ExprType::BitwiseShiftRight => {
+                explain_verbose_binary_op(f, ">>", &that.inputs, self.input_schema)
+            }
+            ExprType::BitwiseAnd => {
+                explain_verbose_binary_op(f, "&", &that.inputs, self.input_schema)
+            }
+            ExprType::BitwiseOr => {
+                explain_verbose_binary_op(f, "|", &that.inputs, self.input_schema)
+            }
+            ExprType::BitwiseXor => {
+                explain_verbose_binary_op(f, "#", &that.inputs, self.input_schema)
+            }
+            _ => {
+                let func_name = format!("{:?}", that.func_type);
+                let mut builder = f.debug_tuple(&func_name);
+                that.inputs.iter().for_each(|child| {
+                    builder.field(&ExprDisplay {
+                        expr: child,
+                        input_schema: self.input_schema,
+                    });
+                });
+                builder.finish()
+            }
+        }
+    }
+}
+
+fn explain_verbose_binary_op(
+    f: &mut std::fmt::Formatter<'_>,
+    op: &str,
+    inputs: &[ExprImpl],
+    input_schema: &Schema,
+) -> std::fmt::Result {
+    use std::fmt::Debug;
+
+    assert_eq!(inputs.len(), 2);
+
+    write!(f, "(")?;
+    ExprDisplay {
+        expr: &inputs[0],
+        input_schema,
+    }
+    .fmt(f)?;
+    write!(f, " {} ", op)?;
+    ExprDisplay {
+        expr: &inputs[1],
+        input_schema,
+    }
+    .fmt(f)?;
+    write!(f, ")")?;
+
+    Ok(())
+}
+
+fn is_row_function(expr: &ExprImpl) -> bool {
+    if let ExprImpl::FunctionCall(func) = expr {
+        if func.get_expr_type() == ExprType::Row {
+            return true;
+        }
+    }
+    false
 }

@@ -15,16 +15,18 @@
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
+use async_stack_trace::StackTrace;
 use bytes::Bytes;
 use futures::Future;
-use piestream_hummock_sdk::LocalSstableInfo;
+use piestream_hummock_sdk::HummockReadEpoch;
 use tracing::error;
 
 use super::StateStoreMetrics;
-use crate::error::{StorageError, StorageResult};
-use crate::hummock::local_version_manager::LocalVersionManager;
+use crate::error::StorageResult;
+use crate::hummock::compaction_group_client::CompactionGroupClientImpl;
+use crate::hummock::local_version::local_version_manager::LocalVersionManagerRef;
 use crate::hummock::sstable_store::SstableStoreRef;
-use crate::hummock::HummockStorage;
+use crate::hummock::{HummockStorage, SstableIdManagerRef};
 use crate::storage_value::StorageValue;
 use crate::store::*;
 use crate::{define_state_store_associated_type, StateStore, StateStoreIter};
@@ -59,6 +61,7 @@ where
 
         // wait for iterator creation (e.g. seek)
         let iter = iter
+            .stack_trace("store_create_iter")
             .await
             .inspect_err(|e| error!("Failed in iter: {:?}", e))?;
 
@@ -80,6 +83,10 @@ where
     pub fn stats(&self) -> Arc<StateStoreMetrics> {
         self.stats.clone()
     }
+
+    pub fn inner(&self) -> &S {
+        &self.inner
+    }
 }
 
 impl<S> StateStore for MonitoredStateStore<S>
@@ -90,12 +97,18 @@ where
 
     define_state_store_associated_type!();
 
-    fn get<'a>(&'a self, key: &'a [u8], read_options: ReadOptions) -> Self::GetFuture<'_> {
+    fn get<'a>(
+        &'a self,
+        key: &'a [u8],
+        check_bloom_filter: bool,
+        read_options: ReadOptions,
+    ) -> Self::GetFuture<'_> {
         async move {
             let timer = self.stats.get_duration.start_timer();
             let value = self
                 .inner
-                .get(key, read_options)
+                .get(key, check_bloom_filter, read_options)
+                .stack_trace("store_get")
                 .await
                 .inspect_err(|e| error!("Failed in get: {:?}", e))?;
             timer.observe_duration();
@@ -111,6 +124,7 @@ where
 
     fn scan<R, B>(
         &self,
+        prefix_hint: Option<Vec<u8>>,
         key_range: R,
         limit: Option<usize>,
         read_options: ReadOptions,
@@ -123,7 +137,8 @@ where
             let timer = self.stats.range_scan_duration.start_timer();
             let result = self
                 .inner
-                .scan(key_range, limit, read_options)
+                .scan(prefix_hint, key_range, limit, read_options)
+                .stack_trace("store_scan")
                 .await
                 .inspect_err(|e| error!("Failed in scan: {:?}", e))?;
             timer.observe_duration();
@@ -150,7 +165,8 @@ where
             let timer = self.stats.range_backward_scan_duration.start_timer();
             let result = self
                 .inner
-                .scan(key_range, limit, read_options)
+                .scan(None, key_range, limit, read_options)
+                .stack_trace("store_backward_scan")
                 .await
                 .inspect_err(|e| error!("Failed in backward_scan: {:?}", e))?;
             timer.observe_duration();
@@ -180,6 +196,7 @@ where
             let batch_size = self
                 .inner
                 .ingest_batch(kv_pairs, write_options)
+                .stack_trace("store_ingest_batch")
                 .await
                 .inspect_err(|e| error!("Failed in ingest_batch: {:?}", e))?;
             timer.observe_duration();
@@ -189,13 +206,18 @@ where
         }
     }
 
-    fn iter<R, B>(&self, key_range: R, read_options: ReadOptions) -> Self::IterFuture<'_, R, B>
+    fn iter<R, B>(
+        &self,
+        prefix_hint: Option<Vec<u8>>,
+        key_range: R,
+        read_options: ReadOptions,
+    ) -> Self::IterFuture<'_, R, B>
     where
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
         async move {
-            self.monitored_iter(self.inner.iter(key_range, read_options))
+            self.monitored_iter(self.inner.iter(prefix_hint, key_range, read_options))
                 .await
         }
     }
@@ -215,52 +237,50 @@ where
         }
     }
 
-    fn wait_epoch(&self, epoch: u64) -> Self::WaitEpochFuture<'_> {
+    fn try_wait_epoch(&self, epoch: HummockReadEpoch) -> Self::WaitEpochFuture<'_> {
         async move {
             self.inner
-                .wait_epoch(epoch)
+                .try_wait_epoch(epoch)
+                .stack_trace("store_wait_epoch")
                 .await
                 .inspect_err(|e| error!("Failed in wait_epoch: {:?}", e))
         }
     }
 
-    fn sync(&self, epoch: Option<u64>) -> Self::SyncFuture<'_> {
+    fn sync(&self, epoch: u64) -> Self::SyncFuture<'_> {
         async move {
+            // TODO: this metrics may not be accurate if we start syncing after `seal_epoch`. We may
+            // move this metrics to inside uploader
             let timer = self.stats.shared_buffer_to_l0_duration.start_timer();
-            self.inner
+            let sync_result = self
+                .inner
                 .sync(epoch)
+                .stack_trace("store_await_sync")
                 .await
                 .inspect_err(|e| error!("Failed in sync: {:?}", e))?;
             timer.observe_duration();
-            Ok(())
+            if sync_result.sync_size != 0 {
+                self.stats
+                    .write_l0_size_per_epoch
+                    .observe(sync_result.sync_size as _);
+            }
+            Ok(sync_result)
         }
+    }
+
+    fn seal_epoch(&self, epoch: u64, is_checkpoint: bool) {
+        self.inner.seal_epoch(epoch, is_checkpoint);
     }
 
     fn monitored(self, _stats: Arc<StateStoreMetrics>) -> MonitoredStateStore<Self> {
         panic!("the state store is already monitored")
     }
 
-    fn replicate_batch(
-        &self,
-        kv_pairs: Vec<(Bytes, StorageValue)>,
-        write_options: WriteOptions,
-    ) -> Self::ReplicateBatchFuture<'_> {
-        async move {
-            self.inner
-                .replicate_batch(kv_pairs, write_options)
-                .await
-                .inspect_err(|e| error!("Failed in replicate_batch: {:?}", e))
-        }
-    }
-
-    fn get_uncommitted_ssts(&self, epoch: u64) -> Vec<LocalSstableInfo> {
-        self.inner.get_uncommitted_ssts(epoch)
-    }
-
     fn clear_shared_buffer(&self) -> Self::ClearSharedBufferFuture<'_> {
         async move {
             self.inner
                 .clear_shared_buffer()
+                .stack_trace("store_clear_shared_buffer")
                 .await
                 .inspect_err(|e| error!("Failed in clear_shared_buffer: {:?}", e))
         }
@@ -272,16 +292,16 @@ impl MonitoredStateStore<HummockStorage> {
         self.inner.sstable_store()
     }
 
-    pub fn local_version_manager(&self) -> Arc<LocalVersionManager> {
+    pub fn local_version_manager(&self) -> LocalVersionManagerRef {
         self.inner.local_version_manager().clone()
     }
 
-    // Note(bugen): should we use notification service for this?
-    pub async fn update_compaction_group_cache(&self) -> StorageResult<()> {
-        self.inner
-            .update_compaction_group_cache()
-            .await
-            .map_err(StorageError::Hummock)
+    pub fn sstable_id_manager(&self) -> SstableIdManagerRef {
+        self.inner.sstable_id_manager().clone()
+    }
+
+    pub fn compaction_group_client(&self) -> Arc<CompactionGroupClientImpl> {
+        self.inner.compaction_group_client().clone()
     }
 }
 

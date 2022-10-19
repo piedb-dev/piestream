@@ -30,9 +30,9 @@ pub struct LocalExchangeSource {
 }
 
 impl LocalExchangeSource {
-    pub fn create<C: BatchTaskContext>(
+    pub fn create(
         output_id: TaskOutputId,
-        context: C,
+        context: impl BatchTaskContext,
         task_id: TaskId,
     ) -> Result<Self> {
         let task_output = context.get_task_output(output_id)?;
@@ -58,7 +58,7 @@ impl ExchangeSource for LocalExchangeSource {
         async {
             let ret = self.task_output.direct_take_data().await?;
             if let Some(data) = ret {
-                let data = data.compact()?;
+                let data = data.compact();
                 trace!(
                     "Receiver task: {:?}, source task output: {:?}, data: {:?}",
                     self.task_id,
@@ -71,6 +71,10 @@ impl ExchangeSource for LocalExchangeSource {
             }
         }
     }
+
+    fn get_task_id(&self) -> TaskId {
+        self.task_id.clone()
+    }
 }
 
 #[cfg(test)]
@@ -78,11 +82,9 @@ mod tests {
     use std::net::SocketAddr;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use std::thread::sleep;
     use std::time::Duration;
 
-    use piestream_common::util::addr::HostAddr;
-    use piestream_pb::batch_plan::{ExchangeSource as ProstExchangeSource, TaskId, TaskOutputId};
+    use piestream_pb::batch_plan::{TaskId, TaskOutputId};
     use piestream_pb::data::DataChunk;
     use piestream_pb::task_service::exchange_service_server::{
         ExchangeService, ExchangeServiceServer,
@@ -90,6 +92,8 @@ mod tests {
     use piestream_pb::task_service::{
         GetDataRequest, GetDataResponse, GetStreamRequest, GetStreamResponse,
     };
+    use piestream_rpc_client::ComputeClient;
+    use tokio::time::sleep;
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::{Request, Response, Status};
 
@@ -130,7 +134,7 @@ mod tests {
         }
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_exchange_client() {
         let rpc_called = Arc::new(AtomicBool::new(false));
         let server_run = Arc::new(AtomicBool::new(false));
@@ -153,18 +157,17 @@ mod tests {
                 .unwrap();
         });
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(1)).await;
         assert!(server_run.load(Ordering::SeqCst));
 
-        let exchange_source = ProstExchangeSource {
-            task_output_id: Some(TaskOutputId {
-                task_id: Some(TaskId::default()),
-                ..Default::default()
-            }),
-            host: Some(HostAddr::from(addr).to_protobuf()),
-            local_execute_plan: None,
+        let client = ComputeClient::new(addr.into()).await.unwrap();
+        let task_output_id = TaskOutputId {
+            task_id: Some(TaskId::default()),
+            ..Default::default()
         };
-        let mut src = GrpcExchangeSource::create(exchange_source).await.unwrap();
+        let mut src = GrpcExchangeSource::create(client, task_output_id, None)
+            .await
+            .unwrap();
         for _ in 0..3 {
             assert!(src.take_data().await.unwrap().is_some());
         }
@@ -174,20 +177,5 @@ mod tests {
         // Gracefully terminate the server.
         shutdown_send.send(()).unwrap();
         join_handle.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_unconnectable_node() {
-        let addr: HostAddr = "127.0.0.1:1001".parse().unwrap();
-        let exchange_source = ProstExchangeSource {
-            task_output_id: Some(TaskOutputId {
-                task_id: Some(TaskId::default()),
-                ..Default::default()
-            }),
-            host: Some(addr.to_protobuf()),
-            local_execute_plan: None,
-        };
-        let res = GrpcExchangeSource::create(exchange_source).await;
-        assert!(res.is_err());
     }
 }

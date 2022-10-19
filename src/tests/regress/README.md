@@ -21,17 +21,41 @@ tests: boolean
 # How to run
 
 * Install `psql` and ensure that it's in your path.
+* `cd` to the root directory of piestream.
 * Start piestream cluster.
-* Enter `rust` folder of your workspace.
-* Run 
+* Run tests against piestream.
 ```shell
 RUST_BACKTRACE=1 target/debug/piestream_regress_test -h 127.0.0.1 \
-  -p 4567 \
-  --input `pwd`/tests/regress/data \
-  --output `pwd`/tests/regress/output \
-  --schedule `pwd`/tests/regress/data/schedule
+  -p 4566 \
+  -u root \
+  --input `pwd`/src/tests/regress/data \
+  --output `pwd`/src/tests/regress/output \
+  --schedule `pwd`/src/tests/regress/data/schedule \
+  --mode piestream
+```
+
+* Run tests against PostgreSQL. Make sure PostgreSQL is running.
+```shell
+RUST_BACKTRACE=1 target/debug/piestream_regress_test -h 127.0.0.1 \
+  -p 5432 \
+  -u `user name` \
+  --database `database name` \
+  --input `pwd`/src/tests/regress/data \
+  --output `pwd`/src/tests/regress/output \
+  --schedule `pwd`/src/tests/regress/data/schedule \
+  --mode postgres
+
+```
+Please remove the `output` directory before running the test again.
+```shell
+rm -rf `pwd`/src/tests/regress/output
 ```
 
 # Reference
 
 The `data` folder contains test cases migrated from [postgres](https://github.com/postgres/postgres/).
+
+# Caveat
+
+This regress test is executed for both Postgres and piestream. As the result set of a query without `order by` 
+is order-unaware, we need to interpret the output file by ourselves. 

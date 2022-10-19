@@ -20,7 +20,10 @@ use piestream_common::catalog::{ColumnDesc, DEFAULT_SCHEMA_NAME};
 use piestream_common::error::Result;
 use piestream_sqlparser::ast::{Ident, ObjectName, ShowObject};
 
+use super::RwPgResponse;
 use crate::binder::Binder;
+use crate::catalog::root_catalog::SchemaPath;
+use crate::catalog::CatalogError;
 use crate::handler::util::col_descs_to_rows;
 use crate::session::{OptimizerContext, SessionImpl};
 
@@ -28,19 +31,27 @@ pub fn get_columns_from_table(
     session: &SessionImpl,
     table_name: ObjectName,
 ) -> Result<Vec<ColumnDesc>> {
-    let (schema_name, table_name) = Binder::resolve_table_name(table_name)?;
+    let db_name = session.database();
+    let (schema_name, table_name) = Binder::resolve_table_or_source_name(db_name, table_name)?;
+    let search_path = session.config().get_search_path();
+    let user_name = &session.auth_context().user_name;
+
+    let schema_path = match schema_name.as_deref() {
+        Some(schema_name) => SchemaPath::Name(schema_name),
+        None => SchemaPath::Path(&search_path, user_name),
+    };
 
     let catalog_reader = session.env().catalog_reader().read_guard();
-    let catalogs = match catalog_reader
-        .get_schema_by_name(session.database(), &schema_name)?
-        .get_table_by_name(&table_name)
-    {
-        Some(table) => &table.columns,
-        None => {
-            &catalog_reader
-                .get_source_by_name(session.database(), &schema_name, &table_name)?
-                .columns
-        }
+    let catalogs = match catalog_reader.get_table_by_name(db_name, schema_path, &table_name) {
+        Ok((table, _)) => table.columns(),
+        Err(_) => match catalog_reader.get_source_by_name(db_name, schema_path, &table_name) {
+            Ok((source, _)) => &source.columns,
+            Err(_) => {
+                return Err(
+                    CatalogError::NotFound("table or source", table_name.to_string()).into(),
+                );
+            }
+        },
     };
     Ok(catalogs
         .iter()
@@ -49,20 +60,20 @@ pub fn get_columns_from_table(
         .collect())
 }
 
-fn schema_or_default(schema: &Option<Ident>) -> &str {
+fn schema_or_default(schema: &Option<Ident>) -> String {
     schema
         .as_ref()
-        .map_or_else(|| DEFAULT_SCHEMA_NAME, |s| &s.value)
+        .map_or_else(|| DEFAULT_SCHEMA_NAME.to_string(), |s| s.real_value())
 }
 
-pub fn handle_show_object(context: OptimizerContext, command: ShowObject) -> Result<PgResponse> {
+pub fn handle_show_object(context: OptimizerContext, command: ShowObject) -> Result<RwPgResponse> {
     let session = context.session_ctx;
     let catalog_reader = session.env().catalog_reader().read_guard();
 
     let names = match command {
         // If not include schema name, use default schema name
         ShowObject::Table { schema } => catalog_reader
-            .get_schema_by_name(session.database(), schema_or_default(&schema))?
+            .get_schema_by_name(session.database(), &schema_or_default(&schema))?
             .iter_table()
             .map(|t| t.name.clone())
             .collect(),
@@ -70,49 +81,51 @@ pub fn handle_show_object(context: OptimizerContext, command: ShowObject) -> Res
         ShowObject::Schema => catalog_reader.get_all_schema_names(session.database())?,
         // If not include schema name, use default schema name
         ShowObject::MaterializedView { schema } => catalog_reader
-            .get_schema_by_name(session.database(), schema_or_default(&schema))?
+            .get_schema_by_name(session.database(), &schema_or_default(&schema))?
             .iter_mv()
             .map(|t| t.name.clone())
             .collect(),
         ShowObject::Source { schema } => catalog_reader
-            .get_schema_by_name(session.database(), schema_or_default(&schema))?
+            .get_schema_by_name(session.database(), &schema_or_default(&schema))?
             .iter_source()
             .map(|t| t.name.clone())
             .collect(),
         ShowObject::MaterializedSource { schema } => catalog_reader
-            .get_schema_by_name(session.database(), schema_or_default(&schema))?
+            .get_schema_by_name(session.database(), &schema_or_default(&schema))?
             .iter_materialized_source()
             .map(|t| t.name.clone())
             .collect(),
-        ShowObject::Sink { schema: _ } => todo!(),
+        ShowObject::Sink { schema } => catalog_reader
+            .get_schema_by_name(session.database(), &schema_or_default(&schema))?
+            .iter_sink()
+            .map(|t| t.name.clone())
+            .collect(),
         ShowObject::Columns { table } => {
             let columns = get_columns_from_table(&session, table)?;
             let rows = col_descs_to_rows(columns);
 
-            return Ok(PgResponse::new(
+            return Ok(PgResponse::new_for_stream(
                 StatementType::SHOW_COMMAND,
-                rows.len() as i32,
-                rows,
+                Some(rows.len() as i32),
+                rows.into(),
                 vec![
                     PgFieldDescriptor::new("Name".to_owned(), TypeOid::Varchar),
                     PgFieldDescriptor::new("Type".to_owned(), TypeOid::Varchar),
                 ],
-                true,
             ));
         }
     };
 
     let rows = names
         .into_iter()
-        .map(|n| Row::new(vec![Some(n)]))
+        .map(|n| Row::new(vec![Some(n.into())]))
         .collect_vec();
 
-    Ok(PgResponse::new(
+    Ok(PgResponse::new_for_stream(
         StatementType::SHOW_COMMAND,
-        rows.len() as i32,
-        rows,
+        Some(rows.len() as i32),
+        rows.into(),
         vec![PgFieldDescriptor::new("Name".to_owned(), TypeOid::Varchar)],
-        true,
     ))
 }
 
@@ -121,6 +134,8 @@ mod tests {
     use std::collections::HashMap;
     use std::ops::Index;
 
+    use futures_async_stream::for_await;
+
     use crate::test_utils::{create_proto_file, LocalFrontend, PROTO_FILE_DATA};
 
     #[tokio::test]
@@ -128,12 +143,12 @@ mod tests {
         let frontend = LocalFrontend::new(Default::default()).await;
 
         let sql = r#"CREATE SOURCE t1
-        WITH ('kafka.topic' = 'abc', 'kafka.servers' = 'localhost:1001')
+        WITH (kafka.topic = 'abc', kafka.servers = 'localhost:1001')
         ROW FORMAT JSON"#;
         frontend.run_sql(sql).await.unwrap();
 
         let sql = r#"CREATE MATERIALIZED SOURCE t2
-    WITH ('kafka.topic' = 'abc', 'kafka.servers' = 'localhost:1001')
+    WITH (kafka.topic = 'abc', kafka.servers = 'localhost:1001')
     ROW FORMAT JSON"#;
         frontend.run_sql(sql).await.unwrap();
 
@@ -142,15 +157,15 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                "Row([Some(\"t1\")])".to_string(),
-                "Row([Some(\"t2\")])".to_string()
+                "Row([Some(b\"t1\")])".to_string(),
+                "Row([Some(b\"t2\")])".to_string()
             ]
         );
 
         let rows = frontend
             .query_formatted_result("SHOW MATERIALIZED SOURCES")
             .await;
-        assert_eq!(rows, vec!["Row([Some(\"t2\")])".to_string()]);
+        assert_eq!(rows, vec!["Row([Some(b\"t2\")])".to_string()]);
     }
 
     #[tokio::test]
@@ -158,7 +173,7 @@ mod tests {
         let proto_file = create_proto_file(PROTO_FILE_DATA);
         let sql = format!(
             r#"CREATE SOURCE t
-    WITH ('kafka.topic' = 'abc', 'kafka.servers' = 'localhost:1001')
+    WITH (kafka.topic = 'abc', kafka.servers = 'localhost:1001')
     ROW FORMAT PROTOBUF MESSAGE '.test.TestRecord' ROW SCHEMA LOCATION 'file://{}'"#,
             proto_file.path().to_str().unwrap()
         );
@@ -166,28 +181,34 @@ mod tests {
         frontend.run_sql(sql).await.unwrap();
 
         let sql = "show columns from t";
-        let pg_response = frontend.run_sql(sql).await.unwrap();
+        let mut pg_response = frontend.run_sql(sql).await.unwrap();
 
-        let columns = pg_response
-            .iter()
-            .map(|row| {
-                (
-                    row.index(0).as_ref().unwrap().as_str(),
-                    row.index(1).as_ref().unwrap().as_str(),
-                )
-            })
-            .collect::<HashMap<&str, &str>>();
+        let mut columns = HashMap::new();
+        #[for_await]
+        for row_set in pg_response.values_stream() {
+            let row_set = row_set.unwrap();
+            for row in row_set {
+                columns.insert(
+                    std::str::from_utf8(row.index(0).as_ref().unwrap())
+                        .unwrap()
+                        .to_string(),
+                    std::str::from_utf8(row.index(1).as_ref().unwrap())
+                        .unwrap()
+                        .to_string(),
+                );
+            }
+        }
 
-        let expected_columns = maplit::hashmap! {
-            "id" => "Int32",
-            "country.zipcode" => "Varchar",
-            "zipcode" => "Int64",
-            "country.city.address" => "Varchar",
-            "country.address" => "Varchar",
-            "country.city" => ".test.City",
-            "country.city.zipcode" => "Varchar",
-            "rate" => "Float32",
-            "country" => ".test.Country",
+        let expected_columns: HashMap<String, String> = maplit::hashmap! {
+            "id".into() => "Int32".into(),
+            "country.zipcode".into() => "Varchar".into(),
+            "zipcode".into() => "Int64".into(),
+            "country.city.address".into() => "Varchar".into(),
+            "country.address".into() => "Varchar".into(),
+            "country.city".into() => "test.City".into(),
+            "country.city.zipcode".into() => "Varchar".into(),
+            "rate".into() => "Float32".into(),
+            "country".into() => "test.Country".into(),
         };
 
         assert_eq!(columns, expected_columns);

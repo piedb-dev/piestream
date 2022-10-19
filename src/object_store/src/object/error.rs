@@ -67,13 +67,17 @@ impl ObjectError {
     pub fn disk(msg: String, err: io::Error) -> Self {
         ObjectErrorInner::Disk { msg, inner: err }.into()
     }
+
+    pub fn s3(err: impl Into<BoxedError>) -> Self {
+        ObjectErrorInner::S3(err.into()).into()
+    }
 }
 
-impl<E> From<aws_smithy_http::result::SdkError<E>> for ObjectError
+impl<E> From<aws_sdk_s3::types::SdkError<E>> for ObjectError
 where
     E: std::error::Error + Sync + Send + 'static,
 {
-    fn from(e: aws_smithy_http::result::SdkError<E>) -> Self {
+    fn from(e: aws_sdk_s3::types::SdkError<E>) -> Self {
         ObjectErrorInner::S3(e.into()).into()
     }
 }

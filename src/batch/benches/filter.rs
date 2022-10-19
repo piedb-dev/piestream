@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+pub mod utils;
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
-use futures::StreamExt;
-use piestream_batch::executor::test_utils::MockExecutor;
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use piestream_batch::executor::{BoxedExecutor, FilterExecutor};
-use piestream_common::array::column::Column;
-use piestream_common::array::DataChunk;
-use piestream_common::catalog::schema_test_utils::field_n;
-use piestream_common::field_generator::FieldGeneratorImpl;
 use piestream_common::types::{DataType, ScalarImpl};
 use piestream_expr::expr::build_from_prost;
 use piestream_pb::data::data_type::TypeName;
@@ -32,46 +26,14 @@ use piestream_pb::expr::expr_node::Type::{
 use piestream_pb::expr::{ConstantValue, ExprNode, FunctionCall, InputRefExpr};
 use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
+use utils::{create_input, execute_executor};
 
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-const SEED: u64 = 0xFF67FEABBAEF76FF;
-
-/// Generate [`batch_num`] data chunks, each data chunk has cardinality of [`batch_size`].
-fn gen_data(data_type: DataType, batch_size: usize, batch_num: usize) -> Vec<DataChunk> {
-    let mut data_gen =
-        FieldGeneratorImpl::with_random(data_type.clone(), None, None, None, None, SEED).unwrap();
-    let mut ret = Vec::<DataChunk>::with_capacity(batch_num);
-
-    for _ in 0..batch_num {
-        let mut array_builder = data_type.create_array_builder(batch_size);
-
-        for _ in 0..batch_size {
-            array_builder
-                .append_datum(&Some(ScalarImpl::Int64(
-                    // TODO: We should remove this later when generator supports generate Datum,
-                    // see https://github.com/singularity-data/piestream/issues/3519
-                    data_gen.generate(0).as_i64().unwrap(),
-                )))
-                .unwrap();
-        }
-
-        let array = array_builder.finish().unwrap();
-        ret.push(DataChunk::new(
-            vec![Column::new(Arc::new(array))],
-            batch_size,
-        ));
-    }
-
-    ret
-}
-
 fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor {
-    let input_data = gen_data(DataType::Int64, chunk_size, chunk_num);
-
-    let mut mock_executor = MockExecutor::new(field_n::<1>(DataType::Int64));
-    input_data.into_iter().for_each(|c| mock_executor.add(c));
+    const CHUNK_SIZE: usize = 1024;
+    let input = create_input(&[DataType::Int64], chunk_size, chunk_num);
 
     // Expression: $1 % 2 == 0
     let expr = {
@@ -133,22 +95,16 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
 
     Box::new(FilterExecutor::new(
         build_from_prost(&expr).unwrap(),
-        Box::new(mock_executor),
+        input,
         "FilterBenchmark".to_string(),
+        CHUNK_SIZE,
     ))
-}
-
-async fn execute_filter_executor(executor: BoxedExecutor) {
-    let mut stream = executor.execute();
-    while let Some(ret) = stream.next().await {
-        black_box(ret.unwrap());
-    }
 }
 
 fn bench_filter(c: &mut Criterion) {
     const TOTAL_SIZE: usize = 1024 * 1024usize;
     let rt = Runtime::new().unwrap();
-    for chunk_size in &[32usize, 128, 512, 1024, 2048, 4096] {
+    for chunk_size in &[32, 128, 512, 1024, 2048, 4096] {
         c.bench_with_input(
             BenchmarkId::new("FilterExecutor", chunk_size),
             chunk_size,
@@ -156,7 +112,7 @@ fn bench_filter(c: &mut Criterion) {
                 let chunk_num = TOTAL_SIZE / chunk_size;
                 b.to_async(&rt).iter_batched(
                     || create_filter_executor(chunk_size, chunk_num),
-                    |e| execute_filter_executor(e),
+                    |e| execute_executor(e),
                     BatchSize::SmallInput,
                 );
             },

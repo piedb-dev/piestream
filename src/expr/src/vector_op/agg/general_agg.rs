@@ -15,13 +15,14 @@
 use std::marker::PhantomData;
 
 use piestream_common::array::*;
-use piestream_common::error::{ErrorCode, Result};
+use piestream_common::bail;
 use piestream_common::types::*;
 
 use crate::vector_op::agg::aggregator::Aggregator;
 use crate::vector_op::agg::functions::RTFn;
-use crate::vector_op::agg::general_sorted_grouper::EqGroups;
+use crate::Result;
 
+#[derive(Clone)]
 pub struct GeneralAgg<T, F, R>
 where
     T: Array,
@@ -30,10 +31,12 @@ where
 {
     return_type: DataType,
     input_col_idx: usize,
+    init_result: Option<R::OwnedItem>,
     result: Option<R::OwnedItem>,
     f: F,
     _phantom: PhantomData<T>,
 }
+
 impl<T, F, R> GeneralAgg<T, F, R>
 where
     T: Array,
@@ -49,13 +52,14 @@ where
         Self {
             return_type,
             input_col_idx,
+            init_result: init_result.clone(),
             result: init_result,
             f,
             _phantom: PhantomData,
         }
     }
 
-    pub(super) fn update_with_scalar_concrete(&mut self, input: &T, row_id: usize) -> Result<()> {
+    pub(super) fn update_single_concrete(&mut self, input: &T, row_id: usize) -> Result<()> {
         let datum = self
             .f
             .eval(
@@ -67,48 +71,23 @@ where
         Ok(())
     }
 
-    pub(super) fn update_concrete(&mut self, input: &T) -> Result<()> {
+    pub(super) fn update_multi_concrete(
+        &mut self,
+        input: &T,
+        start_row_id: usize,
+        end_row_id: usize,
+    ) -> Result<()> {
         let mut cur = self.result.as_ref().map(|x| x.as_scalar_ref());
-        for datum in input.iter() {
-            cur = self.f.eval(cur, datum)?;
+        for row_id in start_row_id..end_row_id {
+            cur = self.f.eval(cur, input.value_at(row_id))?;
         }
-        let r = cur.map(|x| x.to_owned_scalar());
-        self.result = r;
+        self.result = cur.map(|x| x.to_owned_scalar());
         Ok(())
     }
 
-    pub(super) fn output_concrete(&self, builder: &mut R::Builder) -> Result<()> {
-        builder
-            .append(self.result.as_ref().map(|x| x.as_scalar_ref()))
-            .map_err(Into::into)
-    }
-
-    pub(super) fn update_and_output_with_sorted_groups_concrete(
-        &mut self,
-        input: &T,
-        builder: &mut R::Builder,
-        groups: &EqGroups,
-    ) -> Result<()> {
-        let mut group_cnt = 0;
-        let mut groups_iter = groups.starting_indices().iter().peekable();
-        let mut cur = self.result.as_ref().map(|x| x.as_scalar_ref());
-        let chunk_offset = groups.chunk_offset();
-        for (i, v) in input.iter().skip(chunk_offset).enumerate() {
-            if groups_iter.peek() == Some(&&(i + chunk_offset)) {
-                groups_iter.next();
-                group_cnt += 1;
-                builder.append(cur)?;
-                cur = None;
-            }
-            cur = self.f.eval(cur, v)?;
-
-            // reset state and exit when reach limit
-            if groups.is_reach_limit(group_cnt) {
-                cur = None;
-                break;
-            }
-        }
-        self.result = cur.map(|x| x.to_owned_scalar());
+    pub(super) fn output_concrete(&mut self, builder: &mut R::Builder) -> Result<()> {
+        let res = std::mem::replace(&mut self.result, self.init_result.clone());
+        builder.append(res.as_ref().map(|x| x.as_scalar_ref()));
         Ok(())
     }
 }
@@ -123,63 +102,40 @@ macro_rules! impl_aggregator {
                 self.return_type.clone()
             }
 
-            fn update_with_row(&mut self, input: &DataChunk, row_id: usize) -> Result<()> {
+            fn update_single(&mut self, input: &DataChunk, row_id: usize) -> Result<()> {
                 if let ArrayImpl::$input_variant(i) =
                     input.column_at(self.input_col_idx).array_ref()
                 {
-                    self.update_with_scalar_concrete(i, row_id)
+                    self.update_single_concrete(i, row_id)
                 } else {
-                    Err(ErrorCode::InternalError(format!(
-                        "Input fail to match {}.",
-                        stringify!($input_variant)
-                    ))
-                    .into())
+                    bail!("Input fail to match {}.", stringify!($input_variant))
                 }
             }
 
-            fn update(&mut self, input: &DataChunk) -> Result<()> {
-                if let ArrayImpl::$input_variant(i) =
-                    input.column_at(self.input_col_idx).array_ref()
-                {
-                    self.update_concrete(i)
-                } else {
-                    Err(ErrorCode::InternalError(format!(
-                        "Input fail to match {}.",
-                        stringify!($input_variant)
-                    ))
-                    .into())
-                }
-            }
-
-            fn output(&self, builder: &mut ArrayBuilderImpl) -> Result<()> {
-                if let ArrayBuilderImpl::$result_variant(b) = builder {
-                    self.output_concrete(b)
-                } else {
-                    Err(ErrorCode::InternalError(format!(
-                        "Builder fail to match {}.",
-                        stringify!($result_variant)
-                    ))
-                    .into())
-                }
-            }
-
-            fn update_and_output_with_sorted_groups(
+            fn update_multi(
                 &mut self,
                 input: &DataChunk,
-                builder: &mut ArrayBuilderImpl,
-                groups: &EqGroups,
+                start_row_id: usize,
+                end_row_id: usize,
             ) -> Result<()> {
-                if let (ArrayImpl::$input_variant(i), ArrayBuilderImpl::$result_variant(b)) =
-                    (input.column_at(self.input_col_idx).array_ref(), builder)
+                if let ArrayImpl::$input_variant(i) =
+                    input.column_at(self.input_col_idx).array_ref()
                 {
-                    self.update_and_output_with_sorted_groups_concrete(i, b, groups)
+                    self.update_multi_concrete(i, start_row_id, end_row_id)
                 } else {
-                    Err(ErrorCode::InternalError(format!(
+                    bail!(
                         "Input fail to match {} or builder fail to match {}.",
                         stringify!($input_variant),
                         stringify!($result_variant)
-                    ))
-                    .into())
+                    )
+                }
+            }
+
+            fn output(&mut self, builder: &mut ArrayBuilderImpl) -> Result<()> {
+                if let ArrayBuilderImpl::$result_variant(b) = builder {
+                    self.output_concrete(b)
+                } else {
+                    bail!("Builder fail to match {}.", stringify!($result_variant))
                 }
             }
         }
@@ -234,68 +190,28 @@ mod tests {
     fn eval_agg(
         input_type: DataType,
         input: ArrayRef,
-        agg_type: &AggKind,
+        agg_kind: AggKind,
         return_type: DataType,
         mut builder: ArrayBuilderImpl,
     ) -> Result<ArrayImpl> {
         let len = input.len();
         let input_chunk = DataChunk::new(vec![Column::new(input)], len);
-        let mut agg_state = create_agg_state_unary(input_type, 0, agg_type, return_type, false)?;
-        agg_state.update(&input_chunk)?;
+        let mut agg_state = create_agg_state_unary(input_type, 0, agg_kind, return_type, false)?;
+        agg_state.update_multi(&input_chunk, 0, input_chunk.cardinality())?;
         agg_state.output(&mut builder)?;
-        builder.finish().map_err(Into::into)
-    }
-
-    #[test]
-    fn single_value_int32() -> Result<()> {
-        let test_case = |numbers: &[Option<i32>], result: &[Option<i32>]| -> Result<()> {
-            let input = I32Array::from_slice(numbers).unwrap();
-            let agg_type = AggKind::SingleValue;
-            let input_type = DataType::Int32;
-            let return_type = DataType::Int32;
-            let actual = eval_agg(
-                input_type,
-                Arc::new(input.into()),
-                &agg_type,
-                return_type,
-                ArrayBuilderImpl::Int32(I32ArrayBuilder::new(0)),
-            );
-            if !result.is_empty() {
-                let actual = actual?;
-                let actual = actual.as_int32().iter().collect::<Vec<_>>();
-                assert_eq!(actual, result);
-            } else {
-                assert!(actual.is_err());
-            }
-            Ok(())
-        };
-
-        // zero row
-        test_case(&[], &[None])?;
-
-        // one row
-        test_case(&[Some(1)], &[Some(1)])?;
-        test_case(&[None], &[None])?;
-
-        // more than one row
-        test_case(&[Some(1), Some(2)], &[])?;
-        test_case(&[Some(1), None], &[])?;
-        test_case(&[None, Some(1)], &[])?;
-        test_case(&[None, None], &[])?;
-        test_case(&[None, Some(1), None], &[])?;
-        test_case(&[None, None, Some(1)], &[])
+        Ok(builder.finish())
     }
 
     #[test]
     fn vec_sum_int32() -> Result<()> {
-        let input = I32Array::from_slice(&[Some(1), Some(2), Some(3)]).unwrap();
-        let agg_type = AggKind::Sum;
+        let input = I32Array::from_slice(&[Some(1), Some(2), Some(3)]);
+        let agg_kind = AggKind::Sum;
         let input_type = DataType::Int32;
         let return_type = DataType::Int64;
         let actual = eval_agg(
             input_type,
             Arc::new(input.into()),
-            &agg_type,
+            agg_kind,
             return_type,
             ArrayBuilderImpl::Int64(I64ArrayBuilder::new(0)),
         )?;
@@ -307,18 +223,18 @@ mod tests {
 
     #[test]
     fn vec_sum_int64() -> Result<()> {
-        let input = I64Array::from_slice(&[Some(1), Some(2), Some(3)])?;
-        let agg_type = AggKind::Sum;
+        let input = I64Array::from_slice(&[Some(1), Some(2), Some(3)]);
+        let agg_kind = AggKind::Sum;
         let input_type = DataType::Int64;
         let return_type = DataType::Decimal;
         let actual = eval_agg(
             input_type,
             Arc::new(input.into()),
-            &agg_type,
+            agg_kind,
             return_type,
             DecimalArrayBuilder::new(0).into(),
         )?;
-        let actual: &DecimalArray = (&actual).into();
+        let actual: DecimalArray = actual.into();
         let actual = actual.iter().collect::<Vec<Option<Decimal>>>();
         assert_eq!(actual, vec![Some(Decimal::from(6))]);
         Ok(())
@@ -326,15 +242,14 @@ mod tests {
 
     #[test]
     fn vec_min_float32() -> Result<()> {
-        let input =
-            F32Array::from_slice(&[Some(1.0.into()), Some(2.0.into()), Some(3.0.into())]).unwrap();
-        let agg_type = AggKind::Min;
+        let input = F32Array::from_slice(&[Some(1.0.into()), Some(2.0.into()), Some(3.0.into())]);
+        let agg_kind = AggKind::Min;
         let input_type = DataType::Float32;
         let return_type = DataType::Float32;
         let actual = eval_agg(
             input_type,
             Arc::new(input.into()),
-            &agg_type,
+            agg_kind,
             return_type,
             ArrayBuilderImpl::Float32(F32ArrayBuilder::new(0)),
         )?;
@@ -346,14 +261,14 @@ mod tests {
 
     #[test]
     fn vec_min_char() -> Result<()> {
-        let input = Utf8Array::from_slice(&[Some("b"), Some("aa")])?;
-        let agg_type = AggKind::Min;
+        let input = Utf8Array::from_slice(&[Some("b"), Some("aa")]);
+        let agg_kind = AggKind::Min;
         let input_type = DataType::Varchar;
         let return_type = DataType::Varchar;
         let actual = eval_agg(
             input_type,
             Arc::new(input.into()),
-            &agg_type,
+            agg_kind,
             return_type,
             ArrayBuilderImpl::Utf8(Utf8ArrayBuilder::new(0)),
         )?;
@@ -364,15 +279,57 @@ mod tests {
     }
 
     #[test]
+    fn vec_min_list() -> Result<()> {
+        use piestream_common::array;
+        let input = ListArray::from_slices(
+            &[true, true, true],
+            vec![
+                Some(array! { I32Array, [Some(0)] }.into()),
+                Some(array! { I32Array, [Some(1)] }.into()),
+                Some(array! { I32Array, [Some(2)] }.into()),
+            ],
+            DataType::Int32,
+        );
+        let agg_type = AggKind::Min;
+        let input_type = DataType::List {
+            datatype: Box::new(DataType::Int32),
+        };
+        let return_type = DataType::List {
+            datatype: Box::new(DataType::Int32),
+        };
+        let actual = eval_agg(
+            input_type,
+            Arc::new(input.into()),
+            agg_type,
+            return_type,
+            ArrayBuilderImpl::List(ListArrayBuilder::with_meta(
+                0,
+                ArrayMeta::List {
+                    datatype: Box::new(DataType::Int32),
+                },
+            )),
+        )?;
+        let actual = actual.as_list();
+        let actual = actual.iter().collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            vec![Some(ListRef::ValueRef {
+                val: &ListValue::new(vec![Some(ScalarImpl::Int32(0))])
+            })]
+        );
+        Ok(())
+    }
+
+    #[test]
     fn vec_max_char() -> Result<()> {
-        let input = Utf8Array::from_slice(&[Some("b"), Some("aa")])?;
-        let agg_type = AggKind::Max;
+        let input = Utf8Array::from_slice(&[Some("b"), Some("aa")]);
+        let agg_kind = AggKind::Max;
         let input_type = DataType::Varchar;
         let return_type = DataType::Varchar;
         let actual = eval_agg(
             input_type,
             Arc::new(input.into()),
-            &agg_type,
+            agg_kind,
             return_type,
             ArrayBuilderImpl::Utf8(Utf8ArrayBuilder::new(0)),
         )?;
@@ -385,13 +342,13 @@ mod tests {
     #[test]
     fn vec_count_int32() -> Result<()> {
         let test_case = |input: ArrayImpl, expected: &[Option<i64>]| -> Result<()> {
-            let agg_type = AggKind::Count;
+            let agg_kind = AggKind::Count;
             let input_type = DataType::Int32;
             let return_type = DataType::Int64;
             let actual = eval_agg(
                 input_type,
                 Arc::new(input),
-                &agg_type,
+                agg_kind,
                 return_type,
                 ArrayBuilderImpl::Int64(I64ArrayBuilder::new(0)),
             )?;
@@ -400,13 +357,13 @@ mod tests {
             assert_eq!(actual, expected);
             Ok(())
         };
-        let input = I32Array::from_slice(&[Some(1), Some(2), Some(3)]).unwrap();
+        let input = I32Array::from_slice(&[Some(1), Some(2), Some(3)]);
         let expected = &[Some(3)];
         test_case(input.into(), expected)?;
-        let input = I32Array::from_slice(&[]).unwrap();
+        let input = I32Array::from_slice(&[]);
         let expected = &[Some(0)];
         test_case(input.into(), expected)?;
-        let input = I32Array::from_slice(&[None]).unwrap();
+        let input = I32Array::from_slice(&[None]);
         let expected = &[Some(0)];
         test_case(input.into(), expected)
     }

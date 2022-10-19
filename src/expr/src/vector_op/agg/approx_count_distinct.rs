@@ -16,11 +16,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use piestream_common::array::*;
-use piestream_common::error::{ErrorCode, Result};
+use piestream_common::bail;
 use piestream_common::types::*;
 
 use crate::vector_op::agg::aggregator::Aggregator;
-use crate::vector_op::agg::general_sorted_grouper::EqGroups;
+use crate::Result;
 
 const INDEX_BITS: u8 = 14; // number of bits used for finding the index of each 64-bit hash
 const NUM_OF_REGISTERS: usize = 1 << INDEX_BITS; // number of indices available
@@ -28,11 +28,12 @@ const COUNT_BITS: u8 = 64 - INDEX_BITS; // number of non-index bits in each 64-b
 
 // Approximation for bias correction for 16384 registers. See "HyperLogLog: the analysis of a
 // near-optimal cardinality estimation algorithm" by Philippe Flajolet et al.
-const BIAS_CORRECTION: f64 = 0.72125;
+const BIAS_CORRECTION: f64 = 0.7213 / (1. + (1.079 / NUM_OF_REGISTERS as f64));
 
 /// `ApproxCountDistinct` approximates the count of non-null rows using `HyperLogLog`. The
 /// estimation error for `HyperLogLog` is 1.04/sqrt(num of registers). With 2^14 registers this
 /// is ~1/128.
+#[derive(Clone)]
 pub struct ApproxCountDistinct {
     return_type: DataType,
     input_col_idx: usize,
@@ -50,7 +51,7 @@ impl ApproxCountDistinct {
 
     /// Adds the count of the datum's hash into the register, if it is greater than the existing
     /// count at the register
-    fn add_datum(&mut self, datum_ref: DatumRef) {
+    fn add_datum(&mut self, datum_ref: DatumRef<'_>) {
         if datum_ref.is_none() {
             return;
         }
@@ -122,77 +123,41 @@ impl Aggregator for ApproxCountDistinct {
         self.return_type.clone()
     }
 
-    fn update_with_row(&mut self, input: &DataChunk, row_id: usize) -> Result<()> {
+    fn update_single(&mut self, input: &DataChunk, row_id: usize) -> Result<()> {
         let array = input.column_at(self.input_col_idx).array_ref();
-        let datum_ref = array.value_at(row_id);
-        self.add_datum(datum_ref);
-
+        self.add_datum(array.value_at(row_id));
         Ok(())
     }
 
-    fn update(&mut self, input: &DataChunk) -> Result<()> {
-        let array = input.column_at(self.input_col_idx).array_ref();
-        for datum_ref in array.iter() {
-            self.add_datum(datum_ref);
-        }
-        Ok(())
-    }
-
-    fn output(&self, builder: &mut ArrayBuilderImpl) -> Result<()> {
-        let result = self.calculate_result();
-        match builder {
-            ArrayBuilderImpl::Int64(b) => b.append(Some(result)).map_err(Into::into),
-            _ => Err(ErrorCode::InternalError("Unexpected builder for count(*).".into()).into()),
-        }
-    }
-
-    fn update_and_output_with_sorted_groups(
+    fn update_multi(
         &mut self,
         input: &DataChunk,
-        builder: &mut ArrayBuilderImpl,
-        groups: &EqGroups,
+        start_row_id: usize,
+        end_row_id: usize,
     ) -> Result<()> {
-        let builder = match builder {
-            ArrayBuilderImpl::Int64(b) => b,
-            _ => {
-                return Err(ErrorCode::InternalError(
-                    "Unexpected builder for approx_distinct_count().".into(),
-                )
-                .into())
-            }
-        };
-
         let array = input.column_at(self.input_col_idx).array_ref();
-        let mut group_cnt = 0;
-        let mut groups_iter = groups.starting_indices().iter().peekable();
-        let chunk_offset = groups.chunk_offset();
-        for (i, datum_ref) in array.iter().skip(chunk_offset).enumerate() {
-            // reset state and output result when new group is found
-            if groups_iter.peek() == Some(&&i) {
-                groups_iter.next();
-                group_cnt += 1;
-                builder.append(Some(self.calculate_result()))?;
-                self.registers = [0; NUM_OF_REGISTERS];
-            }
-
-            self.add_datum(datum_ref);
-
-            // reset state and exit when reach limit
-            if groups.is_reach_limit(group_cnt) {
-                self.registers = [0; NUM_OF_REGISTERS];
-                break;
-            }
+        for row_id in start_row_id..end_row_id {
+            self.add_datum(array.value_at(row_id));
         }
-
         Ok(())
+    }
+
+    fn output(&mut self, builder: &mut ArrayBuilderImpl) -> Result<()> {
+        let result = self.calculate_result();
+        self.registers = [0; NUM_OF_REGISTERS];
+        match builder {
+            ArrayBuilderImpl::Int64(b) => {
+                b.append(Some(result));
+                Ok(())
+            }
+            _ => bail!("Unexpected builder for count(*)."),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
-    use piestream_common::array::column::Column;
     use piestream_common::array::{
         ArrayBuilder, ArrayBuilderImpl, DataChunk, I32Array, I64ArrayBuilder,
     };
@@ -200,7 +165,6 @@ mod tests {
 
     use crate::vector_op::agg::aggregator::Aggregator;
     use crate::vector_op::agg::approx_count_distinct::ApproxCountDistinct;
-    use crate::vector_op::agg::EqGroups;
 
     fn generate_data_chunk(size: usize, start: i32) -> DataChunk {
         let mut lhs = vec![];
@@ -208,17 +172,12 @@ mod tests {
             lhs.push(Some(i));
         }
 
-        let col1 = Column::new(
-            I32Array::from_slice(&lhs)
-                .map(|x| Arc::new(x.into()))
-                .unwrap(),
-        );
-
+        let col1 = I32Array::from_slice(&lhs).into();
         DataChunk::new(vec![col1], size)
     }
 
     #[test]
-    fn test_update_and_output() {
+    fn test_update_single() {
         let inputs_size: [usize; 3] = [20000, 10000, 5000];
         let inputs_start: [i32; 3] = [0, 20000, 30000];
 
@@ -227,25 +186,32 @@ mod tests {
 
         for i in 0..3 {
             let data_chunk = generate_data_chunk(inputs_size[i], inputs_start[i]);
-            agg.update(&data_chunk).unwrap();
+            for row_id in 0..data_chunk.cardinality() {
+                agg.update_single(&data_chunk, row_id).unwrap();
+            }
             agg.output(&mut builder).unwrap();
         }
 
-        let array = builder.finish().unwrap();
+        let array = builder.finish();
         assert_eq!(array.len(), 3);
     }
 
     #[test]
-    fn test_update_and_output_with_sorted_groups() {
-        let mut a = ApproxCountDistinct::new(DataType::Int64, 0);
+    fn test_update_multi() {
+        let inputs_size: [usize; 3] = [20000, 10000, 5000];
+        let inputs_start: [i32; 3] = [0, 20000, 30000];
 
-        let data_chunk = generate_data_chunk(30001, 0);
-        let mut builder = ArrayBuilderImpl::Int64(I64ArrayBuilder::new(5));
-        let mut group = EqGroups::new(vec![5000, 10000, 14000, 20000, 30000]);
-        group.set_limit(5);
+        let mut agg = ApproxCountDistinct::new(DataType::Int64, 0);
+        let mut builder = ArrayBuilderImpl::Int64(I64ArrayBuilder::new(3));
 
-        let _ = a.update_and_output_with_sorted_groups(&data_chunk, &mut builder, &group);
-        let array = builder.finish().unwrap();
-        assert_eq!(array.len(), 5);
+        for i in 0..3 {
+            let data_chunk = generate_data_chunk(inputs_size[i], inputs_start[i]);
+            agg.update_multi(&data_chunk, 0, data_chunk.cardinality())
+                .unwrap();
+            agg.output(&mut builder).unwrap();
+        }
+
+        let array = builder.finish();
+        assert_eq!(array.len(), 3);
     }
 }

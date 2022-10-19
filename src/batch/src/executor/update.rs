@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyhow::anyhow;
 use futures::future::try_join_all;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use piestream_common::array::column::Column;
 use piestream_common::array::{ArrayBuilder, DataChunk, Op, PrimitiveArrayBuilder, StreamChunk};
 use piestream_common::catalog::{Field, Schema, TableId};
-use piestream_common::error::{ErrorCode, Result, RwError};
+use piestream_common::error::{Result, RwError};
 use piestream_common::types::DataType;
 use piestream_expr::expr::{build_from_prost, BoxedExpression};
 use piestream_pb::batch_plan::plan_node::NodeBody;
-use piestream_source::SourceManagerRef;
+use piestream_source::TableSourceManagerRef;
 
+use crate::error::BatchError;
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
 };
 use crate::task::BatchTaskContext;
-
 /// [`UpdateExecutor`] implements table updation with values from its child executor and given
 /// expressions.
 // TODO: multiple `UPDATE`s in a single epoch may cause problems. Need validation on materialize.
@@ -36,7 +37,7 @@ use crate::task::BatchTaskContext;
 pub struct UpdateExecutor {
     /// Target table id.
     table_id: TableId,
-    source_manager: SourceManagerRef,
+    source_manager: TableSourceManagerRef,
     child: BoxedExecutor,
     exprs: Vec<BoxedExpression>,
     schema: Schema,
@@ -46,9 +47,10 @@ pub struct UpdateExecutor {
 impl UpdateExecutor {
     pub fn new(
         table_id: TableId,
-        source_manager: SourceManagerRef,
+        source_manager: TableSourceManagerRef,
         child: BoxedExecutor,
         exprs: Vec<BoxedExpression>,
+        identity: String,
     ) -> Self {
         assert_eq!(
             child.schema().data_types(),
@@ -65,7 +67,7 @@ impl UpdateExecutor {
             schema: Schema {
                 fields: vec![Field::unnamed(DataType::Int64)],
             },
-            identity: "UpdateExecutor".to_string(),
+            identity,
         }
     }
 }
@@ -88,14 +90,14 @@ impl UpdateExecutor {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(mut self: Box<Self>) {
         let source_desc = self.source_manager.get_source(&self.table_id)?;
-        let source = source_desc.source.as_table_v2().expect("not table source");
+        let source = source_desc.source.as_table().expect("not table source");
 
         let schema = self.child.schema().clone();
         let mut notifiers = Vec::new();
 
         #[for_await]
         for data_chunk in self.child.execute() {
-            let data_chunk = data_chunk?.compact()?;
+            let data_chunk = data_chunk?.compact();
             let len = data_chunk.cardinality();
 
             let updated_data_chunk = {
@@ -117,13 +119,10 @@ impl UpdateExecutor {
                 .flat_map(|(a, b)| [a, b])
             {
                 for (datum_ref, builder) in row.values().zip_eq(builders.iter_mut()) {
-                    builder.append_datum_ref(datum_ref)?;
+                    builder.append_datum_ref(datum_ref);
                 }
             }
-            let columns = builders
-                .into_iter()
-                .map(|b| b.finish().map(|a| a.into()))
-                .try_collect()?;
+            let columns = builders.into_iter().map(|b| b.finish().into()).collect();
 
             let ops = [Op::UpdateDelete, Op::UpdateInsert]
                 .into_iter()
@@ -141,9 +140,7 @@ impl UpdateExecutor {
         let rows_updated = try_join_all(notifiers)
             .await
             .map_err(|_| {
-                RwError::from(ErrorCode::InternalError(
-                    "failed to wait chunks to be written".to_owned(),
-                ))
+                BatchError::Internal(anyhow!("failed to wait chunks to be written".to_owned(),))
             })?
             .into_iter()
             .sum::<usize>()
@@ -152,9 +149,9 @@ impl UpdateExecutor {
         // Create ret value
         {
             let mut array_builder = PrimitiveArrayBuilder::<i64>::new(1);
-            array_builder.append(Some(rows_updated as i64))?;
+            array_builder.append(Some(rows_updated as i64));
 
-            let array = array_builder.finish()?;
+            let array = array_builder.finish();
             let ret_chunk = DataChunk::new(vec![array.into()], 1);
 
             yield ret_chunk
@@ -165,16 +162,17 @@ impl UpdateExecutor {
 #[async_trait::async_trait]
 impl BoxedExecutorBuilder for UpdateExecutor {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
-        mut inputs: Vec<BoxedExecutor>,
+        source: &ExecutorBuilder<'_, C>,
+        inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
-        ensure!(inputs.len() == 1, "Update executor should have 1 child!");
+        let [child]: [_; 1] = inputs.try_into().unwrap();
+
         let update_node = try_match_expand!(
             source.plan_node().get_node_body().unwrap(),
             NodeBody::Update
         )?;
 
-        let table_id = TableId::from(&update_node.table_source_ref_id);
+        let table_id = TableId::new(update_node.table_source_id);
 
         let exprs: Vec<_> = update_node
             .get_exprs()
@@ -184,9 +182,10 @@ impl BoxedExecutorBuilder for UpdateExecutor {
 
         Ok(Box::new(Self::new(
             table_id,
-            source.context().try_get_source_manager_ref()?,
-            inputs.remove(0),
+            source.context().source_manager(),
+            child,
             exprs,
+            source.plan_node().get_identity().clone(),
         )))
     }
 }
@@ -197,10 +196,11 @@ mod tests {
 
     use futures::StreamExt;
     use piestream_common::array::Array;
-    use piestream_common::catalog::{schema_test_utils, ColumnDesc, ColumnId};
+    use piestream_common::catalog::schema_test_utils;
     use piestream_common::test_prelude::DataChunkTestExt;
     use piestream_expr::expr::InputRefExpression;
-    use piestream_source::{MemSourceManager, SourceManager, StreamSourceReader};
+    use piestream_source::table_test_utils::create_table_info;
+    use piestream_source::{SourceDescBuilder, TableSourceManager, TableSourceManagerRef};
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;
@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_executor() -> Result<()> {
-        let source_manager = Arc::new(MemSourceManager::default());
+        let source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
 
         // Schema for mock executor.
         let schema = schema_test_utils::ii();
@@ -216,19 +216,6 @@ mod tests {
 
         // Schema of the table
         let schema = schema_test_utils::ii();
-
-        let table_columns: Vec<_> = schema
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| ColumnDesc {
-                data_type: f.data_type.clone(),
-                column_id: ColumnId::from(i as i32), // use column index as column id
-                name: f.name.clone(),
-                field_descs: vec![],
-                type_name: "".to_string(),
-            })
-            .collect();
 
         mock_executor.add(DataChunk::from_pretty(
             "i  i
@@ -246,13 +233,17 @@ mod tests {
         ];
 
         // Create the table.
+        let info = create_table_info(&schema, None, vec![1]);
         let table_id = TableId::new(0);
-        source_manager.create_table_source(&table_id, table_columns.to_vec())?;
+        let source_builder = SourceDescBuilder::new(table_id, &info, &source_manager);
 
         // Create reader
-        let source_desc = source_manager.get_source(&table_id)?;
-        let source = source_desc.source.as_table_v2().unwrap();
-        let mut reader = source.stream_reader(vec![0.into(), 1.into()]).await?;
+        let source_desc = source_builder.build().await?;
+        let source = source_desc.source.as_table().unwrap();
+        let mut reader = source
+            .stream_reader(vec![0.into(), 1.into()])
+            .await?
+            .into_stream();
 
         // Update
         let update_executor = Box::new(UpdateExecutor::new(
@@ -260,6 +251,7 @@ mod tests {
             source_manager.clone(),
             Box::new(mock_executor),
             exprs,
+            "UpdateExecutor".to_string(),
         ));
 
         let handle = tokio::spawn(async move {
@@ -281,15 +273,15 @@ mod tests {
         });
 
         // Read
-        let chunk = reader.next().await?;
+        let chunk = reader.next().await.unwrap()?.chunk;
 
         assert_eq!(
-            chunk.chunk.ops().chunks(2).collect_vec(),
+            chunk.ops().chunks(2).collect_vec(),
             vec![&[Op::UpdateDelete, Op::UpdateInsert]; 5]
         );
 
         assert_eq!(
-            chunk.chunk.columns()[0]
+            chunk.columns()[0]
                 .array()
                 .as_int32()
                 .iter()
@@ -301,7 +293,7 @@ mod tests {
         );
 
         assert_eq!(
-            chunk.chunk.columns()[1]
+            chunk.columns()[1]
                 .array()
                 .as_int32()
                 .iter()

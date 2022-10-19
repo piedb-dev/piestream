@@ -17,17 +17,23 @@ use std::sync::Arc;
 mod operations;
 mod utils;
 
+use std::collections::HashMap;
+
 use clap::Parser;
 use operations::*;
+use parking_lot::RwLock;
 use piestream_common::config::StorageConfig;
 use piestream_common::monitor::Print;
+use piestream_compute::compute_observer::observer_manager::ComputeObserverNode;
+use piestream_compute::server::StateStoreImpl::HummockStateStore;
 use piestream_meta::hummock::test_utils::setup_compute_env;
 use piestream_meta::hummock::MockHummockMetaClient;
-use piestream_storage::hummock::compaction_executor::CompactionExecutor;
-use piestream_storage::hummock::compactor::{get_remote_sstable_id_generator, CompactorContext};
+use piestream_storage::hummock::compactor::CompactionExecutor;
+use piestream_storage::hummock::compactor::CompactorContext;
+use piestream_storage::hummock::MemoryLimiter;
 use piestream_storage::monitor::{ObjectStoreMetrics, StateStoreMetrics};
 use piestream_storage::{dispatch_state_store, StateStoreImpl};
-
+use piestream_storage::test_utils::{get_test_observer_manager, TestNotificationClient};
 #[derive(Parser, Debug)]
 pub(crate) struct Opts {
     // ----- backend type  -----
@@ -38,7 +44,7 @@ pub(crate) struct Opts {
     #[clap(long, default_value_t = 256)]
     table_size_mb: u32,
 
-    #[clap(long, default_value_t = 64)]
+    #[clap(long, default_value_t = 1024)]
     block_size_kb: u32,
 
     #[clap(long, default_value_t = 256)]
@@ -157,23 +163,44 @@ async fn main() {
         local_object_store: "memory".to_string(),
         share_buffer_compaction_worker_threads_number: 1,
         share_buffer_upload_concurrency: 4,
+        compactor_memory_limit_mb: opts.meta_cache_capacity_mb as usize * 2,
     });
 
-    let (_env, hummock_manager_ref, _cluster_manager_ref, worker_node) =
+    let (env, hummock_manager_ref, _cluster_manager_ref, worker_node) =
         setup_compute_env(8080).await;
     let mock_hummock_meta_client = Arc::new(MockHummockMetaClient::new(
         hummock_manager_ref.clone(),
         worker_node.id,
     ));
+
+    let table_id_to_filter_key_extractor = Arc::new(RwLock::new(HashMap::new()));
     let state_store = StateStoreImpl::new(
         &opts.store,
         config.clone(),
         mock_hummock_meta_client.clone(),
         state_store_stats.clone(),
         object_store_stats.clone(),
+        table_id_to_filter_key_extractor.clone(),
     )
     .await
     .expect("Failed to get state_store");
+    let local_version_manager = match &state_store {
+        HummockStateStore(monitored) => monitored.local_version_manager(),
+        _ => {
+            panic!();
+        }
+    };
+    let client = TestNotificationClient::new(env.notification_manager_ref(), hummock_manager_ref);
+    let compute_observer_node =
+        ComputeObserverNode::new(table_id_to_filter_key_extractor.clone(), local_version_manager);
+    let observer_manager = get_test_observer_manager(
+        client,
+        worker_node.get_host().unwrap().into(),
+        Box::new(compute_observer_node),
+        worker_node.get_type().unwrap(),
+    )
+    .await;
+    observer_manager.start().await.unwrap();
     let mut context = None;
     if let StateStoreImpl::HummockStateStore(hummock) = state_store.clone() {
         context = Some((
@@ -183,12 +210,11 @@ async fn main() {
                 sstable_store: hummock.sstable_store(),
                 stats: state_store_stats.clone(),
                 is_share_buffer_compact: false,
-                sstable_id_generator: get_remote_sstable_id_generator(
-                    mock_hummock_meta_client.clone(),
-                ),
                 compaction_executor: Some(Arc::new(CompactionExecutor::new(Some(
                     config.share_buffer_compaction_worker_threads_number as usize,
                 )))),
+                table_id_to_filter_key_extractor: table_id_to_filter_key_extractor.clone(),
+                memory_limiter: Arc::new(MemoryLimiter::new(1024 * 1024 * 128)),
             }),
             hummock.local_version_manager(),
         ));

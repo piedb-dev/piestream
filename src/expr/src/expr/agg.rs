@@ -14,41 +14,29 @@
 
 use std::convert::TryFrom;
 
-use piestream_common::error::{ErrorCode, Result, RwError};
+use parse_display::{Display, FromStr};
+use piestream_common::bail;
 use piestream_pb::expr::agg_call::Type;
 
+use crate::{ExprError, Result};
+
 /// Kind of aggregation function
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Display, FromStr, Copy, Clone, PartialEq, Eq, Hash)]
+#[display(style = "snake_case")]
 pub enum AggKind {
     Min,
     Max,
     Sum,
     Count,
-    RowCount,
     Avg,
     StringAgg,
-    SingleValue,
     ApproxCountDistinct,
-}
-
-impl std::fmt::Display for AggKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AggKind::Min => write!(f, "min"),
-            AggKind::Max => write!(f, "max"),
-            AggKind::Sum => write!(f, "sum"),
-            AggKind::Count => write!(f, "count"),
-            AggKind::RowCount => write!(f, "row_count"),
-            AggKind::Avg => write!(f, "avg"),
-            AggKind::StringAgg => write!(f, "string_agg"),
-            AggKind::SingleValue => write!(f, "single_value"),
-            AggKind::ApproxCountDistinct => write!(f, "approx_count_distinct"),
-        }
-    }
+    ArrayAgg,
+    FirstValue,
 }
 
 impl TryFrom<Type> for AggKind {
-    type Error = RwError;
+    type Error = ExprError;
 
     fn try_from(prost: Type) -> Result<Self> {
         match prost {
@@ -58,15 +46,16 @@ impl TryFrom<Type> for AggKind {
             Type::Avg => Ok(AggKind::Avg),
             Type::Count => Ok(AggKind::Count),
             Type::StringAgg => Ok(AggKind::StringAgg),
-            Type::SingleValue => Ok(AggKind::SingleValue),
             Type::ApproxCountDistinct => Ok(AggKind::ApproxCountDistinct),
-            _ => Err(ErrorCode::InternalError("Unrecognized agg.".into()).into()),
+            Type::ArrayAgg => Ok(AggKind::ArrayAgg),
+            Type::FirstValue => Ok(AggKind::FirstValue),
+            Type::Unspecified => bail!("Unrecognized agg."),
         }
     }
 }
 
 impl AggKind {
-    pub fn to_prost(&self) -> Type {
+    pub fn to_prost(self) -> Type {
         match self {
             Self::Min => Type::Min,
             Self::Max => Type::Max,
@@ -74,11 +63,9 @@ impl AggKind {
             Self::Avg => Type::Avg,
             Self::Count => Type::Count,
             Self::StringAgg => Type::StringAgg,
-            Self::SingleValue => Type::SingleValue,
-            Self::RowCount => {
-                panic!("cannot convert RowCount to prost, TODO: remove RowCount from AggKind")
-            }
             Self::ApproxCountDistinct => Type::ApproxCountDistinct,
+            Self::ArrayAgg => Type::ArrayAgg,
+            Self::FirstValue => Type::FirstValue,
         }
     }
 }

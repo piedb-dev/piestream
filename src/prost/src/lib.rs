@@ -1,5 +1,21 @@
-#![allow(clippy::all)]
-#![allow(rustdoc::bare_urls)]
+// Copyright 2022 PieDb Data
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#![expect(clippy::all)]
+#![expect(rustdoc::bare_urls)]
+#![expect(clippy::doc_markdown)]
+#![feature(lint_reasons)]
 
 #[rustfmt::skip]
 #[cfg_attr(madsim, path = "sim/catalog.rs")]
@@ -43,7 +59,12 @@ pub mod user;
 #[rustfmt::skip]
 #[cfg_attr(madsim, path = "sim/source.rs")]
 pub mod source;
-
+#[rustfmt::skip]
+#[cfg_attr(madsim, path = "sim/monitor_service.rs")]
+pub mod monitor_service;
+#[rustfmt::skip]
+#[cfg_attr(madsim, path = "sim/health.rs")]
+pub mod health;
 
 #[rustfmt::skip]
 #[path = "catalog.serde.rs"]
@@ -87,23 +108,34 @@ pub mod user_serde;
 #[rustfmt::skip]
 #[path = "source.serde.rs"]
 pub mod source_serde;
+#[rustfmt::skip]
+#[path = "monitor_service.serde.rs"]
+pub mod monitor_service_serde;
 
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ProstFieldNotFound(pub &'static str);
 
+impl From<ProstFieldNotFound> for tonic::Status {
+    fn from(e: ProstFieldNotFound) -> Self {
+        tonic::Status::new(tonic::Code::Internal, e.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::data::{data_type, DataType};
-    use crate::plan_common::{DatabaseRefId, SchemaRefId};
+    use crate::plan_common::Field;
 
     #[test]
     fn test_getter() {
-        let schema_id: SchemaRefId = SchemaRefId {
-            database_ref_id: Some(DatabaseRefId { database_id: 0 }),
-            schema_id: 0,
+        let mut data_type: DataType = DataType::default();
+        data_type.is_nullable = true;
+        let field = Field {
+            data_type: Some(data_type),
+            name: "".to_string(),
         };
-        assert_eq!(0, schema_id.get_database_ref_id().unwrap().database_id);
+        assert!(field.get_data_type().unwrap().is_nullable);
     }
 
     #[test]
@@ -117,11 +149,19 @@ mod tests {
     }
 
     #[test]
+    fn test_enum_unspecified() {
+        let mut data_type: DataType = DataType::default();
+        data_type.type_name = data_type::TypeName::TypeUnspecified as i32;
+        assert!(data_type.get_type_name().is_err());
+    }
+
+    #[test]
     fn test_primitive_getter() {
-        let id: DatabaseRefId = DatabaseRefId::default();
-        let new_id = DatabaseRefId {
-            database_id: id.get_database_id(),
+        let data_type: DataType = DataType::default();
+        let new_data_type = DataType {
+            is_nullable: data_type.get_is_nullable(),
+            ..Default::default()
         };
-        assert_eq!(new_id.database_id, 0);
+        assert!(!new_data_type.is_nullable);
     }
 }

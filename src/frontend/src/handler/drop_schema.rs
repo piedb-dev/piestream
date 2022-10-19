@@ -14,9 +14,11 @@
 
 use pgwire::pg_response::{PgResponse, StatementType};
 use piestream_common::catalog::PG_CATALOG_SCHEMA_NAME;
+use piestream_common::error::ErrorCode::PermissionDenied;
 use piestream_common::error::{ErrorCode, Result, TrackingIssue};
 use piestream_sqlparser::ast::{DropMode, ObjectName};
 
+use super::RwPgResponse;
 use crate::binder::Binder;
 use crate::catalog::CatalogError;
 use crate::session::OptimizerContext;
@@ -26,11 +28,11 @@ pub async fn handle_drop_schema(
     schema_name: ObjectName,
     if_exist: bool,
     mode: Option<DropMode>,
-) -> Result<PgResponse> {
+) -> Result<RwPgResponse> {
     let session = context.session_ctx;
     let catalog_reader = session.env().catalog_reader();
-    let (database_name, schema_name) =
-        Binder::resolve_schema_name(session.database(), schema_name)?;
+    let schema_name = Binder::resolve_schema_name(schema_name)?;
+
     if schema_name == PG_CATALOG_SCHEMA_NAME {
         return Err(ErrorCode::ProtocolError(format!(
             "cannot drop schema {} because it is required by the database system",
@@ -41,14 +43,14 @@ pub async fn handle_drop_schema(
 
     let schema = {
         let reader = catalog_reader.read_guard();
-        match reader.get_schema_by_name(&database_name, &schema_name) {
+        match reader.get_schema_by_name(session.database(), &schema_name) {
             Ok(schema) => schema.clone(),
             Err(err) => {
                 // If `if_exist` is true, not return error.
                 return if if_exist {
                     Ok(PgResponse::empty_result_with_notice(
                         StatementType::DROP_SCHEMA,
-                        format!("NOTICE: schema {} does not exist, skipping", schema_name),
+                        format!("schema \"{}\" does not exist, skipping", schema_name),
                     ))
                 } else {
                     Err(err)
@@ -58,7 +60,7 @@ pub async fn handle_drop_schema(
     };
     let schema_id = {
         // If the mode is `Restrict` or `None`, the `schema` need to be empty.
-        if Some(DropMode::Restrict) == mode || None == mode {
+        if Some(DropMode::Restrict) == mode || mode.is_none() {
             if let Some(table) = schema.iter_table().next() {
                 return Err(CatalogError::NotEmpty(
                     "schema",
@@ -85,6 +87,10 @@ pub async fn handle_drop_schema(
             .into());
         }
     };
+
+    if session.user_id() != schema.owner() {
+        return Err(PermissionDenied("Do not have the privilege".to_string()).into());
+    }
 
     let catalog_writer = session.env().catalog_writer();
     catalog_writer.drop_schema(schema_id).await?;

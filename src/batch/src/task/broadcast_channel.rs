@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Formatter};
 use std::future::Future;
 
 use piestream_common::array::DataChunk;
 use piestream_common::error::ErrorCode::InternalError;
-use piestream_common::error::{Result, ToRwResult};
+use piestream_common::error::Result;
 use piestream_pb::batch_plan::exchange_info::BroadcastInfo;
 use piestream_pb::batch_plan::*;
 use tokio::sync::mpsc;
 
+use crate::error::BatchError::SenderError;
+use crate::error::Result as BatchResult;
 use crate::task::channel::{ChanReceiver, ChanReceiverImpl, ChanSender, ChanSenderImpl};
 use crate::task::data_chunk_in_channel::DataChunkInChannel;
-use crate::task::BOUNDED_BUFFER_SIZE;
 
 /// `BroadcastSender` sends the same chunk to a number of `BroadcastReceiver`s.
 pub struct BroadcastSender {
@@ -31,8 +33,16 @@ pub struct BroadcastSender {
     broadcast_info: BroadcastInfo,
 }
 
+impl Debug for BroadcastSender {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BroadcastSender")
+            .field("broadcast_info", &self.broadcast_info)
+            .finish()
+    }
+}
+
 impl ChanSender for BroadcastSender {
-    type SendFuture<'a> = impl Future<Output = Result<()>>;
+    type SendFuture<'a> = impl Future<Output = BatchResult<()>>;
 
     fn send(&mut self, chunk: Option<DataChunk>) -> Self::SendFuture<'_> {
         async move {
@@ -41,7 +51,7 @@ impl ChanSender for BroadcastSender {
                 sender
                     .send(broadcast_data_chunk.as_ref().cloned())
                     .await
-                    .to_rw_result_with(|| "BroadcastSender::send".into())?;
+                    .map_err(|_| SenderError)?
             }
 
             Ok(())
@@ -68,7 +78,10 @@ impl ChanReceiver for BroadcastReceiver {
     }
 }
 
-pub fn new_broadcast_channel(shuffle: &ExchangeInfo) -> (ChanSenderImpl, Vec<ChanReceiverImpl>) {
+pub fn new_broadcast_channel(
+    shuffle: &ExchangeInfo,
+    output_channel_size: usize,
+) -> (ChanSenderImpl, Vec<ChanReceiverImpl>) {
     let broadcast_info = match shuffle.distribution {
         Some(exchange_info::Distribution::BroadcastInfo(ref v)) => v.clone(),
         _ => exchange_info::BroadcastInfo::default(),
@@ -78,7 +91,7 @@ pub fn new_broadcast_channel(shuffle: &ExchangeInfo) -> (ChanSenderImpl, Vec<Cha
     let mut senders = Vec::with_capacity(output_count);
     let mut receivers = Vec::with_capacity(output_count);
     for _ in 0..output_count {
-        let (s, r) = mpsc::channel(BOUNDED_BUFFER_SIZE);
+        let (s, r) = mpsc::channel(output_channel_size);
         senders.push(s);
         receivers.push(r);
     }

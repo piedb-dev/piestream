@@ -12,48 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use hyper::{Body, Request, Response};
 use prometheus::{
     exponential_buckets, histogram_opts, register_histogram_vec_with_registry,
-    register_histogram_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Encoder, Histogram, HistogramVec, IntGauge, IntGaugeVec,
-    Registry, TextEncoder,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
-use tower::make::Shared;
-use tower::ServiceBuilder;
-use tower_http::add_extension::AddExtensionLayer;
 
 pub struct MetaMetrics {
     registry: Registry,
 
     /// gRPC latency of meta services
     pub grpc_latency: HistogramVec,
-    /// latency of each barrier
+    /// The duration from barrier injection to commit
+    /// It is the sum of inflight-latency, sync-latency and wait-commit-latency
     pub barrier_latency: Histogram,
+    /// The duration from barrier complete to commit
+    pub barrier_wait_commit_latency: Histogram,
 
-    /// latency between each barrier send
+    /// Latency between each barrier send
     pub barrier_send_latency: Histogram,
-    /// the nums of all barrier. the it is the sum of in-flight and complete but waiting for other
-    /// barrier
+    /// The number of all barriers. It is the sum of barreriers that are in-flight or completed but
+    /// waiting for other barriers
     pub all_barrier_nums: IntGauge,
-    /// the nums of in-flight barrier
+    /// The number of in-flight barriers
     pub in_flight_barrier_nums: IntGauge,
 
-    /// max committed epoch
+    /// Max committed epoch
     pub max_committed_epoch: IntGauge,
-    /// num of uncommitted SSTs,
-    pub uncommitted_sst_num: IntGauge,
-    /// num of SSTs in each level
+    /// The smallest epoch that has not been GCed.
+    pub safe_epoch: IntGauge,
+    /// The smallest epoch that is being pinned.
+    pub min_pinned_epoch: IntGauge,
+    /// The number of SSTs in each level
     pub level_sst_num: IntGaugeVec,
-    // /// num of SSTs to be merged to next level in each level
+    /// The number of SSTs to be merged to next level in each level
     pub level_compact_cnt: IntGaugeVec,
+    /// The number of compact tasks
+    pub compact_frequency: IntCounterVec,
 
     pub level_file_size: IntGaugeVec,
-    /// hummock version size
+    /// Hummock version size
     pub version_size: IntGauge,
+    /// The version Id of current version.
+    pub current_version_id: IntGauge,
+    /// The version id of checkpoint version.
+    pub checkpoint_version_id: IntGauge,
+    /// The smallest version id that is being pinned.
+    pub min_pinned_version_id: IntGauge,
+
+    /// Latency for hummock manager to acquire lock
+    pub hummock_manager_lock_time: HistogramVec,
+
+    /// Latency for hummock manager to really process a request after acquire the lock
+    pub hummock_manager_real_process_time: HistogramVec,
+
+    pub time_after_last_observation: AtomicU64,
+
+    /// The number of workers in the cluster.
+    pub worker_num: IntGaugeVec,
 }
 
 impl MetaMetrics {
@@ -70,14 +89,22 @@ impl MetaMetrics {
         let opts = histogram_opts!(
             "meta_barrier_duration_seconds",
             "barrier latency",
-            exponential_buckets(0.1, 1.5, 16).unwrap() // max 43s
+            exponential_buckets(0.1, 1.5, 20).unwrap() // max 221s
         );
         let barrier_latency = register_histogram_with_registry!(opts, registry).unwrap();
 
         let opts = histogram_opts!(
+            "meta_barrier_wait_commit_duration_seconds",
+            "barrier_wait_commit_latency",
+            exponential_buckets(0.1, 1.5, 20).unwrap() // max 221s
+        );
+        let barrier_wait_commit_latency =
+            register_histogram_with_registry!(opts, registry).unwrap();
+
+        let opts = histogram_opts!(
             "meta_barrier_send_duration_seconds",
             "barrier send latency",
-            exponential_buckets(0.0001, 2.0, 20).unwrap() // max 52s
+            exponential_buckets(0.001, 2.0, 19).unwrap() // max 262s
         );
         let barrier_send_latency = register_histogram_with_registry!(opts, registry).unwrap();
 
@@ -101,9 +128,13 @@ impl MetaMetrics {
         )
         .unwrap();
 
-        let uncommitted_sst_num = register_int_gauge_with_registry!(
-            "storage_uncommitted_sst_num",
-            "num of uncommitted SSTs",
+        let safe_epoch =
+            register_int_gauge_with_registry!("storage_safe_epoch", "safe epoch", registry)
+                .unwrap();
+
+        let min_pinned_epoch = register_int_gauge_with_registry!(
+            "storage_min_pinned_epoch",
+            "min pinned epoch",
             registry
         )
         .unwrap();
@@ -124,8 +155,39 @@ impl MetaMetrics {
         )
         .unwrap();
 
+        let compact_frequency = register_int_counter_vec_with_registry!(
+            "storage_level_compact_frequency",
+            "num of compactions from each level to next level",
+            &["compactor", "group", "result"],
+            registry
+        )
+        .unwrap();
+
         let version_size =
-            register_int_gauge_with_registry!("version_size", "version size", registry).unwrap();
+            register_int_gauge_with_registry!("storage_version_size", "version size", registry)
+                .unwrap();
+
+        let current_version_id = register_int_gauge_with_registry!(
+            "storage_current_version_id",
+            "current version id",
+            registry
+        )
+        .unwrap();
+
+        let checkpoint_version_id = register_int_gauge_with_registry!(
+            "storage_checkpoint_version_id",
+            "checkpoint version id",
+            registry
+        )
+        .unwrap();
+
+        let min_pinned_version_id = register_int_gauge_with_registry!(
+            "storage_min_pinned_version_id",
+            "min pinned version id",
+            registry
+        )
+        .unwrap();
+
         let level_file_size = register_int_gauge_vec_with_registry!(
             "storage_level_total_file_size",
             "KBs total file bytes in each level",
@@ -134,56 +196,61 @@ impl MetaMetrics {
         )
         .unwrap();
 
+        let hummock_manager_lock_time = register_histogram_vec_with_registry!(
+            "hummock_manager_lock_time",
+            "latency for hummock manager to acquire the rwlock",
+            &["method", "lock_name", "lock_type"],
+            registry
+        )
+        .unwrap();
+
+        let hummock_manager_real_process_time = register_histogram_vec_with_registry!(
+            "meta_hummock_manager_real_process_time",
+            "latency for hummock manager to really process the request",
+            &["method"],
+            registry
+        )
+        .unwrap();
+
+        let worker_num = register_int_gauge_vec_with_registry!(
+            "worker_num",
+            "number of nodes in the cluster",
+            &["worker_type"],
+            registry,
+        )
+        .unwrap();
+
         Self {
             registry,
 
             grpc_latency,
             barrier_latency,
+            barrier_wait_commit_latency,
             barrier_send_latency,
             all_barrier_nums,
             in_flight_barrier_nums,
 
             max_committed_epoch,
-            uncommitted_sst_num,
+            safe_epoch,
+            min_pinned_epoch,
             level_sst_num,
             level_compact_cnt,
+            compact_frequency,
             level_file_size,
             version_size,
+            current_version_id,
+            checkpoint_version_id,
+            min_pinned_version_id,
+            hummock_manager_lock_time,
+            hummock_manager_real_process_time,
+            time_after_last_observation: AtomicU64::new(0),
+
+            worker_num,
         }
     }
 
-    pub fn boot_metrics_service(self: &Arc<Self>, listen_addr: SocketAddr) {
-        let meta_metrics = self.clone();
-        tokio::spawn(async move {
-            tracing::info!(
-                "Prometheus listener for Prometheus is set up on http://{}",
-                listen_addr
-            );
-
-            let service = ServiceBuilder::new()
-                .layer(AddExtensionLayer::new(meta_metrics))
-                .service_fn(Self::metrics_service);
-
-            let serve_future = hyper::Server::bind(&listen_addr).serve(Shared::new(service));
-
-            if let Err(err) = serve_future.await {
-                eprintln!("server error: {}", err);
-            }
-        });
-    }
-
-    async fn metrics_service(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-        let meta_metrics = req.extensions().get::<Arc<MetaMetrics>>().unwrap();
-        let encoder = TextEncoder::new();
-        let mut buffer = vec![];
-        let mf = meta_metrics.registry.gather();
-        encoder.encode(&mf, &mut buffer).unwrap();
-        let response = Response::builder()
-            .header(hyper::header::CONTENT_TYPE, encoder.format_type())
-            .body(Body::from(buffer))
-            .unwrap();
-
-        Ok(response)
+    pub fn registry(&self) -> &Registry {
+        &self.registry
     }
 }
 impl Default for MetaMetrics {

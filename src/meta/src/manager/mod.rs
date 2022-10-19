@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod background_deleter;
 mod catalog;
+mod cluster;
 mod env;
-mod hash_mapping;
 mod id;
 mod idle;
 mod notification;
-mod user;
-
+mod streaming_job;
+pub use background_deleter::*;
 pub use catalog::*;
+pub use cluster::*;
 pub use env::*;
-pub use hash_mapping::*;
 pub use id::*;
 pub use idle::*;
 pub use notification::*;
-pub use user::*;
+pub use streaming_job::*;

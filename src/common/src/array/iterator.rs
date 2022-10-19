@@ -76,6 +76,16 @@ impl<'a> Iterator for ArrayImplIterator<'a> {
         }
     }
 
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if self.pos + n >= self.data.len() {
+            None
+        } else {
+            let item = self.data.value_at(self.pos + n);
+            self.pos += n + 1;
+            Some(item)
+        }
+    }
+
     fn size_hint(&self) -> (usize, Option<usize>) {
         let size = self.data.len() - self.pos;
         (size, Some(size))
@@ -91,30 +101,32 @@ mod tests {
     use crate::for_all_variants;
 
     macro_rules! test_trusted_len {
-        ([], $( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
+        ($( { $variant_name:ident, $suffix_name:ident, $array:ty, $builder:ty } ),*) => {
             $(
                 paste! {
                     #[test]
                     fn [<test_trusted_len_for_ $suffix_name _array>]() {
                         use crate::array::$builder;
-                        let mut builder = $builder::new(3);
-                        for _ in 0..3 {
-                            builder.append_null().unwrap();
+                        let mut builder = $builder::new(5);
+                        for _ in 0..5 {
+                            builder.append_null();
                         }
-                        let array = builder.finish().unwrap();
+                        let array = builder.finish();
                         let mut iter = array.iter();
 
-                        assert_eq!(iter.size_hint(), (3, Some(3))); iter.next();
-                        assert_eq!(iter.size_hint(), (2, Some(2))); iter.next();
-                        assert_eq!(iter.size_hint(), (1, Some(1))); iter.next();
+                        assert_eq!(iter.size_hint(), (5, Some(5))); iter.next();
+                        assert_eq!(iter.size_hint(), (4, Some(4))); iter.next();
+                        assert_eq!(iter.size_hint(), (3, Some(3))); iter.nth(0);
+                        assert_eq!(iter.size_hint(), (2, Some(2))); iter.nth(1);
                         assert_eq!(iter.size_hint(), (0, Some(0)));
 
                         let array_impl = ArrayImpl::from(array);
                         let mut iter = array_impl.iter();
 
-                        assert_eq!(iter.size_hint(), (3, Some(3))); iter.next();
-                        assert_eq!(iter.size_hint(), (2, Some(2))); iter.next();
-                        assert_eq!(iter.size_hint(), (1, Some(1))); iter.next();
+                        assert_eq!(iter.size_hint(), (5, Some(5))); iter.next();
+                        assert_eq!(iter.size_hint(), (4, Some(4))); iter.next();
+                        assert_eq!(iter.size_hint(), (3, Some(3))); iter.nth(0);
+                        assert_eq!(iter.size_hint(), (2, Some(2))); iter.nth(1);
                         assert_eq!(iter.size_hint(), (0, Some(0)));
                     }
                 }
@@ -122,5 +134,5 @@ mod tests {
         };
     }
 
-    for_all_variants! {test_trusted_len}
+    for_all_variants! { test_trusted_len }
 }

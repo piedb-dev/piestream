@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Sub;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use piestream_object_store::object::ObjectStore;
-use piestream_pb::hummock::VacuumTask;
+use itertools::Itertools;
+use piestream_hummock_sdk::HummockSstableId;
+use piestream_object_store::object::ObjectMetadata;
+use piestream_pb::hummock::{FullScanTask, VacuumTask};
 use piestream_rpc_client::HummockMetaClient;
 
 use super::{HummockError, HummockResult};
@@ -24,87 +28,100 @@ use crate::hummock::SstableStoreRef;
 pub struct Vacuum;
 
 impl Vacuum {
+    /// Wrapper method that warns on any error and doesn't propagate it.
+    /// Returns false if any error.
     pub async fn vacuum(
-        sstable_store: SstableStoreRef,
         vacuum_task: VacuumTask,
+        sstable_store: SstableStoreRef,
+        hummock_meta_client: Arc<dyn HummockMetaClient>,
+    ) -> bool {
+        tracing::info!("Try to vacuum SSTs {:?}", vacuum_task.sstable_ids);
+        match Vacuum::vacuum_inner(
+            vacuum_task,
+            sstable_store.clone(),
+            hummock_meta_client.clone(),
+        )
+        .await
+        {
+            Ok(_) => {
+                tracing::info!("Finished vacuuming SSTs");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to vacuum SSTs.\n{:#?}", e);
+                return false;
+            }
+        }
+        true
+    }
+
+    pub async fn vacuum_inner(
+        vacuum_task: VacuumTask,
+        sstable_store: SstableStoreRef,
         hummock_meta_client: Arc<dyn HummockMetaClient>,
     ) -> HummockResult<()> {
-        let store = sstable_store.store();
         let sst_ids = vacuum_task.sstable_ids;
-        for sst_id in &sst_ids {
-            // Meta
-            store
-                .delete(sstable_store.get_sst_meta_path(*sst_id).as_str())
-                .await
-                .map_err(HummockError::object_io_error)?;
-            // Data
-            store
-                .delete(sstable_store.get_sst_data_path(*sst_id).as_str())
-                .await
-                .map_err(HummockError::object_io_error)?;
-        }
-
-        // TODO: report progress instead of in one go.
+        sstable_store.delete_list(&sst_ids).await?;
         hummock_meta_client
             .report_vacuum_task(VacuumTask {
                 sstable_ids: sst_ids,
             })
             .await
             .map_err(|e| {
-                HummockError::meta_error(format!("failed to report vacuum task: {e:?}"))
+                HummockError::meta_error(format!("Failed to report vacuum task.\n{:#?}", e))
             })?;
 
         Ok(())
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use std::iter;
-    use std::sync::Arc;
+    /// Wrapper method that warns on any error and doesn't propagate it.
+    /// Returns false if any error.
+    pub async fn full_scan(
+        full_scan_task: FullScanTask,
+        sstable_store: SstableStoreRef,
+        hummock_meta_client: Arc<dyn HummockMetaClient>,
+    ) -> bool {
+        tracing::info!(
+            "Try to full scan SSTs with timestamp {}",
+            full_scan_task.sst_retention_time_sec
+        );
 
-    use itertools::Itertools;
-    use piestream_meta::hummock::test_utils::setup_compute_env;
-    use piestream_meta::hummock::MockHummockMetaClient;
-    use piestream_pb::hummock::VacuumTask;
-
-    use crate::hummock::iterator::test_utils::{default_builder_opt_for_test, mock_sstable_store};
-    use crate::hummock::test_utils::gen_default_test_sstable;
-    use crate::hummock::vacuum::Vacuum;
-
-    #[tokio::test]
-    async fn test_vacuum_tracked_data() {
-        let sstable_store = mock_sstable_store();
-        // Put some SSTs to object store
-        let sst_ids = (1..10).collect_vec();
-        let mut sstables = vec![];
-        for sstable_id in &sst_ids {
-            let sstable = gen_default_test_sstable(
-                default_builder_opt_for_test(),
-                *sstable_id,
-                sstable_store.clone(),
-            )
-            .await;
-            sstables.push(sstable);
-        }
-
-        // Delete all existent SSTs and a nonexistent SSTs. Trying to delete a nonexistent SST is
-        // OK.
-        let nonexistent_id = 11u64;
-        let vacuum_task = VacuumTask {
-            sstable_ids: sst_ids
-                .into_iter()
-                .chain(iter::once(nonexistent_id))
-                .collect_vec(),
+        let object_metadata = match sstable_store.list_ssts_from_object_store().await {
+            Ok(object_metadata) => object_metadata,
+            Err(e) => {
+                tracing::warn!("Failed to list object store.\n{:#?}", e);
+                return false;
+            }
         };
-        let (_env, hummock_manager_ref, _cluster_manager_ref, worker_node) =
-            setup_compute_env(8080).await;
-        let mock_hummock_meta_client = Arc::new(MockHummockMetaClient::new(
-            hummock_manager_ref.clone(),
-            worker_node.id,
-        ));
-        Vacuum::vacuum(sstable_store, vacuum_task, mock_hummock_meta_client)
-            .await
-            .unwrap();
+
+        let sst_ids =
+            Vacuum::full_scan_inner(full_scan_task, object_metadata, sstable_store.clone());
+        match hummock_meta_client.report_full_scan_task(sst_ids).await {
+            Ok(_) => {
+                tracing::info!("Finished full scan SSTs");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to report full scan task.\n{:#?}", e);
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn full_scan_inner(
+        full_scan_task: FullScanTask,
+        object_metadata: Vec<ObjectMetadata>,
+        sstable_store: SstableStoreRef,
+    ) -> Vec<HummockSstableId> {
+        let timestamp_watermark = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .sub(Duration::from_secs(full_scan_task.sst_retention_time_sec))
+            .as_secs_f64();
+        object_metadata
+            .into_iter()
+            .filter(|o| o.last_modified < timestamp_watermark)
+            .map(|o| sstable_store.get_sst_id_from_path(&o.key))
+            .dedup()
+            .collect_vec()
     }
 }

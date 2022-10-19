@@ -14,23 +14,27 @@
 use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
-use futures::pin_mut;
+use futures::{pin_mut, StreamExt};
 use futures_async_stream::try_stream;
 use itertools::Itertools;
+use prometheus::Histogram;
 use piestream_common::array::{DataChunk, Row};
 use piestream_common::buffer::Bitmap;
-use piestream_common::catalog::{ColumnDesc, ColumnId, OrderedColumnDesc, Schema, TableId};
+use piestream_common::catalog::{ColumnDesc, ColumnId, Schema, TableId, TableOption};
 use piestream_common::error::{Result, RwError};
 use piestream_common::types::{DataType, Datum, ScalarImpl};
+use piestream_common::util::select_all;
 use piestream_common::util::sort_util::OrderType;
+use piestream_common::util::value_encoding::deserialize_datum;
+use piestream_hummock_sdk::HummockReadEpoch;
 use piestream_pb::batch_plan::plan_node::NodeBody;
-use piestream_pb::batch_plan::{scan_range, ScanRange};
-use piestream_pb::plan_common::CellBasedTableDesc;
-use piestream_storage::table::storage_table::{BatchDedupPkIter, StorageTable, StorageTableIter};
+use piestream_pb::batch_plan::{scan_range, ScanRange as ProstScanRange};
+use piestream_pb::plan_common::{OrderType as ProstOrderType, StorageTableDesc};
+use piestream_storage::table::batch_table::storage_table::StorageTable;
 use piestream_storage::table::{Distribution, TableIter};
-use piestream_storage::{dispatch_state_store, Keyspace, StateStore, StateStoreImpl};
+use piestream_storage::{dispatch_state_store, StateStore};
 
-use crate::executor::monitor::BatchMetrics;
+use super::BatchTaskMetricsWithTaskLabels;
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
 };
@@ -39,93 +43,116 @@ use crate::task::BatchTaskContext;
 /// Executor that scans data from row table
 pub struct RowSeqScanExecutor<S: StateStore> {
     chunk_size: usize,
-    schema: Schema,
     identity: String,
-    stats: Arc<BatchMetrics>,
-    scan_type: ScanType<S>,
+
+    /// Batch metrics.
+    /// None: Local mode don't record mertics.
+    metrics: Option<BatchTaskMetricsWithTaskLabels>,
+
+    table: StorageTable<S>,
+    scan_ranges: Vec<ScanRange>,
+    epoch: u64,
 }
 
-pub enum ScanType<S: StateStore> {
-    TableScan(BatchDedupPkIter<S>),
-    RangeScan(StorageTableIter<S>),
-    PointGet(Option<Row>),
+/// Range for batch scan.
+pub struct ScanRange {
+    /// The prefix of the primary key.
+    pub pk_prefix: Row,
+
+    /// The range bounds of the next column.
+    pub next_col_bounds: (Bound<Datum>, Bound<Datum>),
+}
+
+impl ScanRange {
+    fn is_full_range<T>(bounds: &impl RangeBounds<T>) -> bool {
+        matches!(bounds.start_bound(), Bound::Unbounded)
+            && matches!(bounds.end_bound(), Bound::Unbounded)
+    }
+
+    /// Create a scan range from the prost representation.
+    pub fn new(
+        scan_range: ProstScanRange,
+        mut pk_types: impl Iterator<Item = DataType>,
+    ) -> Result<Self> {
+        let pk_prefix = Row(scan_range
+            .eq_conds
+            .iter()
+            .map(|v| {
+                let ty = pk_types.next().unwrap();
+                deserialize_datum(v.as_slice(), &ty)
+            })
+            .try_collect()?);
+        if scan_range.lower_bound.is_none() && scan_range.upper_bound.is_none() {
+            return Ok(Self {
+                pk_prefix,
+                ..Self::full()
+            });
+        }
+
+        let bound_ty = pk_types.next().unwrap();
+        let build_bound = |bound: &scan_range::Bound| -> Bound<Datum> {
+            let scalar =
+                ScalarImpl::from_proto_bytes(&bound.value, &bound_ty.to_protobuf()).unwrap();
+
+            let datum = Some(scalar);
+            if bound.inclusive {
+                Bound::Included(datum)
+            } else {
+                Bound::Excluded(datum)
+            }
+        };
+
+        let next_col_bounds: (Bound<Datum>, Bound<Datum>) = match (
+            scan_range.lower_bound.as_ref(),
+            scan_range.upper_bound.as_ref(),
+        ) {
+            (Some(lb), Some(ub)) => (build_bound(lb), build_bound(ub)),
+            (None, Some(ub)) => (Bound::Unbounded, build_bound(ub)),
+            (Some(lb), None) => (build_bound(lb), Bound::Unbounded),
+            (None, None) => unreachable!(),
+        };
+
+        Ok(Self {
+            pk_prefix,
+            next_col_bounds,
+        })
+    }
+
+    /// Create a scan range for full table scan.
+    pub fn full() -> Self {
+        Self {
+            pk_prefix: Row::default(),
+            next_col_bounds: (Bound::Unbounded, Bound::Unbounded),
+        }
+    }
 }
 
 impl<S: StateStore> RowSeqScanExecutor<S> {
     pub fn new(
-        schema: Schema,
-        scan_type: ScanType<S>,
+        table: StorageTable<S>,
+        scan_ranges: Vec<ScanRange>,
+        epoch: u64,
         chunk_size: usize,
         identity: String,
-        stats: Arc<BatchMetrics>,
+        metrics: Option<BatchTaskMetricsWithTaskLabels>,
     ) -> Self {
         Self {
             chunk_size,
-            schema,
             identity,
-            stats,
-            scan_type,
+            metrics,
+            table,
+            scan_ranges,
+            epoch,
         }
     }
 }
 
 pub struct RowSeqScanExecutorBuilder {}
 
-impl RowSeqScanExecutorBuilder {
-    // TODO: decide the chunk size for row seq scan
-    pub const DEFAULT_CHUNK_SIZE: usize = 1024;
-}
-
-fn is_full_range<T>(bounds: &impl RangeBounds<T>) -> bool {
-    matches!(bounds.start_bound(), Bound::Unbounded)
-        && matches!(bounds.end_bound(), Bound::Unbounded)
-}
-
-fn get_scan_bound(
-    scan_range: ScanRange,
-    mut pk_types: impl Iterator<Item = DataType>,
-) -> (Row, impl RangeBounds<Datum>) {
-    let pk_prefix_value = Row(scan_range
-        .eq_conds
-        .iter()
-        .map(|v| {
-            let ty = pk_types.next().unwrap();
-            let scalar = ScalarImpl::bytes_to_scalar(v, &ty.to_protobuf()).unwrap();
-            Some(scalar)
-        })
-        .collect_vec());
-    if scan_range.lower_bound.is_none() && scan_range.upper_bound.is_none() {
-        return (pk_prefix_value, (Bound::Unbounded, Bound::Unbounded));
-    }
-
-    let bound_ty = pk_types.next().unwrap();
-    let build_bound = |bound: &scan_range::Bound| -> Bound<Datum> {
-        let scalar = ScalarImpl::bytes_to_scalar(&bound.value, &bound_ty.to_protobuf()).unwrap();
-
-        let datum = Some(scalar);
-        if bound.inclusive {
-            Bound::Included(datum)
-        } else {
-            Bound::Excluded(datum)
-        }
-    };
-
-    let next_col_bounds: (Bound<Datum>, Bound<Datum>) = match (
-        scan_range.lower_bound.as_ref(),
-        scan_range.upper_bound.as_ref(),
-    ) {
-        (Some(lb), Some(ub)) => (build_bound(lb), build_bound(ub)),
-        (None, Some(ub)) => (Bound::Unbounded, build_bound(ub)),
-        (Some(lb), None) => (build_bound(lb), Bound::Unbounded),
-        (None, None) => unreachable!(),
-    };
-    (pk_prefix_value, next_col_bounds)
-}
-
 #[async_trait::async_trait]
 impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
     async fn new_boxed_executor<C: BatchTaskContext>(
-        source: &ExecutorBuilder<C>,
+        source: &ExecutorBuilder<'_, C>,
         inputs: Vec<BoxedExecutor>,
     ) -> Result<BoxedExecutor> {
         ensure!(
@@ -137,7 +164,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             NodeBody::RowSeqScan
         )?;
 
-        let table_desc: &CellBasedTableDesc = seq_scan_node.get_table_desc()?;
+        let table_desc: &StorageTableDesc = seq_scan_node.get_table_desc()?;
         let table_id = TableId {
             table_id: table_desc.table_id,
         };
@@ -153,82 +180,85 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             .map(ColumnId::from)
             .collect();
 
-        let pk_descs: Vec<OrderedColumnDesc> =
-            table_desc.order_key.iter().map(|d| d.into()).collect();
-        let order_types: Vec<OrderType> = pk_descs.iter().map(|desc| desc.order).collect();
-
-        let scan_range = seq_scan_node.scan_range.as_ref().unwrap();
-        let (pk_prefix_value, next_col_bounds) = get_scan_bound(
-            scan_range.clone(),
-            pk_descs
-                .iter()
-                .map(|desc| desc.column_desc.data_type.clone()),
-        );
-
-        let pk_indices = table_desc
-            .pk_indices
+        let pk_types = table_desc
+            .pk
             .iter()
-            .map(|&k| k as usize)
+            .map(|order| column_descs[order.index as usize].clone().data_type)
             .collect_vec();
+        let order_types: Vec<OrderType> = table_desc
+            .pk
+            .iter()
+            .map(|order| {
+                OrderType::from_prost(&ProstOrderType::from_i32(order.order_type).unwrap())
+            })
+            .collect();
+
+        let pk_indices = table_desc.pk.iter().map(|k| k.index as usize).collect_vec();
 
         let dist_key_indices = table_desc
             .dist_key_indices
             .iter()
             .map(|&k| k as usize)
             .collect_vec();
-
         let distribution = match &seq_scan_node.vnode_bitmap {
             Some(vnodes) => Distribution {
-                vnodes: Bitmap::try_from(vnodes).unwrap().into(),
+                vnodes: Bitmap::from(vnodes).into(),
                 dist_key_indices,
             },
-            // This is possbile for dml. vnode_bitmap is not filled by scheduler.
+            // This is possible for dml. vnode_bitmap is not filled by scheduler.
             // Or it's single distribution, e.g., distinct agg. We scan in a single executor.
             None => Distribution::all_vnodes(dist_key_indices),
         };
 
-        dispatch_state_store!(source.context().try_get_state_store()?, state_store, {
-            let batch_stats = source.context().stats();
+        let table_option = TableOption {
+            retention_seconds: if table_desc.retention_seconds > 0 {
+                Some(table_desc.retention_seconds)
+            } else {
+                None
+            },
+        };
+        let value_indices = table_desc
+            .get_value_indices()
+            .iter()
+            .map(|&k| k as usize)
+            .collect_vec();
+
+        let scan_ranges = seq_scan_node.scan_ranges.clone();
+        let scan_ranges = {
+            if scan_ranges.is_empty() {
+                vec![ScanRange::full()]
+            } else {
+                scan_ranges
+                    .into_iter()
+                    .map(|scan_range| ScanRange::new(scan_range, pk_types.iter().cloned()))
+                    .try_collect()?
+            }
+        };
+
+        let epoch = source.epoch;
+        let chunk_size = source.context.get_config().developer.batch_chunk_size;
+        let metrics = source.context().task_metrics();
+
+        dispatch_state_store!(source.context().state_store(), state_store, {
             let table = StorageTable::new_partial(
-                state_store.clone(),
+                state_store,
                 table_id,
                 column_descs,
                 column_ids,
                 order_types,
                 pk_indices,
                 distribution,
+                table_option,
+                value_indices,
             );
-            let keyspace = Keyspace::table_root(state_store.clone(), &table_id);
-            let scan_type = if pk_prefix_value.size() == 0 && is_full_range(&next_col_bounds) {
-                let iter = table.batch_dedup_pk_iter(source.epoch, &pk_descs).await?;
-                ScanType::TableScan(iter)
-            } else if pk_prefix_value.size() == pk_descs.len() {
-                let row = {
-                    keyspace.state_store().wait_epoch(source.epoch).await?;
-                    table.get_row(&pk_prefix_value, source.epoch).await?
-                };
-                ScanType::PointGet(row)
-            } else {
-                assert!(pk_prefix_value.size() < pk_descs.len());
-
-                let iter = if is_full_range(&next_col_bounds) {
-                    table
-                        .batch_iter_with_pk_prefix(source.epoch, pk_prefix_value)
-                        .await?
-                } else {
-                    table
-                        .batch_iter_with_pk_bounds(source.epoch, pk_prefix_value, next_col_bounds)
-                        .await?
-                };
-                ScanType::RangeScan(iter)
-            };
 
             Ok(Box::new(RowSeqScanExecutor::new(
-                table.schema().clone(),
-                scan_type,
-                RowSeqScanExecutorBuilder::DEFAULT_CHUNK_SIZE,
+                table,
+                scan_ranges,
+                epoch,
+                chunk_size,
                 source.plan_node().get_identity().clone(),
-                batch_stats,
+                metrics,
             )))
         })
     }
@@ -236,7 +266,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
 
 impl<S: StateStore> Executor for RowSeqScanExecutor<S> {
     fn schema(&self) -> &Schema {
-        &self.schema
+        self.table.schema()
     }
 
     fn identity(&self) -> &str {
@@ -244,56 +274,106 @@ impl<S: StateStore> Executor for RowSeqScanExecutor<S> {
     }
 
     fn execute(self: Box<Self>) -> BoxedDataChunkStream {
-        self.do_execute()
+        self.do_execute().boxed()
     }
 }
 
 impl<S: StateStore> RowSeqScanExecutor<S> {
-    #[try_stream(boxed, ok = DataChunk, error = RwError)]
+    #[try_stream(ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
-        match self.scan_type {
-            ScanType::TableScan(iter) => {
-                pin_mut!(iter);
-                loop {
-                    let timer = self.stats.row_seq_scan_next_duration.start_timer();
+        let Self {
+            chunk_size,
+            identity,
+            metrics,
+            table,
+            scan_ranges,
+            epoch,
+        } = *self;
 
-                    let chunk = iter
-                        .collect_data_chunk(&self.schema, Some(self.chunk_size))
-                        .await
-                        .map_err(RwError::from)?;
-                    timer.observe_duration();
+        let table = Arc::new(table);
 
-                    if let Some(chunk) = chunk {
-                        yield chunk
-                    } else {
-                        break;
-                    }
-                }
-            }
-            ScanType::RangeScan(iter) => {
-                pin_mut!(iter);
-                loop {
-                    // TODO: same as TableScan except iter type
-                    let timer = self.stats.row_seq_scan_next_duration.start_timer();
+        // Create collector.
+        let histogram = if let Some(ref metrics) = metrics {
+            let mut labels = metrics.task_labels();
+            labels.push(identity.as_str());
+            Some(
+                metrics
+                    .metrics
+                    .task_row_seq_scan_next_duration
+                    .with_label_values(&labels),
+            )
+        } else {
+            None
+        };
 
-                    let chunk = iter
-                        .collect_data_chunk(&self.schema, Some(self.chunk_size))
-                        .await
-                        .map_err(RwError::from)?;
-                    timer.observe_duration();
+        // Scan all ranges concurrently.
+        let select_all = select_all(scan_ranges.into_iter().map(|scan_range| {
+            let table = table.clone();
+            let histogram = histogram.clone();
+            Box::pin(Self::execute_range(
+                table, scan_range, epoch, chunk_size, histogram,
+            ))
+        }));
 
-                    if let Some(chunk) = chunk {
-                        yield chunk
-                    } else {
-                        break;
-                    }
-                }
-            }
-            ScanType::PointGet(row) => {
-                if let Some(row) = row {
-                    yield DataChunk::from_rows(&[row], &self.schema.data_types())?;
-                }
-            }
+        #[for_await]
+        for scan_result in select_all {
+            yield scan_result?;
         }
+    }
+
+    #[try_stream(ok = DataChunk, error = RwError)]
+    async fn execute_range(
+        table: Arc<StorageTable<S>>,
+        scan_range: ScanRange,
+        epoch: u64,
+        chunk_size: usize,
+        histogram: Option<Histogram>,
+    ) {
+        let ScanRange {
+            pk_prefix,
+            next_col_bounds,
+        } = scan_range;
+
+        // Resolve the scan range to scan type.
+        if pk_prefix.size() == table.pk_indices().len() {
+            // Point Get.
+            let row = table
+                .get_row(&pk_prefix, HummockReadEpoch::Committed(epoch))
+                .await?;
+
+            if let Some(row) = row {
+                yield DataChunk::from_rows(&[row], &table.schema().data_types());
+            }
+        } else {
+            // Range Scan.
+            assert!(pk_prefix.size() < table.pk_indices().len());
+            let iter = table
+                .batch_iter_with_pk_bounds(
+                    HummockReadEpoch::Committed(epoch),
+                    &pk_prefix,
+                    next_col_bounds,
+                )
+                .await?;
+
+            pin_mut!(iter);
+            loop {
+                let timer = histogram.as_ref().map(|histogram| histogram.start_timer());
+
+                let chunk = iter
+                    .collect_data_chunk(table.schema(), Some(chunk_size))
+                    .await
+                    .map_err(RwError::from)?;
+
+                if let Some(timer) = timer {
+                    timer.observe_duration()
+                }
+
+                if let Some(chunk) = chunk {
+                    yield chunk
+                } else {
+                    break;
+                }
+            }
+        };
     }
 }

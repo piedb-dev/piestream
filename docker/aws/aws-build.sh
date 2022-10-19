@@ -10,7 +10,7 @@ if ! [[ "$DIR" =~ ^/ebs.* ]] ; then
 fi
 
 cd "$DIR/../.."
-cargo build -p piestream_cmd_all --release --features static-link
+cargo build -p piestream_cmd_all --release --features "static-link static-log-level"
 objcopy --compress-debug-sections=zlib-gnu target/release/piestream "$DIR/piestream"
 
 cd "$DIR"

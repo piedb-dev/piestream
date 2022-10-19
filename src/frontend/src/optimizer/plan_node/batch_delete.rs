@@ -17,13 +17,12 @@ use std::fmt;
 use piestream_common::error::Result;
 use piestream_pb::batch_plan::plan_node::NodeBody;
 use piestream_pb::batch_plan::DeleteNode;
-use piestream_pb::plan_common::TableRefId;
 
 use super::{
     LogicalDelete, PlanBase, PlanRef, PlanTreeNodeUnary, ToBatchProst, ToDistributedBatch,
 };
 use crate::optimizer::plan_node::ToLocalBatch;
-use crate::optimizer::property::{Distribution, Order};
+use crate::optimizer::property::{Distribution, Order, RequiredDist};
 
 /// `BatchDelete` implements [`LogicalDelete`]
 #[derive(Debug, Clone)]
@@ -46,7 +45,7 @@ impl BatchDelete {
 }
 
 impl fmt::Display for BatchDelete {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.logical.fmt_with_name(f, "BatchDelete")
     }
 }
@@ -65,7 +64,8 @@ impl_plan_tree_node_for_unary! { BatchDelete }
 
 impl ToDistributedBatch for BatchDelete {
     fn to_distributed(&self) -> Result<PlanRef> {
-        let new_input = self.input().to_distributed()?;
+        let new_input = RequiredDist::single()
+            .enforce_if_not_satisfies(self.input().to_distributed()?, &Order::any())?;
         Ok(self.clone_with_input(new_input).into())
     }
 }
@@ -73,17 +73,16 @@ impl ToDistributedBatch for BatchDelete {
 impl ToBatchProst for BatchDelete {
     fn to_batch_prost_body(&self) -> NodeBody {
         NodeBody::Delete(DeleteNode {
-            table_source_ref_id: TableRefId {
-                table_id: self.logical.source_id().table_id() as i32,
-                ..Default::default()
-            }
-            .into(),
+            table_source_id: self.logical.source_id().table_id(),
+            associated_mview_id: self.logical.associated_mview_id().table_id(),
         })
     }
 }
 
 impl ToLocalBatch for BatchDelete {
     fn to_local(&self) -> Result<PlanRef> {
-        unreachable!();
+        let new_input = RequiredDist::single()
+            .enforce_if_not_satisfies(self.input().to_local()?, &Order::any())?;
+        Ok(self.clone_with_input(new_input).into())
     }
 }
