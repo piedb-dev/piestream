@@ -114,16 +114,34 @@ impl OverlapInfo for RangeOverlapInfo {
     }
 
     fn update(&mut self, table: &SstableInfo) {
+        use piestream_hummock_sdk::key::split_key_epoch;
+
         let other = table.key_range.as_ref().unwrap();
         if let Some(range) = self.target_range.as_mut() {
             //扩张rang范围
             range.full_key_extend(other);
+           
+            let vec=&range.clone().left;
+            let (key_left, _)=split_key_epoch(&vec);
+    
+            let vec=&range.clone().right;
+            let (key_right, _)=split_key_epoch(&vec);
+            //println!("left={:?} right={:?}",  String::from_utf8(self.target_range.unwrap().left.clone()).unwrap(), String::from_utf8(self.target_range.unwrap().right.clone()).unwrap());
+            println!("left={:?} right={:?}",  String::from_utf8(key_left.to_vec()).unwrap(), String::from_utf8(key_right.to_vec()).unwrap());
             return;
         }
         self.target_range = Some(other.clone());
+        
+        let vec=&self.target_range.clone().unwrap().left;
+        let (key_left, _)=split_key_epoch(&vec);
+
+        let vec=&self.target_range.clone().unwrap().right;
+        let (key_right, _)=split_key_epoch(&vec);
+        //println!("left={:?} right={:?}",  String::from_utf8(self.target_range.unwrap().left.clone()).unwrap(), String::from_utf8(self.target_range.unwrap().right.clone()).unwrap());
+        println!("left={:?} right={:?}",  String::from_utf8(key_left.to_vec()).unwrap(), String::from_utf8(key_right.to_vec()).unwrap());
+
     }
 }
-
 #[derive(Default)]
 pub struct HashOverlapInfo {
     infos: Vec<SstableInfo>,
@@ -175,7 +193,17 @@ impl OverlapStrategy for RangeOverlapStrategy {
 //检查table重叠
 fn check_table_overlap(key_range: &KeyRange, table: &SstableInfo) -> bool {
     let other = table.key_range.as_ref().unwrap();
-    key_range.full_key_overlap(other)
+
+    use piestream_hummock_sdk::key::split_key_epoch;
+    let vec=&other.clone().left;
+    let (key_left, _)=split_key_epoch(&vec);
+
+    let vec=&other.clone().right;
+    let (key_right, _)=split_key_epoch(&vec);
+    println!("check_table_overlap left={:?} right={:?}",  String::from_utf8(key_left.to_vec()).unwrap(), String::from_utf8(key_right.to_vec()).unwrap());
+    let b=key_range.full_key_overlap(other);
+    println!("b={:?}", b);
+    b
 }
 
 /// check whether 2 SSTs may have same key by key range and vnode bitmaps in table info

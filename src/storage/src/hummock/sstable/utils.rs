@@ -46,10 +46,12 @@ pub fn bytes_diff<'a, 'b>(base: &'a [u8], target: &'b [u8]) -> &'b [u8] {
         }
         while i < end {
             if base.get_unchecked(i) != target.get_unchecked(i) {
+                //从不相等位置返回
                 return target.get_unchecked(i..);
             }
             i += 1;
         }
+        //get_unchecked函数等同于指针+offset
         target.get_unchecked(end..)
     }
 }

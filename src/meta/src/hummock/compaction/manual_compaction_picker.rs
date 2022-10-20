@@ -52,7 +52,9 @@ impl CompactionPicker for ManualCompactionPicker {
         levels: &[Level],
         level_handlers: &mut [LevelHandler],
     ) -> Option<SearchResult> {
+        //当前级别
         let level = self.option.level;
+        //目标级别
         let target_level = self.target_level;
 
         let mut select_input_ssts = vec![];
@@ -61,6 +63,7 @@ impl CompactionPicker for ManualCompactionPicker {
         tmp_sst_info.key_range = Some(self.option.key_range.clone());
         range_overlap_info.update(&tmp_sst_info);
 
+        //选择逻辑 1.输入范围有重叠的SsttableInfo,2.候选SsttableInfo对象table_ids列表包含输入内部表（internal_table_id）
         let level_table_infos: Vec<SstableInfo> = levels[level]
             .table_infos
             .iter()
@@ -91,6 +94,7 @@ impl CompactionPicker for ManualCompactionPicker {
                 continue;
             }
 
+            //文件与target_level重叠情况
             let overlap_files = self
                 .overlap_strategy
                 .check_base_level_overlap(&[table.clone()], &levels[target_level].table_infos);
@@ -109,6 +113,7 @@ impl CompactionPicker for ManualCompactionPicker {
             return None;
         }
 
+        //获取目标文件列表
         let target_input_ssts = self
             .overlap_strategy
             .check_base_level_overlap(&select_input_ssts, &levels[target_level].table_infos);
@@ -120,6 +125,7 @@ impl CompactionPicker for ManualCompactionPicker {
             return None;
         }
 
+        //选择文件列表设置为pending状态
         level_handlers[level].add_pending_task(self.compact_task_id, &select_input_ssts);
         if !target_input_ssts.is_empty() {
             level_handlers[target_level].add_pending_task(self.compact_task_id, &target_input_ssts);

@@ -34,7 +34,7 @@ pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
         https://www.cnblogs.com/gremount/p/8830707.html
     */
     let res = (Epoch::MAX - epoch).to_be();
-    println!("user_key={:?} res={:?} EPOCH_LEN={:?}", user_key, res, EPOCH_LEN);
+    //println!("user_key={:?} res={:?} EPOCH_LEN={:?}", String::from_utf8(user_key.clone()).unwrap(), res, EPOCH_LEN);
     //增加EPOCH_LEN大小
     user_key.reserve(EPOCH_LEN);
     let buf = user_key.chunk_mut();
@@ -50,7 +50,7 @@ pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
         //写指针从当前位置移动EPOCH_LEN
         user_key.advance_mut(EPOCH_LEN);
     }
-    println!("user_key={:?} res={:?} EPOCH_LEN={:?}", user_key, res, EPOCH_LEN);
+    //println!("user_key={:?} res={:?} EPOCH_LEN={:?}", user_key, res, EPOCH_LEN);
     user_key
 }
 
@@ -58,6 +58,7 @@ pub fn key_with_epoch(mut user_key: Vec<u8>, epoch: Epoch) -> Vec<u8> {
 #[inline]
 pub fn split_key_epoch(full_key: &[u8]) -> (&[u8], &[u8]) {
     //full_key=epoch+key
+    //https://vimsky.com/examples/usage/rust-std-primitive.i16.checked_sub-rt.html
     let pos = full_key
         .len()
         .checked_sub(EPOCH_LEN)

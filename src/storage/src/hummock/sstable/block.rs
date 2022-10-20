@@ -245,11 +245,13 @@ impl BlockBuilder {
             );
         }
         // Update restart point if needed and calculate diff key.
+        //
         let diff_key = if self.entry_count % self.restart_count == 0 {
             self.restart_points.push(self.buf.len() as u32);
             self.last_key = key.to_vec();
             key
         } else {
+            //计算和key差异，并返回
             bytes_diff(&self.last_key, key)
         };
 
@@ -260,6 +262,7 @@ impl BlockBuilder {
             offset: self.buf.len(),
         };
 
+        //buf存储结构:u16(overlap)+u16(diff)+u32(value)+diff_key+value
         prefix.encode(&mut self.buf);
         self.buf.put_slice(diff_key);
         self.buf.put_slice(value);
@@ -283,8 +286,10 @@ impl BlockBuilder {
     pub fn build(mut self) -> Bytes {
         assert!(self.entry_count > 0);
         for restart_point in &self.restart_points {
+            //每个restart_point小端字节写入结尾
             self.buf.put_u32_le(*restart_point);
         }
+        //写入总的restart_points
         self.buf.put_u32_le(self.restart_points.len() as u32);
         let mut buf = match self.compression_algorithm {
             CompressionAlgorithm::None => self.buf,
@@ -318,14 +323,18 @@ impl BlockBuilder {
                 writer.into_inner()
             }
         };
+        //存储压缩
         self.compression_algorithm.encode(&mut buf);
+        //加上checksum
         let checksum = xxhash64_checksum(&buf);
         buf.put_u64_le(checksum);
+        //变成不可写返回
         buf.freeze()
     }
 
     /// Approximate block len (uncompressed).
     pub fn approximate_len(&self) -> usize {
+        //预估长度 buf.len+restart_points队列每项4字节*len+1字节压缩标志+8字节checksum
         self.buf.len() + 4 * self.restart_points.len() + 4 + 1 + 4
     }
 }

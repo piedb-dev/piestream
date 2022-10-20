@@ -220,11 +220,13 @@ where
                 .map(|assigned| (assigned.key().unwrap(), assigned))
                 .collect();
 
+        //获取当前版本id
         let mut versioning_guard = self.versioning.write().await;
         versioning_guard.current_version_id = CurrentHummockVersionId::get(self.env.meta_store())
             .await?
             .unwrap_or_else(CurrentHummockVersionId::new);
 
+        //版本列表
         let mut version_ids: HashSet<_> = HummockVersion::list(self.env.meta_store())
             .await?
             .into_iter()

@@ -66,8 +66,8 @@ pub struct SelectContext {
     // be compact to `max_level`, and the `max_level` would be `base_level`. When the total
     // size of the files in  `base_level` reaches its capacity, we will place data in a higher
     // level, which equals to `base_level -= 1;`.
-    //开始所有数据放置到last level,当集群为空，L0层文件将用max_level来压缩，此时max_level将是base_level
-    //当"base_level"里文件总大小已经到达容量，我们会将数据放置到更高级别。等于base_level=1
+    //开始所有数据放置到last level。当集群为空，L0层文件将压缩到max_level，此时max_level将是base_level
+    //当"base_level"里文件总大小已经到达容量，我们会将数据放置到更高级别。等于base_level-=1
     base_level: usize,
     score_levels: Vec<(u64, usize, usize)>,
 }
@@ -102,8 +102,10 @@ impl DynamicLevelSelector {
     ) -> Box<dyn CompactionPicker> {
         if select_level == 0 {
             if target_level == 0 {
+                //同级别内合并小文件，选择足够多小文件合并
                 Box::new(TierCompactionPicker::new(task_id, self.config.clone()))
             } else {
+                //相邻级别合并，
                 Box::new(LevelCompactionPicker::new(
                     task_id,
                     target_level,
@@ -112,6 +114,7 @@ impl DynamicLevelSelector {
                 ))
             }
         } else {
+            //选择对target_level层影响最小的文件作为输入
             Box::new(MinOverlappingPicker::new(
                 task_id,
                 select_level,
@@ -125,6 +128,7 @@ impl DynamicLevelSelector {
     /// current dataset. In other words,  `level_max_bytes` is our compaction goal which shall
     /// reach. This algorithm refers to the implementation in  `</>https://github.com/facebook/rocksdb/blob/v7.2.2/db/version_set.cc#L3706</>`
     fn calculate_level_base_size(&self, levels: &[Level]) -> SelectContext {
+        //第一个不为空level
         let mut first_non_empty_level = 0;
         let mut max_level_size = 0;
         let mut ctx = SelectContext::default();
@@ -135,12 +139,14 @@ impl DynamicLevelSelector {
                 if level.total_file_size > 0 && first_non_empty_level == 0 {
                     first_non_empty_level = level.level_idx as usize;
                 }
+                //记录文件size最大的level,不包含level0
                 max_level_size = std::cmp::max(max_level_size, level.total_file_size);
             } else {
                 l0_size = level.total_file_size;
             }
         }
 
+        println!("first_non_empty_level={:?}, l0_size={:?}  max_level_size={:?}", first_non_empty_level, l0_size, max_level_size);
         //重新设置
         ctx.level_max_bytes
             .resize(self.config.max_level as usize + 1, u64::MAX);
@@ -151,19 +157,27 @@ impl DynamicLevelSelector {
             return ctx;
         }
 
+        //获取最大base_bytes_max
         let base_bytes_max = std::cmp::max(self.config.max_bytes_for_level_base, l0_size);
+        //获取最小
         let base_bytes_min = base_bytes_max / self.config.max_bytes_for_level_multiplier;
 
+        println!("base_bytes_max={:?}, base_bytes_min={:?}", base_bytes_max, base_bytes_min);
+
         let mut cur_level_size = max_level_size;
+        //第一个不为空开始到max_level
         for _ in first_non_empty_level..self.config.max_level as usize {
             cur_level_size /= self.config.max_bytes_for_level_multiplier;
+            println!("cur_level_size={:?}", cur_level_size);
         }
 
+        //计算base_level_size
         let base_level_size = if cur_level_size <= base_bytes_min {
             // Case 1. If we make target size of last level to be max_level_size,
             // target size of the first non-empty level would be smaller than
             // base_bytes_min. We set it be base_bytes_min.
             ctx.base_level = first_non_empty_level;
+            println!("ctx.base_level={:?}", ctx.base_level);
             base_bytes_min + 1
         } else {
             ctx.base_level = first_non_empty_level;
@@ -171,6 +185,7 @@ impl DynamicLevelSelector {
                 ctx.base_level -= 1;
                 cur_level_size /= self.config.max_bytes_for_level_multiplier;
             }
+            println!("base_bytes_max={:?} cur_level_size={:?}", base_bytes_max, cur_level_size);
             std::cmp::min(base_bytes_max, cur_level_size)
         };
 
@@ -181,8 +196,12 @@ impl DynamicLevelSelector {
             // assume an hourglass shape where L1+ sizes are smaller than L0. This
             // causes compaction scoring, which depends on level sizes, to favor L1+
             // at the expense of L0, which may fill up and stall.
+            //设置每个级别的level_max_bytes，必须不小于base_bytes_max
             ctx.level_max_bytes[i] = std::cmp::max(level_size, base_bytes_max);
+            println!("i={:?} level_size={:?} base_bytes_max={:?} ctx.level_max_bytes[i]={:?}",i,level_size, base_bytes_max, ctx.level_max_bytes[i]);
+            //base_level+1开始，每个层次都比下个层次size大level_multiplier倍
             level_size = (level_size as f64 * level_multiplier) as u64;
+           
         }
         ctx
     }
@@ -198,19 +217,22 @@ impl DynamicLevelSelector {
         // The bottommost level can not be input level.
         for level in &levels[..self.config.max_level as usize] {
             let level_idx = level.level_idx as usize;
-            //空闲文件数
+            //没处于pending状态的文件数
             let idle_file_count =
                 (level.table_infos.len() - handlers[level_idx].get_pending_file_count()) as u64;
-            //剩余空间
+            //不处于pending状态的文件大小
             let total_size = level.total_file_size - handlers[level_idx].get_pending_file_size();
             if total_size == 0 {
                 continue;
             }
             if level_idx == 0 {
                 // trigger intra-l0 compaction at first when the number of files is too large.
+                //计算了两个score
+                //用非pending文件数计算得分
                 let score = idle_file_count * SCORE_BASE
                     / self.config.level0_tier_compact_file_number as u64;
                 ctx.score_levels.push((score, 0, 0));
+                //非pendng文件size得分+非pending文件数得分
                 let score = 2 * total_size * SCORE_BASE / self.config.max_bytes_for_level_base
                     + idle_file_count * SCORE_BASE / self.config.level0_tigger_file_numer as u64;
                 ctx.score_levels.push((score, 0, ctx.base_level));
@@ -235,6 +257,7 @@ impl DynamicLevelSelector {
         } else if input.select_level.level_idx == 0 {
             input.target_file_size = self.config.target_file_size_base;
         } else {
+            //没地方保证？？？
             assert!(input.target_level.level_idx as usize >= base_level);
             input.target_file_size = self.config.target_file_size_base
                 << (input.target_level.level_idx as usize - base_level);
@@ -242,6 +265,7 @@ impl DynamicLevelSelector {
         if input.target_level.level_idx == 0 {
             input.compression_algorithm = self.config.compression_algorithm[0].clone();
         } else {
+            //idx一定会大于0？？？
             let idx = input.target_level.level_idx as usize - base_level + 1;
             input.compression_algorithm = self.config.compression_algorithm[idx].clone();
         }
@@ -249,6 +273,7 @@ impl DynamicLevelSelector {
 }
 
 impl LevelSelector for DynamicLevelSelector {
+    //判断是否需要compaction
     fn need_compaction(&self, levels: &[Level], level_handlers: &mut [LevelHandler]) -> bool {
         let ctx = self.get_priority_levels(levels, level_handlers);
         ctx.score_levels

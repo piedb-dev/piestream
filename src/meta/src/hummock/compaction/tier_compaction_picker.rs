@@ -43,11 +43,19 @@ impl TierCompactionPicker {
 }
 
 impl CompactionPicker for TierCompactionPicker {
+    /*
+        同级别内文件选择,原则选择多个小文件进行合并：
+        1.过滤掉pending状态文件
+        2.单个文件size大于配置里最小config.min_compaction_bytes过滤
+        3.当前文件size+已选择文件列表size大于max_compaction_bytes过滤
+        4.总文件数小于config.level0_tier_compact_file_number也不合并
+     */
     fn pick_compaction(
         &self,
         levels: &[Level],
         level_handlers: &mut [LevelHandler],
     ) -> Option<SearchResult> {
+        println!("config={:?}", self.config);
         let mut idx = 0;
         while idx < levels[0].table_infos.len() {
             let table = &levels[0].table_infos[idx];
@@ -58,7 +66,7 @@ impl CompactionPicker for TierCompactionPicker {
             }
             let mut compaction_bytes = table.file_size;
             let mut select_level_inputs = vec![table.clone()];
-            //合并小文件
+            //只合并小文件
             if table.file_size >= self.config.min_compaction_bytes {
                 // only merge small file until we support sub-level.
                 idx += 1;
@@ -90,6 +98,7 @@ impl CompactionPicker for TierCompactionPicker {
             // to make compaction tree balance, we do not need to merge a large file and a few small
             // files.
             //输入列表文件数大于触发level0合并文件数，第一个文件大于总文件bytes的一半，满足上述条件将抛弃第一个文件
+            //原则还是控制每次合并大小
             while let Some(first) = select_level_inputs.first() {
                 if first.file_size * 2 > compaction_bytes
                     && select_level_inputs.len()
@@ -193,13 +202,18 @@ impl CompactionPicker for LevelCompactionPicker {
             return None;
         }
 
+        println!("select_level_inputs={:?} target_level_inputs={:?}", select_level_inputs.len(), target_level_inputs.len());
+
+        //增加两个task
         level_handlers[select_level].add_pending_task(next_task_id, &select_level_inputs);
         level_handlers[target_level].add_pending_task(next_task_id, &target_level_inputs);
         // Here, we have known that `select_level_input` is valid
         let mut splits = Vec::with_capacity(target_level_inputs.len());
+        //构建target_level_inputs key_range列表
         splits.push(KeyRange::new(vec![], vec![]));
         if target_level_inputs.len() > 1 {
             for table in &target_level_inputs[1..] {
+                //获取新key
                 let key_before_last = FullKey::from_user_key_slice(
                     user_key(&table.key_range.as_ref().unwrap().left),
                     HummockEpoch::MAX,
@@ -208,6 +222,7 @@ impl CompactionPicker for LevelCompactionPicker {
                 splits.last_mut().unwrap().right = key_before_last.clone();
                 splits.push(KeyRange::new(key_before_last, vec![]));
             }
+            //println!("splits={:?}", splits);
         }
 
         Some(SearchResult {
@@ -275,6 +290,12 @@ impl LevelCompactionPicker {
         Some(new_add_tables)
     }
 
+    /*
+        选择文件逻辑：
+        1.select_level和target_level里pending状态不选择
+        2.select_level层被选文件和候选列表文件（select_level_ssts）之间重叠的不选择，同层不能重叠
+        3.假如target_level层和select_level_ssts有重叠的文件列表，将其存储在target_level_ssts
+     */
     fn select_input_files(
         &self,
         select_level: &Level,
@@ -282,7 +303,7 @@ impl LevelCompactionPicker {
         select_level_handler: &LevelHandler,
         target_level_handler: &LevelHandler,
     ) -> (Vec<SstableInfo>, Vec<SstableInfo>) {
-        //创建verlap_info对象，记录不参与table key范围
+        //创建verlap_info对象，过滤select_level层pending状态或相互重叠文件
         let mut info = self.overlap_strategy.create_overlap_info();
         for idx in 0..select_level.table_infos.len() {
             let select_table = select_level.table_infos[idx].clone();
@@ -291,17 +312,21 @@ impl LevelCompactionPicker {
                 info.update(&select_table);
                 continue;
             }
-            //select_level内部检查重叠
+            //select_level内部检查重叠，同一层次key_range重叠的也不参与
             if info.check_overlap(&select_table) {
+                //更新重叠文件列表
                 info.update(&select_table);
                 continue;
             }
 
+            //存储候选文件的特征属性
             let mut target_level_ssts = TargetFilesInfo::default();
             //loop内部创建overlap_info对象,记录本次参与table key范围
             let mut select_info = self.overlap_strategy.create_overlap_info();
+            //记录select层，候选文件集合大小
             let mut select_compaction_bytes = select_table.file_size;
             select_info.update(&select_table);
+            //保存候选文件
             let mut select_level_ssts = vec![select_table];
             //获取同target_level之间重叠数据文件列表,需要排除已经pending状态文件
             match self.pick_target_level_overlap_files(
@@ -311,12 +336,13 @@ impl LevelCompactionPicker {
             ) {
                 None => continue,
                 Some(tables) => {
-                    //重叠数据加入列表
+                    //target层重叠数据file加入列表
                     target_level_ssts.add_tables(tables);
                 }
             }
             // try expand more L0 files if the currenct compaction job is too small.
             for other in &select_level.table_infos[idx + 1..] {
+                //理解是找连续不间断文件，扫描到有pending或以size已经达到一次max_compaction_bytes或key重叠相交文件，就跳出内循环
                 if select_level_handler.is_pending_compact(&other.id) {
                     break;
                 }
@@ -324,18 +350,21 @@ impl LevelCompactionPicker {
                     break;
                 }
 
-                //重叠
+                //重叠，感觉同下面检查重复，可能更高效
                 if info.check_overlap(other) {
                     break;
                 }
 
-                println!("***************");
+                //增加文件
                 select_level_ssts.push(other.clone());
                 select_info.update(other);
+                //检查是否和前面文件存在重叠
+                //select_info至少包含idx信息，和当前idx信息，保证同级别不重叠
                 if select_level.table_infos[0..idx]
                     .iter()
                     .any(|table| select_info.check_overlap(table))
                 {
+                    //存在重叠抛弃
                     select_level_ssts.pop().unwrap();
                     break;
                 }
@@ -346,21 +375,29 @@ impl LevelCompactionPicker {
                     target_level_handler,
                 ) {
                     None => {
+                        //处于pending
                         select_level_ssts.pop().unwrap();
                         break;
                     }
                     Some(tables) => {
+                        /*for table in &tables{
+                            println!("table=:{:?}", table);
+                        }*/
                         // we only extend L0 files when write-amplification does not increase.
+                        //计算增量文件大小
                         let inc_compaction_size =
                             target_level_ssts.calc_inc_compaction_size(&tables);
+                        //select_compaction_bytes已经大于设定，以及数据增长比例超过之前
                         if select_compaction_bytes > self.config.min_compaction_bytes
                             && (target_level_ssts.compaction_bytes + inc_compaction_size)
                                 / (select_compaction_bytes + other.file_size)
                                 > target_level_ssts.compaction_bytes / select_compaction_bytes
                         {
+                            //数据到达要求抛弃other
                             select_level_ssts.pop().unwrap();
                             break;
                         }
+                        //加入候选列表
                         target_level_ssts.add_tables(tables);
                     }
                 }
@@ -371,9 +408,11 @@ impl LevelCompactionPicker {
             if select_compaction_bytes < self.config.min_compaction_bytes
                 && select_compaction_bytes * 4 < target_level_ssts.compaction_bytes
             {
+                //select与target层数据差4倍还多，选择文件size大小
                 continue;
             }
 
+            //对target_level_ssts按key_range排序
             target_level_ssts.tables.sort_by(|a, b| {
                 let r1 = a.key_range.as_ref().unwrap();
                 let r2 = b.key_range.as_ref().unwrap();
@@ -429,7 +468,7 @@ pub mod tests {
     #[test]
     fn test_compact_l0_to_l1() {
         let picker = create_compaction_picker_for_test();
-        //两个级别
+        //两个级别，level[0]表4，5有重叠, level[1]里表1，2分别和level[0]里5，4有重叠
         let mut levels = vec![
             Level {
                 level_idx: 0,
@@ -457,8 +496,10 @@ pub mod tests {
         let ret = picker
             .pick_compaction(&levels, &mut levels_handler)
             .unwrap();
+        //level[0]和level[1],重复分别都有2个文件满足，
         assert_eq!(levels_handler[0].get_pending_file_count(), 2);
         assert_eq!(levels_handler[1].get_pending_file_count(), 2);
+        //level[1]重复文件编号
         assert_eq!(ret.target_level.table_infos[0].id, 2);
         assert_eq!(ret.target_level.table_infos[1].id, 1);
 
@@ -474,13 +515,20 @@ pub mod tests {
         let ret = picker
             .pick_compaction(&levels, &mut levels_handler)
             .unwrap();
+        println!("1****************************************");
+        //picker对象levels_handler累计批次文件,本次6和0重复，count都等于3
         assert_eq!(levels_handler[0].get_pending_file_count(), 3);
         assert_eq!(levels_handler[1].get_pending_file_count(), 3);
+        //ret.target_level是本次pick_compaction新增文件
         assert_eq!(ret.target_level.table_infos[0].id, 0);
         assert_eq!(ret.select_level.table_infos[0].id, 6);
+        println!("ret.target_level.table_infos={:?}", ret.target_level.table_infos);
+        println!("ret.select_level.table_infos={:?}", ret.select_level.table_infos);
+        println!("2****************************************");
 
         // the first idle table in L0 is table 6 and its confict with the last job so we can not
         // pick table 7.
+        //重新构建了picker
         let picker = LevelCompactionPicker::new(
             1,
             1,
@@ -491,12 +539,14 @@ pub mod tests {
             .table_infos
             .push(generate_table(8, 1, 199, 233, 3));
         let ret = picker.pick_compaction(&levels, &mut levels_handler);
+        //8和7重叠，所以没有新增
         assert!(ret.is_none());
 
         // compact L0 to L0
         let config = CompactionConfigBuilder::new()
             .level0_tier_compact_file_number(2)
             .build();
+        //同层次里选择
         let picker = TierCompactionPicker::new(2, Arc::new(config));
         levels[0]
             .table_infos
@@ -508,8 +558,10 @@ pub mod tests {
         assert_eq!(ret.select_level.table_infos[1].id, 8);
         assert_eq!(ret.select_level.table_infos[2].id, 9);
         assert!(ret.target_level.table_infos.is_empty());
+        //删除任务1对应文件,任务1对应文件为空
         levels_handler[0].remove_task(1);
         levels[0].table_infos.retain(|table| table.id < 7);
+        println!("levels[0].table_infos={:?}", levels[0].table_infos);
         levels[0]
             .table_infos
             .push(generate_table(10, 1, 100, 200, 3));
@@ -523,6 +575,11 @@ pub mod tests {
             .pick_compaction(&levels, &mut levels_handler)
             .unwrap();
         assert_eq!(ret.select_level.table_infos.len(), 3);
+        
+        for  table in &ret.select_level.table_infos{
+            println!("ret.select_level.table_infos={:?}", table);
+        }
+
     }
 
     #[test]
@@ -568,9 +625,13 @@ pub mod tests {
         let ret = picker
             .pick_compaction(&levels, &mut levels_handler)
             .unwrap();
-
+        //level[0],两个表范围合并后是[100-500],同level[1]表4，5重叠 
+        /*
+            程序执行逻辑
+            1.l0的t1 和l1的t4 重叠
+            2.l0的t2同级别不重复，于是[t1,t2]将key_range扩展到[100,500],同l1级别t4,t5重叠，步骤1，2 l1重复排重[t4,t5]
+         */
         assert_eq!(levels_handler[0].get_pending_file_count(), 2);
-
         assert_eq!(levels_handler[1].get_pending_file_count(), 2);
 
         assert_eq!(
@@ -628,6 +689,9 @@ pub mod tests {
             .table_infos
             .push(generate_table(3, 1, 250, 300, 3));
 
+        /*
+            l0的t1,t2将key_range扩展到[100-500], t3和此相交，忽略了
+         */
         assert!(picker
             .pick_compaction(&levels, &mut levels_handler)
             .is_none());
@@ -679,6 +743,7 @@ pub mod tests {
         // [3,4] would be overlap with file [0]
         assert!(ret.target_level.table_infos.is_empty());
         assert_eq!(ret.target_level.level_idx, 1);
+        //第二次pick l0里t3，t4，获取key_range[100,500],同之前记录计算发现重叠，所以t4被忽略
         assert_eq!(
             ret.select_level
                 .table_infos
@@ -721,6 +786,7 @@ pub mod tests {
         assert_eq!(levels_handler[0].get_pending_file_count(), 2);
         assert_eq!(levels_handler[1].get_pending_file_count(), 1);
 
+        //info key_range会[100,250]所以被忽略
         levels[0]
             .table_infos
             .push(generate_table(4, 1, 170, 180, 3));

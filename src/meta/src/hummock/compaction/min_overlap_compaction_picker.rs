@@ -115,6 +115,8 @@ impl MinOverlappingPicker {
 }
 
 impl CompactionPicker for MinOverlappingPicker {
+    //1. 遍历寻找对target_level文件列表影响最小的文件（影响的target_level文件size求和最小）
+    //2. 不考虑同级别是否重叠
     fn pick_compaction(
         &self,
         levels: &[Level],
@@ -128,6 +130,7 @@ impl CompactionPicker for MinOverlappingPicker {
             }
             let mut total_file_size = 0;
             let mut pending_campct = false;
+            //check当前文件和target_level文件重叠情况，返回target_level重叠的文件
             let overlap_files = self
                 .overlap_strategy
                 .check_base_level_overlap(&[table.clone()], &levels[target_level].table_infos);
@@ -141,13 +144,18 @@ impl CompactionPicker for MinOverlappingPicker {
             if pending_campct {
                 continue;
             }
+            println!("total_file_size={:?} table_id={:?} table.file_size={:?}", total_file_size, table.id, table.file_size);
+            //TODO:放大100意义,担心小于1？
+            //同target_level没重叠的total_file_size=0，优先级别最高
             scores.push((total_file_size * 100 / (table.file_size + 1), table.clone()));
         }
         if scores.is_empty() {
             return None;
         }
+        //获取影响size最小文件
         let (_, table) = scores.iter().min_by(|x, y| x.0.cmp(&y.0)).unwrap();
         let mut select_input_ssts = vec![table.clone()];
+        //重新获取target_level重叠文件列表
         let target_input_ssts = self
             .overlap_strategy
             .check_base_level_overlap(&select_input_ssts, &levels[target_level].table_infos);
@@ -238,6 +246,7 @@ pub mod tests {
         assert_eq!(ret.select_level.level_idx, 1);
         assert_eq!(ret.target_level.level_idx, 2);
         assert_eq!(ret.select_level.table_infos.len(), 1);
+        //文件2和target_level都不重叠
         assert_eq!(ret.select_level.table_infos[0].id, 2);
         assert_eq!(ret.target_level.table_infos.len(), 0);
 
@@ -248,6 +257,7 @@ pub mod tests {
         assert_eq!(ret.target_level.level_idx, 2);
         assert_eq!(ret.select_level.table_infos.len(), 1);
         assert_eq!(ret.target_level.table_infos.len(), 1);
+        //0号文件和4号文件重叠
         assert_eq!(ret.select_level.table_infos[0].id, 0);
         assert_eq!(ret.target_level.table_infos[0].id, 4);
 
@@ -258,6 +268,7 @@ pub mod tests {
         assert_eq!(ret.target_level.level_idx, 2);
         assert_eq!(ret.select_level.table_infos.len(), 1);
         assert_eq!(ret.target_level.table_infos.len(), 2);
+        //1号文件和5，6号文件重叠
         assert_eq!(ret.select_level.table_infos[0].id, 1);
         assert_eq!(ret.target_level.table_infos[0].id, 5);
         assert_eq!(ret.target_level.table_infos[1].id, 6);

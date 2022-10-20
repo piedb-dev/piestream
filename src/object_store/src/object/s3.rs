@@ -59,6 +59,7 @@ impl ObjectStore for S3ObjectStore {
 
         //变量命名可阅读性真差
         let req = if let Some(range) = range {
+            //设置读取大小
             req.range(range)
         } else {
             req

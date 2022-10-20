@@ -57,6 +57,7 @@ where
     }
 
     /// Encodes the object
+    /// 第一个字节是增加or删除的标志位
     pub fn encode(&self, buffer: &mut impl BufMut) -> VirtualNode {
         match self {
             HummockValue::Put(meta, val) => {

@@ -113,6 +113,7 @@ impl SstableStore {
 
     async fn put_sst_data(&self, sst_id: HummockSSTableId, data: Bytes) -> HummockResult<()> {
         let data_path = self.get_sst_data_path(sst_id);
+        //数据存储到云端
         self.store
             .upload(&data_path, data)
             .await
@@ -241,6 +242,7 @@ impl SstableStore {
                     let meta = match meta_data {
                         Some(data) => data,
                         None => {
+                            //远端读取meta
                             let path = self.get_sst_meta_path(sst_id);
                             let buf = self
                                 .store

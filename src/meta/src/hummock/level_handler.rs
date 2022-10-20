@@ -65,7 +65,10 @@ impl LevelHandler {
             total_file_size += sst.file_size;
             table_ids.push(sst.id);
         }
-
+        /*println!("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+        println!("self.compacting_files={:?} ssts={:?}", self.compacting_files.len(), ssts.len());
+        println!("self.compacting_files={:?}", self.compacting_files);
+        println!("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");*/
         //pending_tasks列表中设置task_id对应的total_file_size,table_ids
         self.pending_tasks
             .push((task_id, total_file_size, table_ids));

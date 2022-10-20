@@ -42,6 +42,7 @@ pub struct CompactStatus {
     pub(crate) level_handlers: Vec<LevelHandler>,
     // TODO: remove this `CompactionConfig`, which is a duplicate of that in `CompactionGroup`.
     pub compaction_config: CompactionConfig,
+    //每个level文件选择器
     compaction_selector: Arc<dyn LevelSelector>,
 }
 
@@ -250,6 +251,7 @@ impl CompactStatus {
 
 #[derive(Clone, Debug)]
 pub struct ManualCompactionOption {
+    //指定范围，内部表，级别
     pub key_range: KeyRange,
     pub internal_table_id: HashSet<u32>,
     pub level: usize,

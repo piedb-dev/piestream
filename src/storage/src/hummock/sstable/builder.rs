@@ -106,11 +106,13 @@ impl SSTableBuilder {
         // Rotate block builder if the previous one has been built.
         if self.block_builder.is_none() {
             self.last_full_key.clear();
+            //构建BlockBuilder
             self.block_builder = Some(BlockBuilder::new(BlockBuilderOptions {
                 capacity: self.options.block_capacity,
                 restart_interval: self.options.restart_interval,
                 compression_algorithm: self.options.compression_algorithm,
             }));
+            //存储meta
             self.block_metas.push(BlockMeta {
                 offset: self.buf.len() as u32,
                 len: 0,
@@ -127,13 +129,15 @@ impl SSTableBuilder {
             self.table_ids.insert(table_id);
         }
         let raw_value = raw_value.freeze();
-
+        //增加key-value
         block_builder.add(full_key, &raw_value);
 
         let user_key = user_key(full_key);
+        //计算指纹
         self.user_key_hashes.push(farmhash::fingerprint32(user_key));
 
         if self.last_full_key.is_empty() {
+            //TODO(liqiu) 有序，所以第一个一定最小？？？
             self.block_metas.last_mut().unwrap().smallest_key = full_key.to_vec();
         }
         self.last_full_key = Bytes::copy_from_slice(full_key);
@@ -157,9 +161,11 @@ impl SSTableBuilder {
     /// | Block 0 | ... | Block N-1 | N (4B) |
     /// ```
     pub fn finish(mut self) -> (u64, Bytes, SstableMeta, Vec<u32>) {
+        //获取第一个block的smallest_key
         let smallest_key = self.block_metas[0].smallest_key.clone();
         let largest_key = self.last_full_key.to_vec();
         self.build_block();
+        //存储快长度
         self.buf.put_u32_le(self.block_metas.len() as u32);
 
         let meta = SstableMeta {
@@ -198,8 +204,11 @@ impl SSTableBuilder {
             return;
         }
         let mut block_meta = self.block_metas.last_mut().unwrap();
+        //build最后一个block
         let block = self.block_builder.take().unwrap().build();
+        //block内容写入
         self.buf.put_slice(&block);
+        //block长度
         block_meta.len = self.buf.len() as u32 - block_meta.offset;
     }
 
