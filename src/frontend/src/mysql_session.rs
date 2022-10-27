@@ -142,10 +142,10 @@ impl MySQLApi
                 }
                 let mut rw = results.start(&cols)?;
                 for value in values {
-                    let v1 = value[0].as_ref().unwrap();
-                    let v2 = value[1].as_ref().unwrap();
-                    rw.write_col(v1)?;
-                    rw.write_col(v2)?;
+                    for point in value.values(){
+                        let v = point.as_ref().unwrap();
+                        rw.write_col(v)?;
+                    }
                     rw.end_row()?;
                 };
                 rw.finish()
