@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,7 +70,6 @@ impl ExecutorBuilder for LookupExecutorBuilder {
                 .config
                 .developer
                 .unsafe_stream_join_cache_size,
-            chunk_size: params.env.config().developer.stream_chunk_size,
         })))
     }
 }

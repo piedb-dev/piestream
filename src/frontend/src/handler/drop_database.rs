@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,10 @@ pub async fn handle_drop_database(
                 return if if_exists {
                     Ok(PgResponse::empty_result_with_notice(
                         StatementType::DROP_DATABASE,
-                        format!("database \"{}\" does not exist, skipping", database_name),
+                        format!(
+                            "NOTICE: database {} does not exist, skipping",
+                            database_name
+                        ),
                     ))
                 } else {
                     Err(err)
@@ -78,9 +81,15 @@ mod tests {
 
         frontend.run_sql("CREATE DATABASE database").await.unwrap();
 
-        frontend.run_sql("CREATE SCHEMA schema").await.unwrap();
+        frontend
+            .run_sql("CREATE SCHEMA database.schema")
+            .await
+            .unwrap();
 
-        frontend.run_sql("DROP SCHEMA public").await.unwrap();
+        frontend
+            .run_sql("DROP SCHEMA database.public")
+            .await
+            .unwrap();
 
         frontend.run_sql("CREATE USER user WITH NOSUPERUSER NOCREATEDB PASSWORD 'md5827ccb0eea8a706c4c34a16891f84e7b'").await.unwrap();
         let user_id = {

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ use itertools::Itertools;
 use piestream_common::array::DataChunk;
 use piestream_common::catalog::{Field, Schema};
 use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 use piestream_expr::expr::{build_from_prost, BoxedExpression};
 use piestream_pb::batch_plan::plan_node::NodeBody;
 
@@ -128,7 +129,7 @@ impl BoxedExecutorBuilder for ValuesExecutor {
             rows: rows.into_iter(),
             schema: Schema { fields },
             identity: source.plan_node().get_identity().clone(),
-            chunk_size: source.context.get_config().developer.batch_chunk_size,
+            chunk_size: DEFAULT_CHUNK_BUFFER_SIZE,
         }))
     }
 }
@@ -146,8 +147,6 @@ mod tests {
     use piestream_expr::expr::{BoxedExpression, LiteralExpression};
 
     use crate::executor::{Executor, ValuesExecutor};
-
-    const CHUNK_SIZE: usize = 1024;
 
     #[tokio::test]
     async fn test_values_executor() {
@@ -183,7 +182,7 @@ mod tests {
             rows: vec![exprs].into_iter(),
             schema: Schema { fields },
             identity: "ValuesExecutor2".to_string(),
-            chunk_size: CHUNK_SIZE,
+            chunk_size: 1024,
         });
 
         let fields = &values_executor.schema().fields;
@@ -273,7 +272,7 @@ mod tests {
             vec![vec![]],
             Schema::default(),
             "ValuesExecutor2".to_string(),
-            CHUNK_SIZE,
+            1024,
         ));
         let mut stream = values_executor.execute();
 

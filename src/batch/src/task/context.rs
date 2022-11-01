@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
 
 use piestream_common::catalog::SysCatalogReaderRef;
 use piestream_common::config::BatchConfig;
+use piestream_common::error::ErrorCode::InternalError;
 use piestream_common::error::Result;
 use piestream_common::util::addr::{is_local_address, HostAddr};
 use piestream_rpc_client::ComputeClientPoolRef;
-use piestream_source::TableSourceManagerRef;
+use piestream_source::SourceManagerRef;
 use piestream_storage::StateStoreImpl;
 
 use super::TaskId;
@@ -34,14 +35,32 @@ pub trait BatchTaskContext: Clone + Send + Sync + 'static {
     fn get_task_output(&self, task_output_id: TaskOutputId) -> Result<TaskOutput>;
 
     /// Get system catalog reader, used to read system table.
-    fn catalog_reader(&self) -> SysCatalogReaderRef;
+    fn catalog_reader_ref(&self) -> Option<SysCatalogReaderRef>;
+
+    fn try_get_catalog_reader_ref(&self) -> Result<SysCatalogReaderRef> {
+        Ok(self
+            .catalog_reader_ref()
+            .ok_or_else(|| InternalError("Sys catalog reader not found".to_string()))?)
+    }
 
     /// Whether `peer_addr` is in same as current task.
     fn is_local_addr(&self, peer_addr: &HostAddr) -> bool;
 
-    fn source_manager(&self) -> TableSourceManagerRef;
+    fn source_manager_ref(&self) -> Option<SourceManagerRef>;
 
-    fn state_store(&self) -> StateStoreImpl;
+    fn try_get_source_manager_ref(&self) -> Result<SourceManagerRef> {
+        Ok(self
+            .source_manager_ref()
+            .ok_or_else(|| InternalError("Source manager not found".to_string()))?)
+    }
+
+    fn state_store(&self) -> Option<StateStoreImpl>;
+
+    fn try_get_state_store(&self) -> Result<StateStoreImpl> {
+        Ok(self
+            .state_store()
+            .ok_or_else(|| InternalError("State store not found".to_string()))?)
+    }
 
     /// Get task level metrics.
     /// None indicates that not collect task metrics.
@@ -59,7 +78,7 @@ pub trait BatchTaskContext: Clone + Send + Sync + 'static {
 #[derive(Clone)]
 pub struct ComputeNodeContext {
     env: BatchEnvironment,
-    // None: Local mode don't record metrics.
+    // None: Local mode don't record mertics.
     task_metrics: Option<BatchTaskMetricsWithTaskLabels>,
 }
 
@@ -70,20 +89,20 @@ impl BatchTaskContext for ComputeNodeContext {
             .take_output(&task_output_id.to_prost())
     }
 
-    fn catalog_reader(&self) -> SysCatalogReaderRef {
-        unimplemented!("not supported in distributed mode")
+    fn catalog_reader_ref(&self) -> Option<SysCatalogReaderRef> {
+        None
     }
 
     fn is_local_addr(&self, peer_addr: &HostAddr) -> bool {
         is_local_address(self.env.server_address(), peer_addr)
     }
 
-    fn source_manager(&self) -> TableSourceManagerRef {
-        self.env.source_manager_ref()
+    fn source_manager_ref(&self) -> Option<SourceManagerRef> {
+        Some(self.env.source_manager_ref())
     }
 
-    fn state_store(&self) -> StateStoreImpl {
-        self.env.state_store()
+    fn state_store(&self) -> Option<StateStoreImpl> {
+        Some(self.env.state_store())
     }
 
     fn task_metrics(&self) -> Option<BatchTaskMetricsWithTaskLabels> {

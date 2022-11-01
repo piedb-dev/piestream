@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,7 +104,6 @@ impl Default for FrontendOpts {
 use std::future::Future;
 use std::pin::Pin;
 
-use pgwire::pg_protocol::TlsConfig;
 use piestream_common::config::ServerConfig;
 
 /// Start frontend
@@ -113,9 +112,7 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     // slow compile in release mode.
     Box::pin(async move {
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        pg_serve(&opts.host, session_mgr, Some(TlsConfig::new_default()))
-            .await
-            .unwrap();
+        pg_serve(&opts.host, session_mgr).await.unwrap();
     })
 }
 

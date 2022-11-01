@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ use piestream_common::buffer::Bitmap;
 use piestream_common::types::{Datum, Scalar, ScalarRef};
 use piestream_expr::ExprError;
 
-use super::{StreamingAggImpl, StreamingAggInput, StreamingAggOutput};
+use super::{StreamingAggFunction, StreamingAggState, StreamingAggStateImpl};
 use crate::executor::error::StreamExecutorResult;
 
 /// A trait over all fold functions.
@@ -237,7 +237,7 @@ where
     }
 }
 
-impl<R, I, S> StreamingAggInput<I> for StreamingFoldAgg<R, I, S>
+impl<R, I, S> StreamingAggState<I> for StreamingFoldAgg<R, I, S>
 where
     R: Array,
     I: Array,
@@ -283,7 +283,7 @@ where
     }
 }
 
-impl<R, I, S> StreamingAggOutput<R::Builder> for StreamingFoldAgg<R, I, S>
+impl<R, I, S> StreamingAggFunction<R::Builder> for StreamingFoldAgg<R, I, S>
 where
     R: Array,
     I: Array,
@@ -338,7 +338,7 @@ where
 
 macro_rules! impl_fold_agg {
     ($result:ty, $result_variant:ident, $input:ty) => {
-        impl<S> StreamingAggImpl for StreamingFoldAgg<$result, $input, S>
+        impl<S> StreamingAggStateImpl for StreamingFoldAgg<$result, $input, S>
         where
             S: StreamingFoldable<<$result as Array>::OwnedItem, <$input as Array>::OwnedItem>,
         {
@@ -417,9 +417,10 @@ mod tests {
     type TestStreamingMaxAgg<R> = StreamingFoldAgg<R, R, Maximizable<<R as Array>::OwnedItem>>;
 
     #[test]
-    /// This test uses `Box<dyn StreamingAggImpl>` to test an aggregator.
+    /// This test uses `Box<dyn StreamingAggStateImpl>` to test a state.
     fn test_primitive_sum_boxed() {
-        let mut agg: Box<dyn StreamingAggImpl> = Box::<TestStreamingSumAgg<I64Array>>::default();
+        let mut agg: Box<dyn StreamingAggStateImpl> =
+            Box::new(TestStreamingSumAgg::<I64Array>::default());
         agg.apply_batch(
             &[Op::Insert, Op::Insert, Op::Insert, Op::Delete],
             None,

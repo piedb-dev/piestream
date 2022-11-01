@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 use piestream_common::array::{Op, Row};
-use piestream_common::row::CompactedRow;
 use piestream_common::util::ordered::OrderedRow;
 use piestream_storage::StateStore;
 
@@ -39,17 +38,17 @@ const TOPN_CACHE_HIGH_CAPACITY_FACTOR: usize = 2;
 /// since they have different semantics.
 pub struct TopNCache<const WITH_TIES: bool> {
     /// Rows in the range `[0, offset)`
-    pub low: BTreeMap<OrderedRow, CompactedRow>,
+    pub low: BTreeMap<OrderedRow, Row>,
     /// Rows in the range `[offset, offset+limit)`
     ///
     /// When `WITH_TIES` is true, it also stores ties for the last element,
     /// and thus the size can be larger than `limit`.
-    pub middle: BTreeMap<OrderedRow, CompactedRow>,
+    pub middle: BTreeMap<OrderedRow, Row>,
     /// Rows in the range `[offset+limit, offset+limit+high_capacity)`
     ///
     /// When `WITH_TIES` is true, it also stores ties for the last element,
     /// and thus the size can be larger than `high_capacity`.
-    pub high: BTreeMap<OrderedRow, CompactedRow>,
+    pub high: BTreeMap<OrderedRow, Row>,
     pub high_capacity: usize,
     pub offset: usize,
     /// Assumption: `limit != 0`
@@ -73,7 +72,7 @@ pub trait TopNCacheTrait {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     );
 
     /// Delete input row from the cache.
@@ -92,7 +91,7 @@ pub trait TopNCacheTrait {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     ) -> StreamExecutorResult<()>;
 }
 
@@ -113,14 +112,6 @@ impl<const WITH_TIES: bool> TopNCache<WITH_TIES> {
             limit,
             order_by_len,
         }
-    }
-
-    /// Clear the cache. After this, the cache must be `init` again before use.
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.low.clear();
-        self.middle.clear();
-        self.high.clear();
     }
 
     pub fn is_low_cache_full(&self) -> bool {
@@ -167,23 +158,22 @@ impl TopNCacheTrait for TopNCache<false> {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     ) {
         if !self.is_low_cache_full() {
-            self.low.insert(ordered_pk_row, (&row).into());
+            self.low.insert(ordered_pk_row, row);
             return;
         }
-        // let data_types = self.schema
-        // let row_deserializer = RowDeserializer::new();
+
         let elem_to_compare_with_middle =
             if let Some(low_last) = self.low.last_entry()
                 && ordered_pk_row <= *low_last.key() {
                 // Take the last element of `cache.low` and insert input row to it.
                 let low_last = low_last.remove_entry();
-                self.low.insert(ordered_pk_row, (&row).into());
+                self.low.insert(ordered_pk_row, row);
                 low_last
             } else {
-                (ordered_pk_row, (&row).into())
+                (ordered_pk_row, row)
             };
 
         if !self.is_middle_cache_full() {
@@ -235,7 +225,7 @@ impl TopNCacheTrait for TopNCache<false> {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     ) -> StreamExecutorResult<()> {
         if self.is_middle_cache_full() && ordered_pk_row > *self.middle.last_key_value().unwrap().0
         {
@@ -259,7 +249,7 @@ impl TopNCacheTrait for TopNCache<false> {
 
             self.middle.remove(&ordered_pk_row);
             res_ops.push(Op::Delete);
-            res_rows.push((&row).into());
+            res_rows.push(row.clone());
 
             // Bring one element, if any, from high cache to middle cache
             if !self.high.is_empty() {
@@ -312,7 +302,7 @@ impl TopNCacheTrait for TopNCache<true> {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     ) {
         assert!(self.low.is_empty());
 
@@ -321,10 +311,10 @@ impl TopNCacheTrait for TopNCache<true> {
         if !self.is_middle_cache_full() {
             self.middle.insert(
                 elem_to_compare_with_middle.0,
-                (&elem_to_compare_with_middle.1).into(),
+                elem_to_compare_with_middle.1.clone(),
             );
             res_ops.push(Op::Insert);
-            res_rows.push((&elem_to_compare_with_middle.1).into());
+            res_rows.push(elem_to_compare_with_middle.1);
             return;
         }
 
@@ -355,37 +345,29 @@ impl TopNCacheTrait for TopNCache<true> {
                 }
 
                 res_ops.push(Op::Insert);
-                res_rows.push((&elem_to_compare_with_middle.1).into());
-                self.middle.insert(
-                    elem_to_compare_with_middle.0,
-                    (&elem_to_compare_with_middle.1).into(),
-                );
+                res_rows.push(elem_to_compare_with_middle.1.clone());
+                self.middle
+                    .insert(elem_to_compare_with_middle.0, elem_to_compare_with_middle.1);
             }
             Ordering::Equal => {
                 // The row is in middle and is a tie with the last row.
                 res_ops.push(Op::Insert);
-                res_rows.push((&elem_to_compare_with_middle.1).into());
-                self.middle.insert(
-                    elem_to_compare_with_middle.0,
-                    (&elem_to_compare_with_middle.1).into(),
-                );
+                res_rows.push(elem_to_compare_with_middle.1.clone());
+                self.middle
+                    .insert(elem_to_compare_with_middle.0, elem_to_compare_with_middle.1);
             }
             Ordering::Greater => {
                 // The row is in high.
                 let elem_to_compare_with_high = elem_to_compare_with_middle;
                 if !self.is_high_cache_full() {
-                    self.high.insert(
-                        elem_to_compare_with_high.0,
-                        (&elem_to_compare_with_high.1).into(),
-                    );
+                    self.high
+                        .insert(elem_to_compare_with_high.0, elem_to_compare_with_high.1);
                 } else {
                     let high_last = self.high.last_entry().unwrap();
                     if elem_to_compare_with_high.0 <= *high_last.key() {
                         high_last.remove_entry();
-                        self.high.insert(
-                            elem_to_compare_with_high.0,
-                            (&elem_to_compare_with_high.1).into(),
-                        );
+                        self.high
+                            .insert(elem_to_compare_with_high.0, elem_to_compare_with_high.1);
                     }
                 }
             }
@@ -400,7 +382,7 @@ impl TopNCacheTrait for TopNCache<true> {
         ordered_pk_row: OrderedRow,
         row: Row,
         res_ops: &mut Vec<Op>,
-        res_rows: &mut Vec<CompactedRow>,
+        res_rows: &mut Vec<Row>,
     ) -> StreamExecutorResult<()> {
         // Since low cache is always empty for WITH_TIES, this unwrap is safe.
 
@@ -415,7 +397,7 @@ impl TopNCacheTrait for TopNCache<true> {
             // The row is in middle
             self.middle.remove(&ordered_pk_row);
             res_ops.push(Op::Delete);
-            res_rows.push((&row).into());
+            res_rows.push(row.clone());
             if self.middle.len() >= self.limit {
                 // This can happen when there are ties.
                 return Ok(());

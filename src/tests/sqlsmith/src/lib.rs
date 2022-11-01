@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ use rand::Rng;
 use piestream_common::types::DataTypeName;
 use piestream_frontend::bind_data_type;
 use piestream_sqlparser::ast::{
-    BinaryOperator, ColumnDef, Cte, Distinct, Expr, Ident, Join, JoinConstraint, JoinOperator,
-    ObjectName, OrderByExpr, Query, Select, SelectItem, SetExpr, Statement, TableWithJoins, With,
+    BinaryOperator, ColumnDef, Cte, Expr, Ident, Join, JoinConstraint, JoinOperator, ObjectName,
+    OrderByExpr, Query, Select, SelectItem, SetExpr, Statement, TableWithJoins, With,
 };
 use piestream_sqlparser::parser::Parser;
 
@@ -292,7 +292,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let having = self.gen_having(!group_by.is_empty());
         let (select_list, schema) = self.gen_select_list();
         let select = Select {
-            distinct: Distinct::All,
+            distinct: false,
             projection: select_list,
             from,
             lateral_views: vec![],

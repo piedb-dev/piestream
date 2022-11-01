@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@ use piestream_common::hash::{HashKey, HashKeyDispatcher};
 use piestream_common::types::DataType;
 use piestream_storage::table::streaming_table::state_table::StateTable;
 
-use super::agg_common::{build_agg_call_from_prost, build_agg_state_storages_from_proto};
+use super::agg_common::{build_agg_call_from_prost, build_agg_state_tables_from_proto};
 use super::*;
 use crate::cache::LruManagerRef;
-use crate::executor::aggregation::{AggCall, AggStateStorage};
+use crate::executor::aggregation::{AggCall, AggStateTable};
 use crate::executor::monitor::StreamingMetrics;
 use crate::executor::{ActorContextRef, HashAggExecutor, PkIndices};
 
@@ -31,7 +31,7 @@ pub struct HashAggExecutorDispatcherArgs<S: StateStore> {
     ctx: ActorContextRef,
     input: BoxedExecutor,
     agg_calls: Vec<AggCall>,
-    storages: Vec<AggStateStorage<S>>,
+    agg_state_tables: Vec<Option<AggStateTable<S>>>,
     result_table: StateTable<S>,
     group_key_indices: Vec<usize>,
     group_key_types: Vec<DataType>,
@@ -41,7 +41,6 @@ pub struct HashAggExecutorDispatcherArgs<S: StateStore> {
     executor_id: u64,
     lru_manager: Option<LruManagerRef>,
     metrics: Arc<StreamingMetrics>,
-    chunk_size: usize,
 }
 
 impl<S: StateStore> HashKeyDispatcher for HashAggExecutorDispatcherArgs<S> {
@@ -52,7 +51,7 @@ impl<S: StateStore> HashKeyDispatcher for HashAggExecutorDispatcherArgs<S> {
             self.ctx,
             self.input,
             self.agg_calls,
-            self.storages,
+            self.agg_state_tables,
             self.result_table,
             self.pk_indices,
             self.executor_id,
@@ -61,7 +60,6 @@ impl<S: StateStore> HashKeyDispatcher for HashAggExecutorDispatcherArgs<S> {
             self.extreme_cache_size,
             self.lru_manager,
             self.metrics,
-            self.chunk_size,
         )?
         .boxed())
     }
@@ -101,7 +99,7 @@ impl ExecutorBuilder for HashAggExecutorBuilder {
         let vnodes = Some(Arc::new(
             params.vnode_bitmap.expect("vnodes not set for hash agg"),
         ));
-        let storages = build_agg_state_storages_from_proto(
+        let agg_state_tables = build_agg_state_tables_from_proto(
             node.get_agg_call_states(),
             store.clone(),
             vnodes.clone(),
@@ -113,7 +111,7 @@ impl ExecutorBuilder for HashAggExecutorBuilder {
             ctx: params.actor_context,
             input,
             agg_calls,
-            storages,
+            agg_state_tables,
             result_table,
             group_key_indices,
             group_key_types,
@@ -123,7 +121,6 @@ impl ExecutorBuilder for HashAggExecutorBuilder {
             executor_id: params.executor_id,
             lru_manager: stream.context.lru_manager.clone(),
             metrics: params.executor_stats,
-            chunk_size: params.env.config().developer.stream_chunk_size,
         };
         args.dispatch()
     }

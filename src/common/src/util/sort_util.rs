@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ use crate::array::{Array, ArrayImpl, DataChunk, Row};
 use crate::error::ErrorCode::InternalError;
 use crate::error::Result;
 use crate::types::ScalarImpl;
+
+pub const K_PROCESSING_WINDOW_SIZE: usize = 1024;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum OrderType {

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -438,10 +438,7 @@ impl ToStream for LogicalProject {
         // Add missing columns of input_pk into the select list.
         let input_pk = input.logical_pk();
         let i2o = Self::i2o_col_mapping_inner(input.schema().len(), proj.exprs());
-        let col_need_to_add = input_pk
-            .iter()
-            .cloned()
-            .filter(|i| i2o.try_map(*i).is_none());
+        let col_need_to_add = input_pk.iter().cloned().filter(|i| i2o.try_map(*i) == None);
         let input_schema = input.schema();
         let exprs =
             proj.exprs()

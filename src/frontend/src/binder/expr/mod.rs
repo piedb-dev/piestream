@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ use piestream_common::catalog::{ColumnDesc, ColumnId};
 use piestream_common::error::{ErrorCode, Result};
 use piestream_common::types::DataType;
 use piestream_sqlparser::ast::{
-    BinaryOperator, DataType as AstDataType, Expr, Function, ObjectName, Query, StructField,
-    TrimWhereField, UnaryOperator,
+    BinaryOperator, DataType as AstDataType, DateTimeField, Expr, Function, ObjectName, Query,
+    StructField, TrimWhereField, UnaryOperator,
 };
 
 use crate::binder::Binder;
@@ -125,12 +125,12 @@ impl Binder {
         }
     }
 
-    pub(super) fn bind_extract(&mut self, field: String, expr: Expr) -> Result<ExprImpl> {
+    pub(super) fn bind_extract(&mut self, field: DateTimeField, expr: Expr) -> Result<ExprImpl> {
         let arg = self.bind_expr(expr)?;
         let arg_type = arg.return_type();
         Ok(FunctionCall::new(
             ExprType::Extract,
-            vec![self.bind_string(field.clone())?.into(), arg],
+            vec![self.bind_string(field.to_string())?.into(), arg],
         )
         .map_err(|_| {
             ErrorCode::NotImplemented(

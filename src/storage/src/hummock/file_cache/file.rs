@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ impl CacheFile {
         oopts.create(true);
         oopts.read(true);
         oopts.write(true);
-        oopts.custom_flags(libc::O_DIRECT | libc::O_NOATIME);
+        oopts.custom_flags(libc::O_DIRECT);
 
         let (file, len, capacity) = asyncify(move || {
             let file = oopts.open(path)?;

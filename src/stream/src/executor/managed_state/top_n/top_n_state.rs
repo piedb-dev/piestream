@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ use piestream_common::util::ordered::*;
 use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
-use crate::common::iter_state_table;
 use crate::executor::error::StreamExecutorResult;
+use crate::executor::managed_state::iter_state_table;
 use crate::executor::top_n::TopNCache;
 
 /// * For TopN, the storage key is: `[ order_by + remaining columns of pk ]`
@@ -135,8 +135,7 @@ impl<S: StateStore> ManagedTopNState<S> {
             if topn_row.ordered_key <= *start_key {
                 continue;
             }
-            // let row= &topn_row.row;
-            cache.insert(topn_row.ordered_key, (&topn_row.row).into());
+            cache.insert(topn_row.ordered_key, topn_row.row);
             if cache.len() == cache_size_limit {
                 break;
             }
@@ -152,9 +151,7 @@ impl<S: StateStore> ManagedTopNState<S> {
                 let topn_row =
                     self.get_topn_row(item?.into_owned(), group_key.map(|p| p.size()).unwrap_or(0));
                 if topn_row.ordered_key.prefix(topn_cache.order_by_len) == high_last_sort_key {
-                    topn_cache
-                        .high
-                        .insert(topn_row.ordered_key, (&topn_row.row).into());
+                    topn_cache.high.insert(topn_row.ordered_key, topn_row.row);
                 } else {
                     break;
                 }
@@ -179,9 +176,7 @@ impl<S: StateStore> ManagedTopNState<S> {
             while let Some(item) = state_table_iter.next().await {
                 let topn_row =
                     self.get_topn_row(item?.into_owned(), group_key.map(|p| p.size()).unwrap_or(0));
-                topn_cache
-                    .low
-                    .insert(topn_row.ordered_key, (&topn_row.row).into());
+                topn_cache.low.insert(topn_row.ordered_key, topn_row.row);
                 if topn_cache.low.len() == topn_cache.offset {
                     break;
                 }
@@ -192,9 +187,7 @@ impl<S: StateStore> ManagedTopNState<S> {
         while let Some(item) = state_table_iter.next().await {
             let topn_row =
                 self.get_topn_row(item?.into_owned(), group_key.map(|p| p.size()).unwrap_or(0));
-            topn_cache
-                .middle
-                .insert(topn_row.ordered_key, (&topn_row.row).into());
+            topn_cache.middle.insert(topn_row.ordered_key, topn_row.row);
             if topn_cache.middle.len() == topn_cache.limit {
                 break;
             }
@@ -210,13 +203,9 @@ impl<S: StateStore> ManagedTopNState<S> {
                 let topn_row =
                     self.get_topn_row(item?.into_owned(), group_key.map(|p| p.size()).unwrap_or(0));
                 if topn_row.ordered_key.prefix(topn_cache.order_by_len) == middle_last_sort_key {
-                    topn_cache
-                        .middle
-                        .insert(topn_row.ordered_key, (&topn_row.row).into());
+                    topn_cache.middle.insert(topn_row.ordered_key, topn_row.row);
                 } else {
-                    topn_cache
-                        .high
-                        .insert(topn_row.ordered_key, (&topn_row.row).into());
+                    topn_cache.high.insert(topn_row.ordered_key, topn_row.row);
                     break;
                 }
             }
@@ -228,7 +217,7 @@ impl<S: StateStore> ManagedTopNState<S> {
         );
         while !topn_cache.is_high_cache_full() && let Some(item) = state_table_iter.next().await {
             let topn_row = self.get_topn_row(item?.into_owned(), group_key.map(|p|p.size()).unwrap_or(0));
-            topn_cache.high.insert(topn_row.ordered_key, (&topn_row.row).into());
+            topn_cache.high.insert(topn_row.ordered_key, topn_row.row);
         }
         if WITH_TIES && topn_cache.is_high_cache_full() {
             let high_last_sort_key = topn_cache
@@ -241,9 +230,7 @@ impl<S: StateStore> ManagedTopNState<S> {
                 let topn_row =
                     self.get_topn_row(item?.into_owned(), group_key.map(|p| p.size()).unwrap_or(0));
                 if topn_row.ordered_key.prefix(topn_cache.order_by_len) == high_last_sort_key {
-                    topn_cache
-                        .high
-                        .insert(topn_row.ordered_key, (&topn_row.row).into());
+                    topn_cache.high.insert(topn_row.ordered_key, topn_row.row);
                 } else {
                     break;
                 }

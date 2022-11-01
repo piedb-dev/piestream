@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ impl CompactionPicker for LevelCompactionPicker {
                         table_infos: l0.sub_levels[0].table_infos.clone(),
                     },
                     InputLevel {
-                        level_idx: target_level,
+                        level_idx: target_level as u32,
                         level_type: LevelType::Nonoverlapping as i32,
                         table_infos: vec![],
                     },
@@ -131,7 +131,7 @@ impl CompactionPicker for LevelCompactionPicker {
             // reverse because the ix of low sub-level is smaller.
             input_levels.reverse();
             input_levels.push(InputLevel {
-                level_idx: target_level,
+                level_idx: target_level as u32,
                 level_type: LevelType::Nonoverlapping as i32,
                 table_infos: levels.get_level(self.target_level).table_infos.clone(),
             });

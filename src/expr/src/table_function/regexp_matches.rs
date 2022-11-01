@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ use std::sync::Arc;
 use regex::Regex;
 use piestream_common::array::{Array, ArrayRef, DataChunk, ListValue, Utf8Array};
 use piestream_common::types::{Scalar, ScalarImpl};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 use piestream_common::{bail, ensure};
 use piestream_pb::expr::expr_node::RexNode;
 
@@ -39,14 +40,15 @@ impl RegexpContext {
 pub struct RegexpMatches {
     text: Box<dyn Expression>,
     ctx: RegexpContext,
-    chunk_size: usize,
 }
 
 impl RegexpMatches {
     /// Match one row and return the result.
     // TODO: The optimization can be allocated.
     fn eval_row(&self, text: &str) -> Result<ArrayRef> {
-        let mut builder = self.return_type().create_array_builder(self.chunk_size);
+        let mut builder = self
+            .return_type()
+            .create_array_builder(DEFAULT_CHUNK_BUFFER_SIZE);
 
         for capture in self.ctx.0.captures_iter(text) {
             // If there are multiple captures, then the first one is the whole match, and should be
@@ -116,10 +118,7 @@ impl TableFunction for RegexpMatches {
     }
 }
 
-pub fn new_regexp_matches(
-    prost: &TableFunctionProst,
-    chunk_size: usize,
-) -> Result<BoxedTableFunction> {
+pub fn new_regexp_matches(prost: &TableFunctionProst) -> Result<BoxedTableFunction> {
     ensure!(
         prost.return_type
             == Some(
@@ -152,7 +151,6 @@ pub fn new_regexp_matches(
     Ok(RegexpMatches {
         text: text_expr,
         ctx,
-        chunk_size,
     }
     .boxed())
 }

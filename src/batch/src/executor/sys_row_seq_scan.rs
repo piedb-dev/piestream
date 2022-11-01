@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ impl BoxedExecutorBuilder for SysRowSeqScanExecutorBuilder {
             source.plan_node().get_node_body().unwrap(),
             NodeBody::SysRowSeqScan
         )?;
-        let sys_catalog_reader = source.context.catalog_reader();
+        let sys_catalog_reader = source.context.try_get_catalog_reader_ref()?;
 
         let table_name = seq_scan_node.table_name.clone();
         let column_descs = seq_scan_node

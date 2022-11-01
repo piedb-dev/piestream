@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ pub fn bytes_diff<'a, 'b>(base: &'a [u8], target: &'b [u8]) -> &'b [u8] {
 pub fn xxhash64_checksum(data: &[u8]) -> u64 {
     let mut hasher = twox_hash::XxHash64::with_seed(0);
     hasher.write(data);
-    hasher.finish()
+    hasher.finish() as u64
 }
 
 /// Verifies the checksum of the data equals the given checksum with xxhash64.

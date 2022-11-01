@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ impl ManagedBarrierState {
                         remaining_actors, ..
                     },
                 ..
-            }) => remaining_actors.is_empty(),
+            }) => (remaining_actors.is_empty()),
             _ => unreachable!(),
         };
 

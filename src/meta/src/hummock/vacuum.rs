@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -356,7 +356,7 @@ mod tests {
 
         // Makes checkpoint and extends deltas_to_delete. Deletes deltas of v0->v1 and v2->v3.
         // Delta of v1->v2 cannot be deleted yet because it's used by ssts_to_delete.
-        assert_eq!(VacuumManager::vacuum_metadata(&vacuum).await.unwrap(), 3);
+        assert_eq!(VacuumManager::vacuum_metadata(&vacuum).await.unwrap(), 2);
         // No SST deletion is scheduled because no available worker.
         assert_eq!(
             VacuumManager::vacuum_sst_data(&vacuum).await.unwrap().len(),

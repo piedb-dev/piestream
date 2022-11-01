@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,34 +21,7 @@ use madsim::rand::thread_rng;
 use madsim::runtime::{Handle, NodeHandle};
 use rand::seq::SliceRandom;
 
-use crate::piestream;
-
-#[derive(Debug, Parser)]
-pub struct Configuration {
-    /// The number of frontend nodes.
-    #[clap(long, default_value = "1")]
-    frontend_nodes: usize,
-
-    /// The number of compute nodes.
-    #[clap(long, default_value = "3")]
-    compute_nodes: usize,
-
-    /// The number of compactor nodes.
-    #[clap(long, default_value = "1")]
-    compactor_nodes: usize,
-
-    /// The number of CPU cores for each compute node.
-    ///
-    /// This determines worker_node_parallelism.
-    #[clap(long, default_value = "2")]
-    compute_node_cores: usize,
-}
-
-impl Default for Configuration {
-    fn default() -> Self {
-        Self::parse_from::<_, &str>([])
-    }
-}
+use crate::{Args, piestream};
 
 pub struct Cluster {
     frontends: Vec<IpAddr>,
@@ -59,10 +32,13 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    pub async fn start(conf: Configuration) -> Result<Self> {
+    pub async fn start() -> Result<Self> {
+        // TODO: allow specifying configuration
+        let args = Args::parse_from::<_, &str>([]);
+
         let handle = madsim::runtime::Handle::current();
         println!("seed = {}", handle.seed());
-        println!("{:?}", conf);
+        println!("{:?}", args);
 
         // wait for the service to be ready
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -91,7 +67,7 @@ impl Cluster {
 
         // frontend node
         let mut frontends = vec![];
-        for i in 1..=conf.frontend_nodes {
+        for i in 1..=args.frontend_nodes {
             let frontend_ip = format!("192.168.2.{i}").parse().unwrap();
             frontends.push(frontend_ip);
             handle
@@ -114,12 +90,12 @@ impl Cluster {
         }
 
         // compute node
-        for i in 1..=conf.compute_nodes {
+        for i in 1..=args.compute_nodes {
             handle
                 .create_node()
                 .name(format!("compute-{i}"))
                 .ip([192, 168, 3, i as u8].into())
-                .cores(conf.compute_node_cores)
+                .cores(args.compute_node_cores)
                 .init(move || async move {
                     let opts = piestream_compute::ComputeNodeOpts::parse_from([
                         "compute-node",
@@ -138,7 +114,7 @@ impl Cluster {
         }
 
         // compactor node
-        for i in 1..=conf.compactor_nodes {
+        for i in 1..=args.compactor_nodes {
             handle
                 .create_node()
                 .name(format!("compactor-{i}"))

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ use piestream_sqlparser::ast::{Ident, ObjectName, ShowObject};
 
 use super::RwPgResponse;
 use crate::binder::Binder;
-use crate::catalog::root_catalog::SchemaPath;
-use crate::catalog::CatalogError;
 use crate::handler::util::col_descs_to_rows;
 use crate::session::{OptimizerContext, SessionImpl};
 
@@ -31,27 +29,19 @@ pub fn get_columns_from_table(
     session: &SessionImpl,
     table_name: ObjectName,
 ) -> Result<Vec<ColumnDesc>> {
-    let db_name = session.database();
-    let (schema_name, table_name) = Binder::resolve_table_or_source_name(db_name, table_name)?;
-    let search_path = session.config().get_search_path();
-    let user_name = &session.auth_context().user_name;
-
-    let schema_path = match schema_name.as_deref() {
-        Some(schema_name) => SchemaPath::Name(schema_name),
-        None => SchemaPath::Path(&search_path, user_name),
-    };
+    let (schema_name, table_name) = Binder::resolve_table_name(table_name)?;
 
     let catalog_reader = session.env().catalog_reader().read_guard();
-    let catalogs = match catalog_reader.get_table_by_name(db_name, schema_path, &table_name) {
-        Ok((table, _)) => table.columns(),
-        Err(_) => match catalog_reader.get_source_by_name(db_name, schema_path, &table_name) {
-            Ok((source, _)) => &source.columns,
-            Err(_) => {
-                return Err(
-                    CatalogError::NotFound("table or source", table_name.to_string()).into(),
-                );
-            }
-        },
+    let catalogs = match catalog_reader
+        .get_schema_by_name(session.database(), &schema_name)?
+        .get_table_by_name(&table_name)
+    {
+        Some(table) => &table.columns,
+        None => {
+            &catalog_reader
+                .get_source_by_name(session.database(), &schema_name, &table_name)?
+                .columns
+        }
     };
     Ok(catalogs
         .iter()
@@ -205,10 +195,11 @@ mod tests {
             "zipcode".into() => "Int64".into(),
             "country.city.address".into() => "Varchar".into(),
             "country.address".into() => "Varchar".into(),
-            "country.city".into() => "test.City".into(),
+            "country.city".into() => ".test.City".into(),
             "country.city.zipcode".into() => "Varchar".into(),
             "rate".into() => "Float32".into(),
-            "country".into() => "test.Country".into(),
+            "country".into() => ".test.Country".into(),
+
         };
 
         assert_eq!(columns, expected_columns);

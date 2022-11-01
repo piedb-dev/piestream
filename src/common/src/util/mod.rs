@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ pub mod ordered;
 pub mod prost;
 pub mod sort_util;
 #[macro_use]
-pub mod match_util;
+pub mod try_match;
 pub mod epoch;
 mod future_utils;
 pub mod scan_range;

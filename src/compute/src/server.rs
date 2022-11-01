@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ use piestream_pb::task_service::exchange_service_server::ExchangeServiceServer;
 use piestream_pb::task_service::task_service_server::TaskServiceServer;
 use piestream_rpc_client::{ComputeClientPool, ExtraInfoSourceRef, MetaClient};
 use piestream_source::monitor::SourceMetrics;
-use piestream_source::TableSourceManager;
+use piestream_source::MemSourceManager;
 use piestream_storage::hummock::compactor::{
     CompactionExecutor, Compactor, CompactorContext, Context,
 };
@@ -190,7 +190,7 @@ pub async fn compute_node_serve(
         opts.enable_async_stack_trace,
         opts.enable_managed_cache,
     ));
-    let source_mgr = Arc::new(TableSourceManager::new(
+    let source_mgr = Arc::new(MemSourceManager::new(
         source_metrics,
         stream_config.developer.stream_connector_message_buffer_size,
     ));

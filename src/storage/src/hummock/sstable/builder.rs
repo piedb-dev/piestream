@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -263,7 +263,6 @@ impl<W: SstableWriter> SstableBuilder<W> {
             meta_offset: meta.meta_offset,
             stale_key_count: self.stale_key_count,
             total_key_count: self.total_key_count,
-            divide_version: 0,
         };
         tracing::trace!(
             "meta_size {} bloom_filter_size {}  add_key_counts {} ",

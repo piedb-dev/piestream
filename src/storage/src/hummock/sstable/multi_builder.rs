@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ where
 
     /// Returns the number of [`SstableBuilder`]s.
     pub fn len(&self) -> usize {
-        self.sst_outputs.len() + self.current_builder.is_some() as usize
+        self.sst_outputs.len() + if self.current_builder.is_some() { 1 } else { 0 }
     }
 
     /// Returns true if no builder is created.

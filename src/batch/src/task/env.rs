@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use piestream_common::config::BatchConfig;
 use piestream_common::util::addr::HostAddr;
 use piestream_rpc_client::ComputeClientPoolRef;
-use piestream_source::{TableSourceManager, TableSourceManagerRef};
+use piestream_source::{SourceManager, SourceManagerRef};
 use piestream_storage::StateStoreImpl;
 
 use crate::executor::BatchTaskMetrics;
@@ -36,7 +36,7 @@ pub struct BatchEnvironment {
     task_manager: Arc<BatchManager>,
 
     /// Reference to the source manager. This is used to query the sources.
-    source_manager: TableSourceManagerRef,
+    source_manager: SourceManagerRef,
 
     /// Batch related configurations.
     config: Arc<BatchConfig>,
@@ -57,7 +57,7 @@ pub struct BatchEnvironment {
 impl BatchEnvironment {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        source_manager: TableSourceManagerRef,
+        source_manager: SourceManagerRef,
         task_manager: Arc<BatchManager>,
         server_addr: HostAddr,
         config: Arc<BatchConfig>,
@@ -82,12 +82,13 @@ impl BatchEnvironment {
     #[cfg(test)]
     pub fn for_test() -> Self {
         use piestream_rpc_client::ComputeClientPool;
+        use piestream_source::MemSourceManager;
         use piestream_storage::monitor::StateStoreMetrics;
 
         BatchEnvironment {
             task_manager: Arc::new(BatchManager::new(None)),
             server_addr: "127.0.0.1:5688".parse().unwrap(),
-            source_manager: std::sync::Arc::new(TableSourceManager::default()),
+            source_manager: std::sync::Arc::new(MemSourceManager::default()),
             config: Arc::new(BatchConfig::default()),
             worker_id: WorkerNodeId::default(),
             state_store: StateStoreImpl::shared_in_memory_store(Arc::new(
@@ -107,11 +108,11 @@ impl BatchEnvironment {
     }
 
     #[expect(clippy::explicit_auto_deref)]
-    pub fn source_manager(&self) -> &TableSourceManager {
+    pub fn source_manager(&self) -> &dyn SourceManager {
         &*self.source_manager
     }
 
-    pub fn source_manager_ref(&self) -> TableSourceManagerRef {
+    pub fn source_manager_ref(&self) -> SourceManagerRef {
         self.source_manager.clone()
     }
 

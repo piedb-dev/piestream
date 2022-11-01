@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -279,7 +279,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             A::Count => Some(Expr::Function(make_agg_func("count", exprs, distinct))),
             A::Avg => Some(Expr::Function(make_agg_func("avg", exprs, distinct))),
             A::StringAgg => Some(Expr::Function(make_agg_func("string_agg", exprs, distinct))),
-            A::FirstValue => None,
             A::ApproxCountDistinct => {
                 if distinct {
                     None

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -230,7 +230,11 @@ impl Condition {
     pub fn split_disjoint(self, columns: &FixedBitSet) -> (Self, Self) {
         self.group_by::<_, 2>(|expr| {
             let input_bits = expr.collect_input_refs(columns.len());
-            input_bits.is_disjoint(columns) as usize
+            if input_bits.is_disjoint(columns) {
+                1
+            } else {
+                0
+            }
         })
         .into_iter()
         .next_tuple()

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ pub struct FilterExecutor {
     expr: BoxedExpression,
     child: BoxedExecutor,
     identity: String,
-    chunk_size: usize,
 }
 
 impl Executor for FilterExecutor {
@@ -53,7 +52,7 @@ impl FilterExecutor {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
         let mut data_chunk_builder =
-            DataChunkBuilder::new(self.child.schema().data_types(), self.chunk_size);
+            DataChunkBuilder::with_default_size(self.child.schema().data_types());
 
         #[for_await]
         for data_chunk in self.child.execute() {
@@ -99,23 +98,16 @@ impl BoxedExecutorBuilder for FilterExecutor {
             expr,
             input,
             source.plan_node().get_identity().clone(),
-            source.context.get_config().developer.batch_chunk_size,
         )))
     }
 }
 
 impl FilterExecutor {
-    pub fn new(
-        expr: BoxedExpression,
-        input: BoxedExecutor,
-        identity: String,
-        chunk_size: usize,
-    ) -> Self {
+    pub fn new(expr: BoxedExpression, input: BoxedExecutor, identity: String) -> Self {
         Self {
             expr,
             child: input,
             identity,
-            chunk_size,
         }
     }
 }
@@ -136,8 +128,6 @@ mod tests {
 
     use crate::executor::test_utils::MockExecutor;
     use crate::executor::{Executor, FilterExecutor};
-
-    const CHUNK_SIZE: usize = 1024;
 
     #[tokio::test]
     async fn test_list_filter_executor() {
@@ -177,7 +167,6 @@ mod tests {
             expr: build_from_prost(&expr).unwrap(),
             child: Box::new(mock_executor),
             identity: "FilterExecutor".to_string(),
-            chunk_size: CHUNK_SIZE,
         });
 
         let fields = &filter_executor.schema().fields;
@@ -280,7 +269,6 @@ mod tests {
             expr: build_from_prost(&expr).unwrap(),
             child: Box::new(mock_executor),
             identity: "FilterExecutor".to_string(),
-            chunk_size: CHUNK_SIZE,
         });
         let fields = &filter_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Int32);

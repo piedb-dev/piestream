@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,11 +64,11 @@ pub fn run_test_inner(cases: &[&TestDescAndFn], hook: impl TestHook + 'static + 
             let f = match case.testfn {
                 TestFn::StaticTestFn(f) => TestFn::DynTestFn(Box::new(move || {
                     let _watcher = TestWatcher::new(name, h);
-                    f()
+                    f();
                 })),
                 TestFn::StaticBenchFn(f) => TestFn::DynTestFn(Box::new(move || {
                     let _watcher = TestWatcher::new(name, h);
-                    bench::run_once(f)
+                    bench::run_once(f);
                 })),
                 ref f => panic!("unexpected testfn {:?}", f),
             };

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -270,7 +270,7 @@ fn main() -> Result<()> {
                 if component == "RISEDEV_CONFIGURED" {
                     continue;
                 }
-                match Components::from_env(component) {
+                match Components::from_env(&component) {
                     Some(component) => {
                         if val == "true" {
                             enabled.push(component);

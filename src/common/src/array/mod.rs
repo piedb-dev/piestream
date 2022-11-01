@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -659,7 +659,7 @@ mod tests {
     fn test_filter() {
         let mut builder = PrimitiveArrayBuilder::<i32>::new(0);
         for i in 0..=60 {
-            builder.append(Some(i));
+            builder.append(Some(i as i32));
         }
         let array = filter(&builder.finish(), |x| x.unwrap_or(0) >= 60).unwrap();
         assert_eq!(array.iter().collect::<Vec<Option<i32>>>(), vec![Some(60)]);
@@ -692,7 +692,7 @@ mod tests {
     fn test_vectorized_add() {
         let mut builder = PrimitiveArrayBuilder::<i32>::new(0);
         for i in 0..=60 {
-            builder.append(Some(i));
+            builder.append(Some(i as i32));
         }
         let array1 = builder.finish();
 

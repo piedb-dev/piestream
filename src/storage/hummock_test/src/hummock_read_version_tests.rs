@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,8 @@ use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
 use piestream_meta::hummock::test_utils::setup_compute_env;
 use piestream_pb::hummock::SstableInfo;
 use piestream_storage::hummock::iterator::test_utils::iterator_test_key_of_epoch;
-use piestream_storage::hummock::shared_buffer::shared_buffer_batch::SharedBufferBatch;
-use piestream_storage::hummock::store::memtable::ImmutableMemtable;
 use piestream_storage::hummock::store::version::{
-    HummockReadVersion, StagingData, StagingSstableInfo, VersionUpdate,
+    HummockReadVersion, ImmutableMemtable, StagingData, StagingSstableInfo, VersionUpdate,
 };
 use piestream_storage::hummock::test_utils::{default_config_for_test, gen_dummy_batch};
 
@@ -34,11 +32,12 @@ async fn test_read_version_basic() {
     let opt = Arc::new(default_config_for_test());
     let (env, hummock_manager_ref, _cluster_manager_ref, worker_node) =
         setup_compute_env(8080).await;
-
     let local_version_manager =
         prepare_local_version_manager(opt, env, hummock_manager_ref, worker_node).await;
 
-    let mut read_version = HummockReadVersion::new(local_version_manager.get_pinned_version());
+    let uploader = local_version_manager.clone();
+
+    let mut read_version = HummockReadVersion::new(uploader.get_pinned_version());
     let mut epoch = 1;
     let compaction_group_id = StaticCompactionGroupId::StateDefault.into();
     let table_id = 0;
@@ -46,14 +45,14 @@ async fn test_read_version_basic() {
     {
         // single imm
         let kv_pairs = gen_dummy_batch(epoch);
-        let imm = SharedBufferBatch::build_shared_buffer_batch(
-            epoch,
-            compaction_group_id,
-            kv_pairs,
-            TableId::from(table_id),
-            None,
-        )
-        .await;
+        let imm = local_version_manager
+            .build_shared_buffer_batch(
+                epoch,
+                compaction_group_id,
+                kv_pairs,
+                TableId::from(table_id),
+            )
+            .await;
 
         read_version.update(VersionUpdate::Staging(StagingData::ImmMem(imm)));
 
@@ -79,14 +78,14 @@ async fn test_read_version_basic() {
         for _ in 0..5 {
             epoch += 1;
             let kv_pairs = gen_dummy_batch(epoch);
-            let imm = SharedBufferBatch::build_shared_buffer_batch(
-                epoch,
-                compaction_group_id,
-                kv_pairs,
-                TableId::from(table_id),
-                None,
-            )
-            .await;
+            let imm = local_version_manager
+                .build_shared_buffer_batch(
+                    epoch,
+                    compaction_group_id,
+                    kv_pairs,
+                    TableId::from(table_id),
+                )
+                .await;
 
             read_version.update(VersionUpdate::Staging(StagingData::ImmMem(imm)));
         }
@@ -118,7 +117,6 @@ async fn test_read_version_basic() {
             .rev()
             .map(|imm| imm.batch_id())
             .take(3)
-            .rev()
             .collect::<Vec<_>>();
 
         let epoch_id_vec_for_clear = staging
@@ -127,7 +125,6 @@ async fn test_read_version_basic() {
             .rev()
             .map(|imm| imm.epoch())
             .take(3)
-            .rev()
             .collect::<Vec<_>>();
 
         let dummy_sst = StagingSstableInfo::new(
@@ -139,7 +136,6 @@ async fn test_read_version_basic() {
                 meta_offset: 1,
                 stale_key_count: 1,
                 total_key_count: 1,
-                divide_version: 0,
             },
             epoch_id_vec_for_clear,
             compaction_group_id,

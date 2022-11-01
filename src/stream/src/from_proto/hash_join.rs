@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,7 +120,6 @@ impl ExecutorBuilder for HashJoinExecutorBuilder {
             metrics: params.executor_stats,
             join_type_proto: node.get_join_type()?,
             join_key_data_types,
-            chunk_size: params.env.config().developer.stream_chunk_size,
         };
 
         args.dispatch()
@@ -149,7 +148,6 @@ struct HashJoinExecutorDispatcherArgs<S: StateStore> {
     metrics: Arc<StreamingMetrics>,
     join_type_proto: JoinTypeProto,
     join_key_data_types: Vec<DataType>,
-    chunk_size: usize,
 }
 
 impl<S: StateStore> HashKeyDispatcher for HashJoinExecutorDispatcherArgs<S> {
@@ -180,7 +178,6 @@ impl<S: StateStore> HashKeyDispatcher for HashJoinExecutorDispatcherArgs<S> {
                         self.lru_manager,
                         self.is_append_only,
                         self.metrics,
-                        self.chunk_size,
                     ),
                 ))
             };

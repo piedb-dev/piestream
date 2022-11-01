@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::StreamExt;
-use itertools::Itertools;
 use pgwire::pg_field_descriptor::PgFieldDescriptor;
 use pgwire::pg_response::{PgResponse, StatementType};
-use piestream_common::catalog::Schema;
 use piestream_common::error::{ErrorCode, Result, RwError};
 use piestream_common::session_config::QueryMode;
 use piestream_sqlparser::ast::Statement;
@@ -41,7 +39,7 @@ pub fn gen_batch_query_plan(
     session: &SessionImpl,
     context: OptimizerContextRef,
     stmt: Statement,
-) -> Result<(PlanRef, QueryMode, Schema)> {
+) -> Result<(PlanRef, QueryMode, Vec<PgFieldDescriptor>)> {
     let stmt_type = to_statement_type(&stmt);
 
     let bound = {
@@ -77,13 +75,17 @@ pub fn gen_batch_query_plan(
     };
 
     let mut logical = planner.plan(bound)?;
-    let schema = logical.schema().clone();
+    let pg_descs = logical
+        .schema()
+        .fields()
+        .iter()
+        .map(to_pg_field)
+        .collect::<Vec<PgFieldDescriptor>>();
 
-    let physical = match query_mode {
-        QueryMode::Local => logical.gen_batch_local_plan()?,
-        QueryMode::Distributed => logical.gen_batch_distributed_plan()?,
-    };
-    Ok((physical, query_mode, schema))
+    match query_mode {
+        QueryMode::Local => Ok((logical.gen_batch_local_plan()?, query_mode, pg_descs)),
+        QueryMode::Distributed => Ok((logical.gen_batch_distributed_plan()?, query_mode, pg_descs)),
+    }
 }
 
 pub async fn handle_query(
@@ -96,8 +98,8 @@ pub async fn handle_query(
     let query_start_time = Instant::now();
 
     // Subblock to make sure PlanRef (an Rc) is dropped before `await` below.
-    let (query, query_mode, output_schema) = {
-        let (plan, query_mode, schema) = gen_batch_query_plan(&session, context.into(), stmt)?;
+    let (query, query_mode, pg_descs) = {
+        let (plan, query_mode, pg_descs) = gen_batch_query_plan(&session, context.into(), stmt)?;
 
         tracing::trace!(
             "Generated query plan: {:?}, query_mode:{:?}",
@@ -108,32 +110,19 @@ pub async fn handle_query(
             session.env().worker_node_manager_ref(),
             session.env().catalog_reader().clone(),
         );
-        (plan_fragmenter.split(plan)?, query_mode, schema)
+        (plan_fragmenter.split(plan)?, query_mode, pg_descs)
     };
     tracing::trace!("Generated query after plan fragmenter: {:?}", &query);
-
-    let pg_descs = output_schema
-        .fields()
-        .iter()
-        .map(to_pg_field)
-        .collect::<Vec<PgFieldDescriptor>>();
-    let column_types = output_schema
-        .fields()
-        .iter()
-        .map(|f| f.data_type())
-        .collect_vec();
 
     let mut row_stream = match query_mode {
         QueryMode::Local => PgResponseStream::LocalQuery(DataChunkToRowSetAdapter::new(
             local_execute(session.clone(), query).await?,
-            column_types,
             format,
         )),
         // Local mode do not support cancel tasks.
         QueryMode::Distributed => {
             PgResponseStream::DistributedQuery(DataChunkToRowSetAdapter::new(
                 distribute_execute(session.clone(), query).await?,
-                column_types,
                 format,
             ))
         }
@@ -216,18 +205,20 @@ async fn local_execute(session: Arc<SessionImpl>, query: Query) -> Result<LocalQ
     // Acquire hummock snapshot for local execution.
     let hummock_snapshot_manager = front_env.hummock_snapshot_manager();
     let query_id = query.query_id().clone();
-    let pinned_snapshot = hummock_snapshot_manager.acquire(&query_id).await?;
+    let epoch = hummock_snapshot_manager
+        .acquire(&query_id)
+        .await?
+        .committed_epoch;
 
     // TODO: Passing sql here
-    let execution = LocalQueryExecution::new(
-        query,
-        front_env.clone(),
-        "",
-        pinned_snapshot.snapshot.committed_epoch,
-        session.auth_context(),
-    );
+    let execution =
+        LocalQueryExecution::new(query, front_env.clone(), "", epoch, session.auth_context());
+    let rsp = Ok(execution.stream_rows());
 
-    Ok(execution.stream_rows())
+    // Release hummock snapshot for local execution.
+    hummock_snapshot_manager.release(epoch, &query_id).await;
+
+    rsp
 }
 
 async fn flush_for_write(session: &SessionImpl, stmt_type: StatementType) -> Result<()> {

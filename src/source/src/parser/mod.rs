@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ pub use avro_parser::*;
 pub use debezium::*;
 use itertools::Itertools;
 pub use json_parser::*;
-pub use pb_parser::*;
+pub use protobuf_parser::*;
 use piestream_common::array::{ArrayBuilderImpl, Op, StreamChunk};
 use piestream_common::error::ErrorCode::ProtocolError;
 use piestream_common::error::{Result, RwError};
@@ -32,8 +32,7 @@ mod avro_parser;
 mod common;
 mod debezium;
 mod json_parser;
-mod pb_parser;
-// mod protobuf_parser;
+mod protobuf_parser;
 
 /// A builder for building a [`StreamChunk`] from [`SourceColumnDesc`].
 pub struct SourceStreamChunkBuilder {

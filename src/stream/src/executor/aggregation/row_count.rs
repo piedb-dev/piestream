@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ use piestream_common::array::*;
 use piestream_common::buffer::Bitmap;
 use piestream_common::types::{DataType, Datum, ScalarImpl};
 
-use super::StreamingAggImpl;
+use super::StreamingAggStateImpl;
 use crate::executor::error::StreamExecutorResult;
 
 /// `StreamingRowCountAgg` count rows, no matter whether the datum is null.
@@ -62,7 +62,7 @@ impl StreamingRowCountAgg {
     }
 }
 
-impl StreamingAggImpl for StreamingRowCountAgg {
+impl StreamingAggStateImpl for StreamingRowCountAgg {
     fn apply_batch(
         &mut self,
         ops: Ops<'_>,

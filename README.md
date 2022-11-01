@@ -1,3 +1,4 @@
+![piestream Logo]
 
 [![Slack](https://badgen.net/badge/Slack/Join%20piestream/0abd59?icon=slack)](https://join.slack.com/t/piestream-community/shared_invite/zt-120rft0mr-d8uGk3d~NZiZAQWPnElOfw)
 [![Build status](https://badge.buildkite.com/9394d2bca0f87e2e97aa78b25f765c92d4207c0b65e7f6648f.svg)](https://buildkite.com/singularity-data/main)
@@ -19,9 +20,9 @@ There are two ways to install piestream: use a pre-built package or compile from
 
 ```shell
 # Download the pre-built binary
-wget https://github.com/piestreamlabs/piestream/releases/download/v0.1.13/piestream-v0.1.13-x86_64-unknown-linux.tar.gz
+wget https://github.com/piestreamlabs/piestream/releases/download/v0.1.11/piestream-v0.1.11-x86_64-unknown-linux.tar.gz
 # Unzip the binary
-tar xvf piestream-v0.1.13-x86_64-unknown-linux.tar.gz
+tar xvf piestream-v0.1.11-x86_64-unknown-linux.tar.gz
 # Start piestream in single-binary playground mode
 ./piestream playground
 ```
@@ -30,7 +31,7 @@ tar xvf piestream-v0.1.13-x86_64-unknown-linux.tar.gz
 
 ```shell
 # Start piestream in single-binary playground mode
-docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/piestreamlabs/piestream:v0.1.13 playground
+docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/piestreamlabs/piestream:v0.1.11 playground
 ```
 
 **Compile from Source with [RiseDev](docs/developer-guide.md#set-up-the-development-environment) (Linux and macOS)**

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use piestream_common::config::StreamingConfig;
 use piestream_common::util::addr::HostAddr;
-use piestream_source::{TableSourceManager, TableSourceManagerRef};
+use piestream_source::{SourceManager, SourceManagerRef};
 use piestream_storage::StateStoreImpl;
 
 pub(crate) type WorkerNodeId = u32;
@@ -29,7 +29,7 @@ pub struct StreamEnvironment {
     server_addr: HostAddr,
 
     /// Reference to the source manager.
-    source_manager: TableSourceManagerRef,
+    source_manager: SourceManagerRef,
 
     /// Streaming related configurations.
     config: Arc<StreamingConfig>,
@@ -43,7 +43,7 @@ pub struct StreamEnvironment {
 
 impl StreamEnvironment {
     pub fn new(
-        source_manager: TableSourceManagerRef,
+        source_manager: SourceManagerRef,
         server_addr: HostAddr,
         config: Arc<StreamingConfig>,
         worker_id: WorkerNodeId,
@@ -61,10 +61,11 @@ impl StreamEnvironment {
     // Create an instance for testing purpose.
     #[cfg(test)]
     pub fn for_test() -> Self {
+        use piestream_source::MemSourceManager;
         use piestream_storage::monitor::StateStoreMetrics;
         StreamEnvironment {
             server_addr: "127.0.0.1:5688".parse().unwrap(),
-            source_manager: Arc::new(TableSourceManager::default()),
+            source_manager: Arc::new(MemSourceManager::default()),
             config: Arc::new(StreamingConfig::default()),
             worker_id: WorkerNodeId::default(),
             state_store: StateStoreImpl::shared_in_memory_store(Arc::new(
@@ -78,11 +79,11 @@ impl StreamEnvironment {
     }
 
     #[expect(clippy::explicit_auto_deref)]
-    pub fn source_manager(&self) -> &TableSourceManager {
+    pub fn source_manager(&self) -> &dyn SourceManager {
         &*self.source_manager
     }
 
-    pub fn source_manager_ref(&self) -> TableSourceManagerRef {
+    pub fn source_manager_ref(&self) -> SourceManagerRef {
         self.source_manager.clone()
     }
 

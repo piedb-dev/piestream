@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ use super::{TopNCache, TopNCacheTrait};
 use crate::error::StreamResult;
 use crate::executor::error::StreamExecutorResult;
 use crate::executor::managed_state::top_n::ManagedTopNState;
-use crate::executor::{ActorContextRef, Executor, ExecutorInfo, PkIndices, PkIndicesRef};
+use crate::executor::{Executor, ExecutorInfo, PkIndices, PkIndicesRef};
 
 /// `TopNExecutor` works with input with modification, it keeps all the data
 /// records/rows that have been seen, and returns topN records overall.
@@ -39,7 +39,6 @@ impl<S: StateStore> TopNExecutor<S, false> {
     #[allow(clippy::too_many_arguments)]
     pub fn new_without_ties(
         input: Box<dyn Executor>,
-        ctx: ActorContextRef,
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, usize),
         order_by_len: usize,
@@ -52,7 +51,6 @@ impl<S: StateStore> TopNExecutor<S, false> {
 
         Ok(TopNExecutorWrapper {
             input,
-            ctx,
             inner: InnerTopNExecutorNew::new(
                 info,
                 schema,
@@ -71,7 +69,6 @@ impl<S: StateStore> TopNExecutor<S, true> {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_ties(
         input: Box<dyn Executor>,
-        ctx: ActorContextRef,
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, usize),
         order_by_len: usize,
@@ -84,7 +81,6 @@ impl<S: StateStore> TopNExecutor<S, true> {
 
         Ok(TopNExecutorWrapper {
             input,
-            ctx,
             inner: InnerTopNExecutorNew::new(
                 info,
                 schema,
@@ -104,7 +100,6 @@ impl<S: StateStore> TopNExecutor<S, true> {
     #[cfg(test)]
     pub fn new_with_ties_for_test(
         input: Box<dyn Executor>,
-        ctx: ActorContextRef,
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, usize),
         order_by_len: usize,
@@ -128,7 +123,7 @@ impl<S: StateStore> TopNExecutor<S, true> {
 
         inner.cache.high_capacity = 1;
 
-        Ok(TopNExecutorWrapper { input, ctx, inner })
+        Ok(TopNExecutorWrapper { input, inner })
     }
 }
 
@@ -242,6 +237,7 @@ where
                 }
             }
         }
+
         generate_output(res_rows, res_ops, &self.schema)
     }
 
@@ -285,7 +281,6 @@ mod tests {
 
     mod test1 {
         use super::*;
-        use crate::executor::ActorContext;
         fn create_stream_chunks() -> Vec<StreamChunk> {
             let chunk1 = StreamChunk::from_pretty(
                 "  I I
@@ -369,7 +364,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_without_ties(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (3, 1000),
                     2,
@@ -466,7 +460,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_without_ties(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (0, 4),
                     2,
@@ -575,7 +568,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_with_ties(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (0, 4),
                     2,
@@ -683,7 +675,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_without_ties(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (3, 4),
                     2,
@@ -767,7 +758,6 @@ mod tests {
 
     mod test2 {
         use super::*;
-        use crate::executor::ActorContext;
         fn create_source_new() -> Box<MockSource> {
             let mut chunks = vec![
                 StreamChunk::from_pretty(
@@ -896,7 +886,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_without_ties(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (1, 3),
                     2,
@@ -976,7 +965,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_without_ties(
                     create_source_new_before_recovery() as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types.clone(),
                     (1, 3),
                     2,
@@ -1018,7 +1006,6 @@ mod tests {
             let top_n_executor_after_recovery = Box::new(
                 TopNExecutor::new_without_ties(
                     create_source_new_after_recovery() as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types.clone(),
                     (1, 3),
                     2,
@@ -1068,7 +1055,6 @@ mod tests {
 
     mod test_with_ties {
         use super::*;
-        use crate::executor::ActorContext;
         fn create_source() -> Box<MockSource> {
             let mut chunks = vec![
                 StreamChunk::from_pretty(
@@ -1133,7 +1119,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_with_ties_for_test(
                     source as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types,
                     (0, 3),
                     1,
@@ -1282,7 +1267,6 @@ mod tests {
             let top_n_executor = Box::new(
                 TopNExecutor::new_with_ties_for_test(
                     create_source_before_recovery() as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types.clone(),
                     (0, 3),
                     1,
@@ -1330,7 +1314,6 @@ mod tests {
             let top_n_executor_after_recovery = Box::new(
                 TopNExecutor::new_with_ties_for_test(
                     create_source_after_recovery() as Box<dyn Executor>,
-                    ActorContext::create(0),
                     order_types.clone(),
                     (0, 3),
                     1,

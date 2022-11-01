@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -190,7 +190,7 @@ impl<'a, B: BufMut> ser::Serializer for &'a mut Serializer<B> {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        self.output.put_u8(!v.is_empty() as u8);
+        self.output.put_u8(if v.is_empty() { 0 } else { 1 });
         let mut len = 0;
         for chunk in v.chunks(8) {
             self.output.put_slice(chunk);

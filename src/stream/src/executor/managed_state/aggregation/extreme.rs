@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@ use piestream_expr::expr::AggKind;
 use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
-use super::{Cache, ManagedTableState};
-use crate::common::{iter_state_table, StateTableColumnMapping};
+use super::Cache;
+use crate::common::StateTableColumnMapping;
 use crate::executor::aggregation::AggCall;
 use crate::executor::error::StreamExecutorResult;
+use crate::executor::managed_state::iter_state_table;
 use crate::executor::PkIndices;
 
 /// Memcomparable row.
@@ -75,6 +76,26 @@ pub struct GenericExtremeState<S: StateStore> {
 
     /// Serializer for cache key.
     cache_key_serializer: OrderedRowSerde,
+}
+
+/// A trait over all table-structured states.
+///
+/// It is true that this interface also fits to value managed state, but we won't implement
+/// `ManagedTableState` for them. We want to reduce the overhead of `BoxedFuture`. For
+/// `ManagedValueState`, we can directly forward its async functions to `ManagedStateImpl`, instead
+/// of adding a layer of indirection caused by async traits.
+#[async_trait]
+pub trait ManagedTableState<S: StateStore>: Send + Sync + 'static {
+    async fn apply_chunk(
+        &mut self,
+        ops: Ops<'_>,
+        visibility: Option<&Bitmap>,
+        columns: &[&ArrayImpl],
+        state_table: &mut StateTable<S>,
+    ) -> StreamExecutorResult<()>;
+
+    /// Get the output of the state. Must flush before getting output.
+    async fn get_output(&mut self, state_table: &StateTable<S>) -> StreamExecutorResult<Datum>;
 }
 
 impl<S: StateStore> GenericExtremeState<S> {
@@ -141,7 +162,7 @@ impl<S: StateStore> GenericExtremeState<S> {
         }
     }
 
-    fn state_row_to_cache_entry(&self, state_row: &Row) -> (CacheKey, Datum) {
+    fn state_row_to_cache_entry(&self, state_row: &Row) -> StreamExecutorResult<(Vec<u8>, Datum)> {
         let mut cache_key = Vec::new();
         self.cache_key_serializer.serialize_datums(
             self.state_table_order_col_indices
@@ -150,7 +171,7 @@ impl<S: StateStore> GenericExtremeState<S> {
             &mut cache_key,
         );
         let cache_data = state_row[self.state_table_agg_col_idx].clone();
-        (cache_key, cache_data)
+        Ok((cache_key, cache_data))
     }
 
     /// Apply a chunk of data to the state.
@@ -161,6 +182,8 @@ impl<S: StateStore> GenericExtremeState<S> {
         columns: &[&ArrayImpl],
         state_table: &mut StateTable<S>,
     ) -> StreamExecutorResult<()> {
+        debug_assert!(super::verify_batch(ops, visibility, columns));
+
         for (i, op) in ops
             .iter()
             .enumerate()
@@ -174,7 +197,7 @@ impl<S: StateStore> GenericExtremeState<S> {
                     .map(|col_idx| columns[*col_idx].datum_at(i))
                     .collect(),
             );
-            let (cache_key, cache_data) = self.state_row_to_cache_entry(&state_row);
+            let (cache_key, cache_data) = self.state_row_to_cache_entry(&state_row)?;
             match op {
                 Op::Insert | Op::UpdateInsert => {
                     if self.cache_synced
@@ -227,7 +250,7 @@ impl<S: StateStore> GenericExtremeState<S> {
             #[for_await]
             for state_row in all_data_iter.take(self.cache.capacity()) {
                 let state_row = state_row?;
-                let (cache_key, cache_data) = self.state_row_to_cache_entry(state_row.as_ref());
+                let (cache_key, cache_data) = self.state_row_to_cache_entry(state_row.as_ref())?;
                 self.cache.insert(cache_key, cache_data);
             }
             self.cache_synced = true;
@@ -263,7 +286,7 @@ mod tests {
     use rand::prelude::*;
     use piestream_common::array::StreamChunk;
     use piestream_common::catalog::{ColumnDesc, ColumnId, Field, TableId};
-    use piestream_common::test_prelude::*;
+    use piestream_common::test_prelude::StreamChunkTestExt;
     use piestream_common::types::ScalarImpl;
     use piestream_common::util::epoch::EpochPair;
     use piestream_common::util::sort_util::OrderType;

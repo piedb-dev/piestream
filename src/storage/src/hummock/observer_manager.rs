@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@ use piestream_hummock_sdk::filter_key_extractor::{
     FilterKeyExtractorImpl, FilterKeyExtractorManagerRef,
 };
 use piestream_pb::catalog::Table;
-use piestream_pb::hummock::{pin_version_response, GroupHummockVersion};
+use piestream_pb::hummock::pin_version_response;
+use piestream_pb::hummock::pin_version_response::HummockVersionDeltas;
 use piestream_pb::meta::subscribe_response::{Info, Operation};
 use piestream_pb::meta::SubscribeResponse;
 use tokio::sync::mpsc::UnboundedSender;
@@ -60,7 +61,9 @@ impl ObserverState for HummockObserverNode {
                 let _ = self
                     .version_update_sender
                     .send(HummockEvent::VersionUpdate(
-                        pin_version_response::Payload::VersionDeltas(hummock_version_deltas),
+                        pin_version_response::Payload::VersionDeltas(HummockVersionDeltas {
+                            delta: hummock_version_deltas.version_deltas,
+                        }),
                     ))
                     .inspect_err(|e| {
                         tracing::error!("unable to send version delta: {:?}", e);
@@ -82,10 +85,9 @@ impl ObserverState for HummockObserverNode {
                 let _ = self
                     .version_update_sender
                     .send(HummockEvent::VersionUpdate(
-                        pin_version_response::Payload::PinnedVersion(GroupHummockVersion {
-                            hummock_version: snapshot.hummock_version,
-                            all_compaction_groups: snapshot.compaction_groups,
-                        }),
+                        pin_version_response::Payload::PinnedVersion(
+                            snapshot.hummock_version.unwrap(),
+                        ),
                     ))
                     .inspect_err(|e| {
                         tracing::error!("unable to send full version: {:?}", e);

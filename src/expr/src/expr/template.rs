@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -378,7 +378,6 @@ macro_rules! for_all_cmp_variants {
             { decimal, decimal, decimal, $general_f },
             { float32, decimal, float64, $general_f },
             { float64, decimal, float64, $general_f },
-            { timestampz, timestampz, timestampz, $general_f },
             { timestamp, timestamp, timestamp, $general_f },
             { interval, interval, interval, $general_f },
             { time, time, time, $general_f },

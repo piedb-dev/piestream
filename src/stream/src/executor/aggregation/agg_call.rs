@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,8 @@ impl AggArgs {
 /// Represents an aggregation function.
 #[derive(Clone, Debug)]
 pub struct AggCall {
-    /// Aggregation kind for constructing agg state.
+    /// Aggregation Kind for constructing
+    /// [`crate::executor::aggregation::StreamingAggStateImpl`]
     pub kind: AggKind,
     /// Arguments of aggregation function input.
     pub args: AggArgs,
@@ -65,8 +66,7 @@ pub struct AggCall {
     pub order_pairs: Vec<OrderPair>,
 
     /// Whether the stream is append-only.
-    /// Specific streaming aggregator may optimize its implementation
-    /// based on this knowledge.
+    /// Specific `StreamingAggStateImpl` may optimize its implementation based on this knowledge.
     pub append_only: bool,
 
     /// Filter of aggregation.

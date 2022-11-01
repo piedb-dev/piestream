@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ use futures_async_stream::try_stream;
 use itertools::Itertools;
 use piestream_batch::executor::{
     BoxedDataChunkStream, BoxedExecutor, DeleteExecutor, Executor as BatchExecutor, InsertExecutor,
-    RowSeqScanExecutor, ScanRange,
+    RowSeqScanExecutor, ScanType,
 };
 use piestream_common::array::{Array, DataChunk, F64Array, I64Array, Row};
 use piestream_common::buffer::Bitmap;
@@ -34,7 +34,8 @@ use piestream_common::test_prelude::DataChunkTestExt;
 use piestream_common::types::{DataType, IntoOrdered};
 use piestream_common::util::epoch::EpochPair;
 use piestream_common::util::sort_util::{OrderPair, OrderType};
-use piestream_source::{SourceDescBuilder, TableSourceManager, TableSourceManagerRef};
+use piestream_hummock_sdk::HummockReadEpoch;
+use piestream_source::{MemSourceManager, SourceDescBuilder, SourceManagerRef};
 use piestream_storage::memory::MemoryStateStore;
 use piestream_storage::table::batch_table::storage_table::StorageTable;
 use piestream_storage::table::streaming_table::state_table::StateTable;
@@ -92,7 +93,7 @@ async fn test_table_materialize() -> StreamResult<()> {
     use piestream_stream::executor::state_table_handler::default_source_internal_table;
 
     let memory_state_store = MemoryStateStore::new();
-    let source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
+    let source_manager: SourceManagerRef = Arc::new(MemSourceManager::default());
     let source_table_id = TableId::default();
     let schema = Schema {
         fields: vec![
@@ -203,9 +204,12 @@ async fn test_table_materialize() -> StreamResult<()> {
     );
 
     let scan = Box::new(RowSeqScanExecutor::new(
-        table.clone(),
-        vec![ScanRange::full()],
-        u64::MAX,
+        table.schema().clone(),
+        vec![ScanType::BatchScan(
+            table
+                .batch_iter(HummockReadEpoch::Committed(u64::MAX))
+                .await?,
+        )],
         1024,
         "RowSeqExecutor2".to_string(),
         None,
@@ -262,9 +266,12 @@ async fn test_table_materialize() -> StreamResult<()> {
 
     // Scan the table again, we are able to get the data now!
     let scan = Box::new(RowSeqScanExecutor::new(
-        table.clone(),
-        vec![ScanRange::full()],
-        u64::MAX,
+        table.schema().clone(),
+        vec![ScanType::BatchScan(
+            table
+                .batch_iter(HummockReadEpoch::Committed(u64::MAX))
+                .await?,
+        )],
         1024,
         "RowSeqScanExecutor2".to_string(),
         None,
@@ -331,9 +338,12 @@ async fn test_table_materialize() -> StreamResult<()> {
 
     // Scan the table again, we are able to see the deletion now!
     let scan = Box::new(RowSeqScanExecutor::new(
-        table,
-        vec![ScanRange::full()],
-        u64::MAX,
+        table.schema().clone(),
+        vec![ScanType::BatchScan(
+            table
+                .batch_iter(HummockReadEpoch::Committed(u64::MAX))
+                .await?,
+        )],
         1024,
         "RowSeqScanExecutor2".to_string(),
         None,
@@ -397,9 +407,13 @@ async fn test_row_seq_scan() -> Result<()> {
     state.commit_for_test(epoch.inc()).await.unwrap();
 
     let executor = Box::new(RowSeqScanExecutor::new(
-        table,
-        vec![ScanRange::full()],
-        u64::MAX,
+        table.schema().clone(),
+        vec![ScanType::BatchScan(
+            table
+                .batch_iter(HummockReadEpoch::Committed(u64::MAX))
+                .await
+                .unwrap(),
+        )],
         1,
         "RowSeqScanExecutor2".to_string(),
         None,

@@ -1,4 +1,4 @@
-//  Copyright 2022 PieDb Data
+//  Copyright 2022 Piedb Data
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -338,12 +338,12 @@ unsafe impl<K: LruKey, T: LruValue> Send for LruCacheShard<K, T> {}
 
 impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
     fn new(capacity: usize, object_capacity: usize) -> Self {
-        let mut lru = Box::<LruHandle<K, T>>::default();
+        let mut lru = Box::new(LruHandle::default());
         lru.prev = lru.as_mut();
         lru.next = lru.as_mut();
         let mut object_pool = Vec::with_capacity(object_capacity);
         for _ in 0..object_capacity {
-            object_pool.push(Box::default());
+            object_pool.push(Box::new(LruHandle::default()));
         }
         Self {
             capacity,

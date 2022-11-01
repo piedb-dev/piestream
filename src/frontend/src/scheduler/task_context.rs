@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ use piestream_common::config::BatchConfig;
 use piestream_common::error::Result;
 use piestream_common::util::addr::{is_local_address, HostAddr};
 use piestream_rpc_client::ComputeClientPoolRef;
-use piestream_source::TableSourceManagerRef;
+use piestream_source::SourceManagerRef;
 
 use crate::catalog::pg_catalog::SysCatalogReaderImpl;
 use crate::session::{AuthContext, FrontendEnv};
@@ -41,29 +41,29 @@ impl FrontendBatchTaskContext {
 
 impl BatchTaskContext for FrontendBatchTaskContext {
     fn get_task_output(&self, _task_output_id: TaskOutputId) -> Result<TaskOutput> {
-        unimplemented!("not supported in local mode")
+        todo!()
     }
 
-    fn catalog_reader(&self) -> SysCatalogReaderRef {
-        Arc::new(SysCatalogReaderImpl::new(
+    fn catalog_reader_ref(&self) -> Option<SysCatalogReaderRef> {
+        Some(Arc::new(SysCatalogReaderImpl::new(
             self.env.catalog_reader().clone(),
             self.env.user_info_reader().clone(),
             self.env.worker_node_manager_ref(),
             self.env.meta_client_ref(),
             self.auth_context.clone(),
-        ))
+        )))
     }
 
     fn is_local_addr(&self, peer_addr: &HostAddr) -> bool {
         is_local_address(self.env.server_address(), peer_addr)
     }
 
-    fn source_manager(&self) -> TableSourceManagerRef {
-        unimplemented!("not supported in local mode")
+    fn source_manager_ref(&self) -> Option<SourceManagerRef> {
+        todo!()
     }
 
-    fn state_store(&self) -> piestream_storage::store_impl::StateStoreImpl {
-        unimplemented!("not supported in local mode")
+    fn state_store(&self) -> Option<piestream_storage::store_impl::StateStoreImpl> {
+        todo!()
     }
 
     fn task_metrics(&self) -> Option<BatchTaskMetricsWithTaskLabels> {
@@ -75,6 +75,6 @@ impl BatchTaskContext for FrontendBatchTaskContext {
     }
 
     fn get_config(&self) -> &BatchConfig {
-        self.env.batch_config()
+        todo!()
     }
 }

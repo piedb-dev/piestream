@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,16 +52,13 @@ pub trait TableFunction: std::fmt::Debug + Sync + Send {
 
 pub type BoxedTableFunction = Box<dyn TableFunction>;
 
-pub fn build_from_prost(
-    prost: &TableFunctionProst,
-    chunk_size: usize,
-) -> Result<BoxedTableFunction> {
+pub fn build_from_prost(prost: &TableFunctionProst) -> Result<BoxedTableFunction> {
     use piestream_pb::expr::table_function::Type::*;
 
     match prost.get_function_type().unwrap() {
-        Generate => new_generate_series(prost, chunk_size),
-        Unnest => new_unnest(prost, chunk_size),
-        RegexpMatches => new_regexp_matches(prost, chunk_size),
+        Generate => new_generate_series(prost),
+        Unnest => new_unnest(prost),
+        RegexpMatches => new_regexp_matches(prost),
         Unspecified => unreachable!(),
     }
 }
@@ -123,10 +120,10 @@ impl From<BoxedExpression> for ProjectSetSelectItem {
 }
 
 impl ProjectSetSelectItem {
-    pub fn from_prost(prost: &SelectItemProst, chunk_size: usize) -> Result<Self> {
+    pub fn from_prost(prost: &SelectItemProst) -> Result<Self> {
         match prost.select_item.as_ref().unwrap() {
             Expr(expr) => expr_build_from_prost(expr).map(Into::into),
-            TableFunction(tf) => build_from_prost(tf, chunk_size).map(Into::into),
+            TableFunction(tf) => build_from_prost(tf).map(Into::into),
         }
     }
 

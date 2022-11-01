@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,8 @@
 // limitations under the License.
 
 #![feature(async_closure)]
-#![feature(drain_filter)]
 #![feature(hash_drain_filter)]
 #![feature(lint_reasons)]
-#![feature(map_many_mut)]
 
 mod version_cmp;
 

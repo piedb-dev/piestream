@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use piestream_common::array::{Array, ArrayRef, DataChunk, ListArray, ListRef};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 
 use super::*;
 
@@ -22,12 +23,13 @@ use super::*;
 pub struct Unnest {
     return_type: DataType,
     list: BoxedExpression,
-    chunk_size: usize,
 }
 
 impl Unnest {
     fn eval_row(&self, list: ListRef<'_>) -> Result<ArrayRef> {
-        let mut builder = self.return_type.create_array_builder(self.chunk_size);
+        let mut builder = self
+            .return_type
+            .create_array_builder(DEFAULT_CHUNK_BUFFER_SIZE);
         for d in &list.flatten() {
             builder.append_datum_ref(*d);
         }
@@ -76,15 +78,10 @@ impl TableFunction for Unnest {
     }
 }
 
-pub fn new_unnest(prost: &TableFunctionProst, chunk_size: usize) -> Result<BoxedTableFunction> {
+pub fn new_unnest(prost: &TableFunctionProst) -> Result<BoxedTableFunction> {
     let return_type = DataType::from(prost.get_return_type().unwrap());
     let args: Vec<_> = prost.args.iter().map(expr_build_from_prost).try_collect()?;
     let [list]: [_; 1] = args.try_into().unwrap();
 
-    Ok(Unnest {
-        return_type,
-        list,
-        chunk_size,
-    }
-    .boxed())
+    Ok(Unnest { return_type, list }.boxed())
 }

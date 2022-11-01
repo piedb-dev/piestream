@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,7 @@ use parking_lot::lock_api::ArcRwLockReadGuard;
 use parking_lot::{RawRwLock, RwLock};
 use piestream_common::error::ErrorCode::InternalError;
 use piestream_common::error::{Result, RwError};
-use piestream_pb::user::update_user_request::UpdateField;
-use piestream_pb::user::{GrantPrivilege, UserInfo};
+use piestream_pb::user::{GrantPrivilege, UpdateUserRequest, UserInfo};
 use piestream_rpc_client::MetaClient;
 use tokio::sync::watch::Receiver;
 
@@ -46,7 +45,7 @@ pub trait UserInfoWriter: Send + Sync {
 
     async fn drop_user(&self, id: UserId) -> Result<()>;
 
-    async fn update_user(&self, user: UserInfo, update_fields: Vec<UpdateField>) -> Result<()>;
+    async fn update_user(&self, request: UpdateUserRequest) -> Result<()>;
 
     async fn grant_privilege(
         &self,
@@ -85,8 +84,8 @@ impl UserInfoWriter for UserInfoWriterImpl {
         self.wait_version(version).await
     }
 
-    async fn update_user(&self, user: UserInfo, update_fields: Vec<UpdateField>) -> Result<()> {
-        let version = self.meta_client.update_user(user, update_fields).await?;
+    async fn update_user(&self, request: UpdateUserRequest) -> Result<()> {
+        let version = self.meta_client.update_user(request).await?;
         self.wait_version(version).await
     }
 

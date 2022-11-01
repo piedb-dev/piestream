@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,11 @@
 
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use piestream_common::config::StorageConfig;
 use piestream_common::error::Result;
 use piestream_common::util::addr::HostAddr;
 use piestream_common_service::observer_manager::{Channel, NotificationClient, ObserverManager};
-use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
 use piestream_hummock_sdk::filter_key_extractor::FilterKeyExtractorManager;
-use piestream_hummock_sdk::CompactionGroupId;
 use piestream_meta::hummock::{HummockManager, HummockManagerRef, MockHummockMetaClient};
 use piestream_meta::manager::{MessageStatus, MetaSrvEnv, NotificationManagerRef, WorkerKey};
 use piestream_meta::storage::{MemStore, MetaStore};
@@ -29,9 +26,6 @@ use piestream_pb::common::WorkerNode;
 use piestream_pb::hummock::pin_version_response;
 use piestream_pb::meta::subscribe_response::{Info, Operation};
 use piestream_pb::meta::{MetaSnapshot, SubscribeResponse, SubscribeType};
-use piestream_storage::hummock::compaction_group_client::{
-    CompactionGroupClientImpl, DummyCompactionGroupClient,
-};
 use piestream_storage::hummock::event_handler::{HummockEvent, HummockEventHandler};
 use piestream_storage::hummock::iterator::test_utils::mock_sstable_store;
 use piestream_storage::hummock::local_version::local_version_manager::{
@@ -39,9 +33,7 @@ use piestream_storage::hummock::local_version::local_version_manager::{
 };
 use piestream_storage::hummock::local_version::pinned_version::PinnedVersion;
 use piestream_storage::hummock::observer_manager::HummockObserverNode;
-use piestream_storage::hummock::store::version::HummockReadVersion;
-use piestream_storage::hummock::SstableStore;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 pub struct TestNotificationClient<S: MetaStore> {
     addr: HostAddr,
@@ -142,82 +134,19 @@ pub async fn prepare_local_version_manager(
 
     let local_version_manager = LocalVersionManager::for_test(
         opt.clone(),
-        PinnedVersion::new(hummock_version.hummock_version.unwrap(), tx),
+        PinnedVersion::new(hummock_version, tx),
         mock_sstable_store(),
         Arc::new(MockHummockMetaClient::new(
             hummock_manager_ref.clone(),
             worker_node.id,
         )),
         event_tx,
-        Arc::new(CompactionGroupClientImpl::Dummy(
-            DummyCompactionGroupClient::new(
-                StaticCompactionGroupId::StateDefault as CompactionGroupId,
-            ),
-        )),
     );
 
     tokio::spawn(
-        HummockEventHandler::new(
-            local_version_manager.clone(),
-            event_rx,
-            Arc::new(RwLock::new(HummockReadVersion::new(
-                local_version_manager.get_pinned_version(),
-            ))),
-        )
-        .start_hummock_event_handler_worker(),
+        HummockEventHandler::new(local_version_manager.clone(), event_rx)
+            .start_hummock_event_handler_worker(),
     );
 
     local_version_manager
-}
-
-pub async fn prepare_local_version_manager_new(
-    opt: Arc<StorageConfig>,
-    env: MetaSrvEnv<MemStore>,
-    hummock_manager_ref: HummockManagerRef<MemStore>,
-    worker_node: WorkerNode,
-    sstable_store_ref: Arc<SstableStore>,
-) -> (
-    LocalVersionManagerRef,
-    UnboundedSender<HummockEvent>,
-    UnboundedReceiver<HummockEvent>,
-) {
-    let (event_tx, mut event_rx) = unbounded_channel();
-
-    let notification_client =
-        get_test_notification_client(env, hummock_manager_ref.clone(), worker_node.clone());
-    let observer_manager = ObserverManager::new(
-        notification_client,
-        HummockObserverNode::new(
-            Arc::new(FilterKeyExtractorManager::default()),
-            event_tx.clone(),
-        ),
-    )
-    .await;
-    let _ = observer_manager.start().await.unwrap();
-    let hummock_version = match event_rx.recv().await {
-        Some(HummockEvent::VersionUpdate(pin_version_response::Payload::PinnedVersion(
-            version,
-        ))) => version,
-        _ => unreachable!("should be full version"),
-    };
-
-    let (tx, _rx) = unbounded_channel();
-
-    let local_version_manager = LocalVersionManager::for_test(
-        opt.clone(),
-        PinnedVersion::new(hummock_version.hummock_version.unwrap(), tx),
-        sstable_store_ref,
-        Arc::new(MockHummockMetaClient::new(
-            hummock_manager_ref.clone(),
-            worker_node.id,
-        )),
-        event_tx.clone(),
-        Arc::new(CompactionGroupClientImpl::Dummy(
-            DummyCompactionGroupClient::new(
-                StaticCompactionGroupId::StateDefault as CompactionGroupId,
-            ),
-        )),
-    );
-
-    (local_version_manager, event_tx, event_rx)
 }

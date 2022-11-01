@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ use utils::{create_input, execute_executor};
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor {
-    const CHUNK_SIZE: usize = 1024;
     let input = create_input(&[DataType::Int64], chunk_size, chunk_num);
 
     // Expression: $1 % 2 == 0
@@ -97,7 +96,6 @@ fn create_filter_executor(chunk_size: usize, chunk_num: usize) -> BoxedExecutor 
         build_from_prost(&expr).unwrap(),
         input,
         "FilterBenchmark".to_string(),
-        CHUNK_SIZE,
     ))
 }
 

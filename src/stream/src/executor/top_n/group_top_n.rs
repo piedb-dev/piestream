@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,11 +30,10 @@ use piestream_storage::StateStore;
 use super::top_n_cache::TopNCacheTrait;
 use super::utils::*;
 use super::TopNCache;
-use crate::cache::cache_may_stale;
 use crate::error::StreamResult;
 use crate::executor::error::StreamExecutorResult;
 use crate::executor::managed_state::top_n::ManagedTopNState;
-use crate::executor::{ActorContextRef, Executor, ExecutorInfo, PkIndices, PkIndicesRef};
+use crate::executor::{Executor, ExecutorInfo, PkIndices, PkIndicesRef};
 
 pub type GroupTopNExecutor<S, const WITH_TIES: bool> =
     TopNExecutorWrapper<InnerGroupTopNExecutorNew<S, WITH_TIES>>;
@@ -43,7 +42,6 @@ impl<S: StateStore> GroupTopNExecutor<S, false> {
     #[allow(clippy::too_many_arguments)]
     pub fn new_without_ties(
         input: Box<dyn Executor>,
-        ctx: ActorContextRef,
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, usize),
         order_by_len: usize,
@@ -57,7 +55,6 @@ impl<S: StateStore> GroupTopNExecutor<S, false> {
 
         Ok(TopNExecutorWrapper {
             input,
-            ctx,
             inner: InnerGroupTopNExecutorNew::new(
                 info,
                 schema,
@@ -77,7 +74,6 @@ impl<S: StateStore> GroupTopNExecutor<S, true> {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_ties(
         input: Box<dyn Executor>,
-        ctx: ActorContextRef,
         order_pairs: Vec<OrderPair>,
         offset_and_limit: (usize, usize),
         order_by_len: usize,
@@ -91,7 +87,6 @@ impl<S: StateStore> GroupTopNExecutor<S, true> {
 
         Ok(TopNExecutorWrapper {
             input,
-            ctx,
             inner: InnerGroupTopNExecutorNew::new(
                 info,
                 schema,
@@ -267,15 +262,10 @@ where
         &self.info.identity
     }
 
-    fn update_vnode_bitmap(&mut self, vnode_bitmap: Arc<Bitmap>) {
-        let previous_vnode_bitmap = self
-            .managed_state
+    fn update_state_table_vnode_bitmap(&mut self, vnode_bitmap: Arc<Bitmap>) {
+        self.managed_state
             .state_table
-            .update_vnode_bitmap(vnode_bitmap.clone());
-
-        if cache_may_stale(&previous_vnode_bitmap, &vnode_bitmap) {
-            self.caches.clear();
-        }
+            .update_vnode_bitmap(vnode_bitmap);
     }
 
     async fn init(&mut self, epoch: EpochPair) -> StreamExecutorResult<()> {
@@ -296,7 +286,7 @@ mod tests {
     use super::*;
     use crate::executor::test_utils::top_n_executor::create_in_memory_state_table;
     use crate::executor::test_utils::MockSource;
-    use crate::executor::{ActorContext, Barrier, Message};
+    use crate::executor::{Barrier, Message};
 
     fn create_schema() -> Schema {
         Schema {
@@ -384,7 +374,6 @@ mod tests {
         let top_n_executor = Box::new(
             GroupTopNExecutor::new_without_ties(
                 source as Box<dyn Executor>,
-                ActorContext::create(0),
                 order_types,
                 (0, 2),
                 3,
@@ -481,7 +470,6 @@ mod tests {
         let top_n_executor = Box::new(
             GroupTopNExecutor::new_without_ties(
                 source as Box<dyn Executor>,
-                ActorContext::create(0),
                 order_types,
                 (1, 2),
                 3,
@@ -570,7 +558,6 @@ mod tests {
         let top_n_executor = Box::new(
             GroupTopNExecutor::new_without_ties(
                 source as Box<dyn Executor>,
-                ActorContext::create(0),
                 order_types,
                 (0, 2),
                 3,

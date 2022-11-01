@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 pub use piestream_common::catalog::TableOption;
-use piestream_hummock_sdk::compaction_group::{StateTableId, StaticCompactionGroupId};
+use piestream_hummock_sdk::compaction_group::StateTableId;
 use piestream_hummock_sdk::CompactionGroupId;
 use piestream_pb::hummock::CompactionConfig;
 
@@ -28,8 +28,7 @@ use crate::model::{MetadataModel, MetadataModelResult};
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompactionGroup {
     group_id: CompactionGroupId,
-    pub parent_group_id: CompactionGroupId,
-    pub member_table_ids: HashSet<StateTableId>,
+    member_table_ids: HashSet<StateTableId>,
     pub compaction_config: CompactionConfig,
     table_id_to_options: HashMap<StateTableId, TableOption>,
 }
@@ -41,7 +40,6 @@ impl CompactionGroup {
             member_table_ids: Default::default(),
             compaction_config,
             table_id_to_options: HashMap::default(),
-            parent_group_id: StaticCompactionGroupId::NewCompactionGroup as CompactionGroupId,
         }
     }
 
@@ -66,7 +64,6 @@ impl From<&piestream_pb::hummock::CompactionGroup> for CompactionGroup {
     fn from(compaction_group: &piestream_pb::hummock::CompactionGroup) -> Self {
         Self {
             group_id: compaction_group.id,
-            parent_group_id: compaction_group.parent_id,
             member_table_ids: compaction_group.member_table_ids.iter().cloned().collect(),
             compaction_config: compaction_group
                 .compaction_config
@@ -86,7 +83,6 @@ impl From<&CompactionGroup> for piestream_pb::hummock::CompactionGroup {
     fn from(compaction_group: &CompactionGroup) -> Self {
         Self {
             id: compaction_group.group_id,
-            parent_id: compaction_group.parent_group_id,
             member_table_ids: compaction_group
                 .member_table_ids
                 .iter()

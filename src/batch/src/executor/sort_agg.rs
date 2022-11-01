@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ use itertools::Itertools;
 use piestream_common::array::{ArrayBuilderImpl, ArrayRef, DataChunk};
 use piestream_common::catalog::{Field, Schema};
 use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 use piestream_expr::expr::{build_from_prost, BoxedExpression};
 use piestream_expr::vector_op::agg::{
     create_sorted_grouper, AggStateFactory, BoxedAggState, BoxedSortedGrouper, EqGroups,
@@ -89,7 +90,7 @@ impl BoxedExecutorBuilder for SortAggExecutor {
             child,
             schema: Schema { fields },
             identity: source.plan_node().get_identity().clone(),
-            output_size_limit: source.context.get_config().developer.batch_chunk_size,
+            output_size_limit: DEFAULT_CHUNK_BUFFER_SIZE,
         }))
     }
 }

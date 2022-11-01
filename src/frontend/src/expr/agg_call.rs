@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,9 +64,9 @@ impl AggCall {
         // The function signatures are aligned with postgres, see
         // https://www.postgresql.org/docs/current/functions-aggregate.html.
         let return_type = match (&agg_kind, inputs) {
-            // Min, Max, FirstValue
-            (AggKind::Min | AggKind::Max | AggKind::FirstValue, [input]) => input.clone(),
-            (AggKind::Min | AggKind::Max | AggKind::FirstValue, _) => return invalid(),
+            // Min, Max
+            (AggKind::Min | AggKind::Max, [input]) => input.clone(),
+            (AggKind::Min | AggKind::Max, _) => return invalid(),
 
             // Avg
             (AggKind::Avg, [input]) => match input {

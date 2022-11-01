@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -979,7 +979,6 @@ async fn test_delete_get() {
         .unwrap()
         .is_none());
 }
-
 #[tokio::test]
 async fn test_multiple_epoch_sync() {
     let sstable_store = mock_sstable_store();

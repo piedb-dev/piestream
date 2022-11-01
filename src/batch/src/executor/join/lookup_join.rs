@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,6 @@ pub struct InnerSideExecutorBuilder<C> {
     epoch: u64,
     pu_to_worker_mapping: HashMap<ParallelUnitId, WorkerNode>,
     pu_to_scan_range_mapping: HashMap<ParallelUnitId, Vec<(ScanRange, VirtualNode)>>,
-    chunk_size: usize,
 }
 
 /// Used to build the executor for the inner side
@@ -224,7 +223,7 @@ impl<C: BatchTaskContext> LookupExecutorBuilder for InnerSideExecutorBuilder<C> 
         let list = self
             .pu_to_scan_range_mapping
             .entry(parallel_unit_id)
-            .or_default();
+            .or_insert(vec![]);
         list.push((scan_range, vnode));
 
         Ok(())
@@ -289,7 +288,6 @@ pub struct LookupJoinExecutor<K> {
     schema: Schema,
     output_indices: Vec<usize>,
     identity: String,
-    chunk_size: usize,
     _phantom: PhantomData<K>,
 }
 
@@ -325,7 +323,6 @@ impl<K> LookupJoinExecutor<K> {
         schema: Schema,
         output_indices: Vec<usize>,
         identity: String,
-        chunk_size: usize,
     ) -> Self {
         Self {
             join_type,
@@ -341,7 +338,6 @@ impl<K> LookupJoinExecutor<K> {
             schema,
             output_indices,
             identity,
-            chunk_size,
             _phantom: PhantomData,
         }
     }
@@ -443,7 +439,6 @@ impl<K: HashKey> LookupJoinExecutor<K> {
                 full_data_types,
                 hash_map,
                 next_build_row_with_same_key,
-                self.chunk_size,
             );
 
             if let Some(cond) = self.condition.as_ref() {
@@ -467,7 +462,7 @@ impl<K: HashKey> LookupJoinExecutor<K> {
                 };
                 // For non-equi join, we need an output chunk builder to align the output chunks.
                 let mut output_chunk_builder =
-                    DataChunkBuilder::new(self.schema.data_types(), self.chunk_size);
+                    DataChunkBuilder::with_default_size(self.schema.data_types());
                 #[for_await]
                 for chunk in stream {
                     #[for_await]
@@ -585,15 +580,13 @@ impl BoxedExecutorBuilder for LookupJoinExecutorBuilder {
 
         let inner_side_key_types = inner_side_key_idxs
             .iter()
-            .map(|&i| inner_side_schema.fields[i].data_type.clone())
+            .map(|&i| inner_side_schema.fields[i as usize].data_type.clone())
             .collect_vec();
 
         let null_safe = lookup_join_node.get_null_safe().to_vec();
 
         let vnode_mapping = lookup_join_node.get_inner_side_vnode_mapping().to_vec();
         assert!(!vnode_mapping.is_empty());
-
-        let chunk_size = source.context.get_config().developer.batch_chunk_size;
 
         let inner_side_builder = InnerSideExecutorBuilder {
             table_desc: table_desc.clone(),
@@ -607,7 +600,6 @@ impl BoxedExecutorBuilder for LookupJoinExecutorBuilder {
             epoch: source.epoch(),
             pu_to_worker_mapping: get_pu_to_worker_mapping(lookup_join_node.get_worker_nodes()),
             pu_to_scan_range_mapping: HashMap::new(),
-            chunk_size,
         };
 
         Ok(LookupJoinExecutorArgs {
@@ -620,10 +612,9 @@ impl BoxedExecutorBuilder for LookupJoinExecutorBuilder {
             inner_side_key_types,
             inner_side_key_idxs,
             null_safe,
-            chunk_builder: DataChunkBuilder::new(original_schema.data_types(), chunk_size),
+            chunk_builder: DataChunkBuilder::with_default_size(original_schema.data_types()),
             schema: actual_schema,
             output_indices,
-            chunk_size,
             identity: source.plan_node().get_identity().clone(),
         }
         .dispatch())
@@ -643,7 +634,6 @@ struct LookupJoinExecutorArgs {
     chunk_builder: DataChunkBuilder,
     schema: Schema,
     output_indices: Vec<usize>,
-    chunk_size: usize,
     identity: String,
 }
 
@@ -665,7 +655,6 @@ impl HashKeyDispatcher for LookupJoinExecutorArgs {
             self.schema,
             self.output_indices,
             self.identity,
-            self.chunk_size,
         ))
     }
 
@@ -692,8 +681,6 @@ mod tests {
         diff_executor_output, FakeInnerSideExecutorBuilder, MockExecutor,
     };
     use crate::executor::{BoxedExecutor, OrderByExecutor};
-
-    const CHUNK_SIZE: usize = 1024;
 
     pub struct MockGatherExecutor {
         chunks: Vec<DataChunk>,
@@ -761,10 +748,9 @@ mod tests {
             inner_side_key_types: vec![inner_side_data_types[0].clone()],
             inner_side_key_idxs: vec![0],
             null_safe: vec![null_safe],
-            chunk_builder: DataChunkBuilder::new(original_schema.data_types(), CHUNK_SIZE),
+            chunk_builder: DataChunkBuilder::with_default_size(original_schema.data_types()),
             schema: original_schema.clone(),
             output_indices: (0..original_schema.len()).into_iter().collect(),
-            chunk_size: CHUNK_SIZE,
             identity: "TestLookupJoinExecutor".to_string(),
         }
         .dispatch()
@@ -786,7 +772,6 @@ mod tests {
             child,
             order_pairs,
             "OrderByExecutor".into(),
-            CHUNK_SIZE,
         ))
     }
 

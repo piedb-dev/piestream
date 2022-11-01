@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,9 +40,7 @@ impl Binder {
         _columns: Vec<Ident>,
         source: Query,
     ) -> Result<BoundInsert> {
-        let (schema_name, source_name) =
-            Self::resolve_table_or_source_name(&self.db_name, source_name)?;
-        let table_source = self.bind_table_source(schema_name.as_deref(), &source_name)?;
+        let table_source = self.bind_table_source(source_name)?;
 
         let expected_types = table_source
             .columns

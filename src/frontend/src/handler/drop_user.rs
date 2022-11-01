@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ pub async fn handle_drop_user(
             return if if_exists {
                 Ok(PgResponse::empty_result_with_notice(
                     StatementType::DROP_USER,
-                    format!("user \"{}\" does not exist, skipping", user_name),
+                    format!("NOTICE: user {} does not exist, skipping", user_name),
                 ))
             } else {
                 Err(CatalogError::NotFound("user", user_name).into())

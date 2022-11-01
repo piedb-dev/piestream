@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ impl ExecutorBuilder for TopNExecutorNewBuilder {
         if node.with_ties {
             Ok(TopNExecutor::new_with_ties(
                 input,
-                params.actor_context,
                 order_pairs,
                 (node.offset as usize, node.limit as usize),
                 node.order_by_len as usize,
@@ -51,7 +50,6 @@ impl ExecutorBuilder for TopNExecutorNewBuilder {
         } else {
             Ok(TopNExecutor::new_without_ties(
                 input,
-                params.actor_context,
                 order_pairs,
                 (node.offset as usize, node.limit as usize),
                 node.order_by_len as usize,

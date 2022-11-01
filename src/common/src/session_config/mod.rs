@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,18 +13,16 @@
 // limitations under the License.
 
 mod query_mode;
-mod search_path;
 use std::ops::Deref;
+use std::str::FromStr;
 
-use itertools::Itertools;
 pub use query_mode::QueryMode;
-pub use search_path::{SearchPath, USER_NAME_WILD_CARD};
 
 use crate::error::{ErrorCode, RwError};
 
 // This is a hack, &'static str is not allowed as a const generics argument.
 // TODO: refine this using the adt_const_params feature.
-const CONFIG_KEYS: [&str; 9] = [
+const CONFIG_KEYS: [&str; 8] = [
     "RW_IMPLICIT_FLUSH",
     "CREATE_COMPACTION_GROUP_FOR_MV",
     "QUERY_MODE",
@@ -33,7 +31,6 @@ const CONFIG_KEYS: [&str; 9] = [
     "DATESTYLE",
     "RW_BATCH_ENABLE_LOOKUP_JOIN",
     "MAX_SPLIT_RANGE_GAP",
-    "SEARCH_PATH",
 ];
 
 // MUST HAVE 1v1 relationship to CONFIG_KEYS. e.g. CONFIG_KEYS[IMPLICIT_FLUSH] =
@@ -46,9 +43,8 @@ const APPLICATION_NAME: usize = 4;
 const DATE_STYLE: usize = 5;
 const BATCH_ENABLE_LOOKUP_JOIN: usize = 6;
 const MAX_SPLIT_RANGE_GAP: usize = 7;
-const SEARCH_PATH: usize = 8;
 
-trait ConfigEntry: Default + for<'a> TryFrom<&'a [&'a str], Error = RwError> {
+trait ConfigEntry: Default + FromStr<Err = RwError> {
     fn entry_name() -> &'static str;
 }
 
@@ -66,19 +62,10 @@ impl<const NAME: usize, const DEFAULT: bool> ConfigEntry for ConfigBool<NAME, DE
     }
 }
 
-impl<const NAME: usize, const DEFAULT: bool> TryFrom<&[&str]> for ConfigBool<NAME, DEFAULT> {
-    type Error = RwError;
+impl<const NAME: usize, const DEFAULT: bool> FromStr for ConfigBool<NAME, DEFAULT> {
+    type Err = RwError;
 
-    fn try_from(value: &[&str]) -> Result<Self, Self::Error> {
-        if value.len() != 1 {
-            return Err(ErrorCode::InternalError(format!(
-                "SET {} takes only one argument",
-                <Self as ConfigEntry>::entry_name()
-            ))
-            .into());
-        }
-
-        let s = value[0];
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case("true") {
             Ok(ConfigBool(true))
         } else if s.eq_ignore_ascii_case("false") {
@@ -112,19 +99,11 @@ impl<const NAME: usize> Deref for ConfigString<NAME> {
     }
 }
 
-impl<const NAME: usize> TryFrom<&[&str]> for ConfigString<NAME> {
-    type Error = RwError;
+impl<const NAME: usize> FromStr for ConfigString<NAME> {
+    type Err = RwError;
 
-    fn try_from(value: &[&str]) -> Result<Self, Self::Error> {
-        if value.len() != 1 {
-            return Err(ErrorCode::InternalError(format!(
-                "SET {} takes only one argument",
-                Self::entry_name()
-            ))
-            .into());
-        }
-
-        Ok(Self(value[0].to_string()))
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -156,19 +135,10 @@ impl<const NAME: usize, const DEFAULT: i32> ConfigEntry for ConfigI32<NAME, DEFA
     }
 }
 
-impl<const NAME: usize, const DEFAULT: i32> TryFrom<&[&str]> for ConfigI32<NAME, DEFAULT> {
-    type Error = RwError;
+impl<const NAME: usize, const DEFAULT: i32> FromStr for ConfigI32<NAME, DEFAULT> {
+    type Err = RwError;
 
-    fn try_from(value: &[&str]) -> Result<Self, Self::Error> {
-        if value.len() != 1 {
-            return Err(ErrorCode::InternalError(format!(
-                "SET {} takes only one argument",
-                Self::entry_name()
-            ))
-            .into());
-        }
-
-        let s = value[0];
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.parse::<i32>().map(ConfigI32).map_err(|_e| {
             ErrorCode::InvalidConfigValue {
                 config_entry: Self::entry_name().to_string(),
@@ -223,32 +193,26 @@ pub struct ConfigMap {
 
     /// It's the max gap allowed to transform small range scan scan into multi point lookup.
     max_split_range_gap: MaxSplitRangeGap,
-
-    /// see <https://www.postgresql.org/docs/14/runtime-config-client.html#GUC-SEARCH-PATH>
-    search_path: SearchPath,
 }
 
 impl ConfigMap {
-    pub fn set(&mut self, key: &str, val: Vec<String>) -> Result<(), RwError> {
-        let val = val.iter().map(AsRef::as_ref).collect_vec();
+    pub fn set(&mut self, key: &str, val: &str) -> Result<(), RwError> {
         if key.eq_ignore_ascii_case(ImplicitFlush::entry_name()) {
-            self.implicit_flush = val.as_slice().try_into()?;
+            self.implicit_flush = val.parse()?;
         } else if key.eq_ignore_ascii_case(CreateCompactionGroupForMv::entry_name()) {
-            self.create_compaction_group_for_mv = val.as_slice().try_into()?;
+            self.create_compaction_group_for_mv = val.parse()?;
         } else if key.eq_ignore_ascii_case(QueryMode::entry_name()) {
-            self.query_mode = val.as_slice().try_into()?;
+            self.query_mode = val.parse()?;
         } else if key.eq_ignore_ascii_case(ExtraFloatDigit::entry_name()) {
-            self.extra_float_digit = val.as_slice().try_into()?;
+            self.extra_float_digit = val.parse()?;
         } else if key.eq_ignore_ascii_case(ApplicationName::entry_name()) {
-            self.application_name = val.as_slice().try_into()?;
+            self.application_name = val.parse()?;
         } else if key.eq_ignore_ascii_case(DateStyle::entry_name()) {
-            self.date_style = val.as_slice().try_into()?;
+            self.date_style = val.parse()?;
         } else if key.eq_ignore_ascii_case(BatchEnableLookupJoin::entry_name()) {
-            self.batch_enable_lookup_join = val.as_slice().try_into()?;
+            self.batch_enable_lookup_join = val.parse()?;
         } else if key.eq_ignore_ascii_case(MaxSplitRangeGap::entry_name()) {
-            self.max_split_range_gap = val.as_slice().try_into()?;
-        } else if key.eq_ignore_ascii_case(SearchPath::entry_name()) {
-            self.search_path = val.as_slice().try_into()?;
+            self.max_split_range_gap = val.parse()?;
         } else {
             return Err(ErrorCode::UnrecognizedConfigurationParameter(key.to_string()).into());
         }
@@ -271,10 +235,6 @@ impl ConfigMap {
             Ok(self.date_style.to_string())
         } else if key.eq_ignore_ascii_case(BatchEnableLookupJoin::entry_name()) {
             Ok(self.batch_enable_lookup_join.to_string())
-        } else if key.eq_ignore_ascii_case(MaxSplitRangeGap::entry_name()) {
-            Ok(self.max_split_range_gap.to_string())
-        } else if key.eq_ignore_ascii_case(SearchPath::entry_name()) {
-            Ok(self.search_path.to_string())
         } else {
             Err(ErrorCode::UnrecognizedConfigurationParameter(key.to_string()).into())
         }
@@ -322,11 +282,6 @@ impl ConfigMap {
                 setting : self.max_split_range_gap.to_string(),
                 description : String::from("It's the max gap allowed to transform small range scan scan into multi point lookup.")
             },
-            VariableInfo {
-                name: SearchPath::entry_name().to_lowercase(),
-                setting : self.search_path.to_string(),
-                description : String::from("Sets the order in which schemas are searched when an object (table, data type, function, etc.) is referenced by a simple name with no schema specified")
-            }
         ]
     }
 
@@ -364,9 +319,5 @@ impl ConfigMap {
         } else {
             *self.max_split_range_gap as u64
         }
-    }
-
-    pub fn get_search_path(&self) -> SearchPath {
-        self.search_path.clone()
     }
 }

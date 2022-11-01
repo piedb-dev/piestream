@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,11 +132,12 @@ impl<S: StateStore> MaterializeExecutor<S> {
                     Message::Chunk(chunk)
                 }
                 Message::Barrier(b) => {
+                    // FIXME(ZBW): use a better error type
                     self.state_table.commit(b.epoch).await?;
 
                     // Update the vnode bitmap for the state table if asked.
                     if let Some(vnode_bitmap) = b.as_update_vnode_bitmap(self.actor_context.id) {
-                        let _ = self.state_table.update_vnode_bitmap(vnode_bitmap);
+                        self.state_table.update_vnode_bitmap(vnode_bitmap);
                     }
 
                     Message::Barrier(b)
@@ -233,7 +234,7 @@ mod tests {
             ColumnDesc::unnamed(column_ids[1], DataType::Int32),
         ];
 
-        let table = StorageTable::for_test(
+        let mut table = StorageTable::for_test(
             memory_state_store.clone(),
             table_id,
             column_descs,

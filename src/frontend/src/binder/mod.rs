@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use piestream_common::error::Result;
-use piestream_common::session_config::SearchPath;
 use piestream_sqlparser::ast::{Statement, TableAlias};
 
 mod bind_context;
@@ -42,7 +41,7 @@ pub use relation::{
     BoundWindowTableFunction, Relation, WindowTableFunctionKind,
 };
 use piestream_common::error::ErrorCode;
-pub use select::{BoundDistinct, BoundSelect};
+pub use select::BoundSelect;
 pub use set_expr::BoundSetExpr;
 pub use statement::BoundStatement;
 pub use update::BoundUpdate;
@@ -75,8 +74,6 @@ pub struct Binder {
     next_values_id: usize,
     /// Map the cte's name to its Relation::Subquery.
     cte_to_relation: HashMap<String, (BoundQuery, TableAlias)>,
-
-    search_path: SearchPath,
 }
 
 impl Binder {
@@ -91,7 +88,6 @@ impl Binder {
             next_subquery_id: 0,
             next_values_id: 0,
             cte_to_relation: HashMap::new(),
-            search_path: session.config().get_search_path(),
         }
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ impl Bitmap {
     }
 
     fn num_bytes(num_bits: usize) -> usize {
-        num_bits / 8 + usize::from(num_bits % 8 > 0)
+        num_bits / 8 + if num_bits % 8 > 0 { 1 } else { 0 }
     }
 
     /// Returns the number of valid bits in the bitmap,

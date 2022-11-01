@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
 #![cfg(madsim)]
 
 use anyhow::Result;
-use piestream_simulation_scale::cluster::{Cluster, Configuration};
+use piestream_simulation_scale::cluster::Cluster;
 use piestream_simulation_scale::utils::AssertResult;
 
 #[madsim::test]
 async fn test_hello() -> Result<()> {
-    let mut cluster = Cluster::start(Configuration::default()).await?;
+    let mut cluster = Cluster::start().await?;
     cluster
         .run("select concat_ws(', ', 'hello', 'world');")
         .await?

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,131 +13,99 @@
 // limitations under the License.
 
 use pgwire::pg_response::{PgResponse, StatementType};
-use piestream_common::error::ErrorCode::{InternalError, PermissionDenied};
+use piestream_common::error::ErrorCode::PermissionDenied;
 use piestream_common::error::Result;
 use piestream_pb::user::update_user_request::UpdateField;
-use piestream_pb::user::UserInfo;
-use piestream_sqlparser::ast::{AlterUserStatement, ObjectName, UserOption, UserOptions};
+use piestream_pb::user::{UpdateUserRequest, UserInfo};
+use piestream_sqlparser::ast::{AlterUserStatement, UserOption, UserOptions};
 
 use super::RwPgResponse;
 use crate::binder::Binder;
 use crate::catalog::CatalogError;
 use crate::session::OptimizerContext;
-use crate::user::user_authentication::encrypted_password;
+use crate::user::user_authentication::{encrypt_default, encrypted_password};
 
 fn alter_prost_user_info(
     mut user_info: UserInfo,
     options: &UserOptions,
     session_user: &UserInfo,
-) -> Result<(UserInfo, Vec<UpdateField>)> {
-    if !session_user.is_super {
-        let require_super = user_info.is_super
-            || options
-                .0
-                .iter()
-                .any(|option| matches!(option, UserOption::SuperUser | UserOption::NoSuperUser));
-        if require_super {
-            return Err(PermissionDenied(
-                "must be superuser to alter superuser roles or change superuser attribute"
-                    .to_string(),
-            )
-            .into());
-        }
-
-        let change_self_password = session_user.id == user_info.id
-            && options.0.len() == 1
-            && matches!(
-                &options.0[0],
-                UserOption::EncryptedPassword(_) | UserOption::Password(_)
-            );
-        if !session_user.can_create_user && !change_self_password {
-            return Err(PermissionDenied("Do not have the privilege".to_string()).into());
-        }
-    }
-
+) -> Result<UpdateUserRequest> {
     let mut update_fields = Vec::new();
+    let mut has_privilege = true;
     for option in &options.0 {
         match option {
             UserOption::SuperUser => {
+                if !session_user.is_super {
+                    has_privilege = false;
+                }
                 user_info.is_super = true;
-                update_fields.push(UpdateField::Super);
+                update_fields.push(UpdateField::Super as i32);
             }
             UserOption::NoSuperUser => {
+                if !session_user.is_super {
+                    has_privilege = false;
+                }
                 user_info.is_super = false;
-                update_fields.push(UpdateField::Super);
+                update_fields.push(UpdateField::Super as i32);
             }
             UserOption::CreateDB => {
+                if !session_user.can_create_db {
+                    has_privilege = false;
+                }
                 user_info.can_create_db = true;
-                update_fields.push(UpdateField::CreateDb);
+                update_fields.push(UpdateField::CreateDb as i32);
             }
             UserOption::NoCreateDB => {
+                if !session_user.can_create_db {
+                    has_privilege = false;
+                }
                 user_info.can_create_db = false;
-                update_fields.push(UpdateField::CreateDb);
+                update_fields.push(UpdateField::CreateDb as i32);
             }
             UserOption::CreateUser => {
+                if !session_user.can_create_user {
+                    has_privilege = false;
+                }
                 user_info.can_create_user = true;
-                update_fields.push(UpdateField::CreateUser);
+                update_fields.push(UpdateField::CreateUser as i32);
             }
             UserOption::NoCreateUser => {
+                if !session_user.can_create_user {
+                    has_privilege = false;
+                }
                 user_info.can_create_user = false;
-                update_fields.push(UpdateField::CreateUser);
+                update_fields.push(UpdateField::CreateUser as i32);
             }
             UserOption::Login => {
                 user_info.can_login = true;
-                update_fields.push(UpdateField::Login);
+                update_fields.push(UpdateField::Login as i32);
             }
             UserOption::NoLogin => {
                 user_info.can_login = false;
-                update_fields.push(UpdateField::Login);
+                update_fields.push(UpdateField::Login as i32);
             }
             UserOption::EncryptedPassword(p) => {
-                // TODO: Behaviour of PostgreSQL: Notice when password is empty string.
                 if !p.0.is_empty() {
-                    user_info.auth_info = encrypted_password(&user_info.name, &p.0);
-                } else {
-                    user_info.auth_info = None;
-                };
-                update_fields.push(UpdateField::AuthInfo);
+                    user_info.auth_info = Some(encrypt_default(&user_info.name, &p.0));
+                    update_fields.push(UpdateField::AuthInfo as i32);
+                }
             }
             UserOption::Password(opt) => {
-                // TODO: Behaviour of PostgreSQL: Notice when password is empty string.
-                if let Some(password) = opt && !password.0.is_empty() {
+                if let Some(password) = opt {
                     user_info.auth_info = encrypted_password(&user_info.name, &password.0);
-                } else {
-                    user_info.auth_info = None;
+                    update_fields.push(UpdateField::AuthInfo as i32);
                 }
-                update_fields.push(UpdateField::AuthInfo);
             }
         }
-    }
-    Ok((user_info, update_fields))
-}
-
-fn alter_rename_prost_user_info(
-    mut user_info: UserInfo,
-    new_name: ObjectName,
-    session_user: &UserInfo,
-) -> Result<(UserInfo, Vec<UpdateField>)> {
-    if session_user.id == user_info.id {
-        return Err(InternalError("session user cannot be renamed".to_string()).into());
-    }
-
-    if !session_user.is_super {
-        if user_info.is_super {
-            return Err(
-                PermissionDenied("must be superuser to rename superusers".to_string()).into(),
-            );
-        }
-
-        if !session_user.can_create_user {
-            return Err(
-                PermissionDenied("Do not have the privilege to rename user".to_string()).into(),
-            );
+        if !session_user.is_super && !has_privilege {
+            return Err(PermissionDenied("Do not have the privilege".to_string()).into());
         }
     }
-
-    user_info.name = Binder::resolve_user_name(new_name)?;
-    Ok((user_info, vec![UpdateField::Rename]))
+    let request = UpdateUserRequest {
+        user: Some(user_info),
+        update_fields,
+    };
+    Ok(request)
 }
 
 pub async fn handle_alter_user(
@@ -145,33 +113,36 @@ pub async fn handle_alter_user(
     stmt: AlterUserStatement,
 ) -> Result<RwPgResponse> {
     let session = context.session_ctx;
-    let (user_info, update_fields) = {
-        let user_name = Binder::resolve_user_name(stmt.user_name.clone())?;
-        let user_reader = session.env().user_info_reader().read_guard();
-
-        let old_info = user_reader
-            .get_user_by_name(&user_name)
-            .ok_or(CatalogError::NotFound("user", user_name))?
-            .clone();
-
-        let session_user = user_reader
-            .get_user_by_name(session.user_name())
-            .ok_or_else(|| CatalogError::NotFound("user", session.user_name().to_string()))?;
-
-        match stmt.mode {
-            piestream_sqlparser::ast::AlterUserMode::Options(options) => {
-                alter_prost_user_info(old_info, &options, session_user)?
-            }
-            piestream_sqlparser::ast::AlterUserMode::Rename(new_name) => {
-                alter_rename_prost_user_info(old_info, new_name, session_user)?
+    let user_name = Binder::resolve_user_name(stmt.user_name.clone())?;
+    let (mut old_info, session_user) = {
+        let user_reader = session.env().user_info_reader();
+        let reader = user_reader.read_guard();
+        if let Some(origin_info) = reader.get_user_by_name(&user_name) {
+            (
+                origin_info.clone(),
+                reader
+                    .get_user_by_name(session.user_name())
+                    .unwrap()
+                    .clone(),
+            )
+        } else {
+            return Err(CatalogError::NotFound("user", user_name).into());
+        }
+    };
+    let request = match stmt.mode {
+        piestream_sqlparser::ast::AlterUserMode::Options(options) => {
+            alter_prost_user_info(old_info, &options, &session_user)?
+        }
+        piestream_sqlparser::ast::AlterUserMode::Rename(new_name) => {
+            old_info.name = Binder::resolve_user_name(new_name)?;
+            UpdateUserRequest {
+                user: Some(old_info),
+                update_fields: vec![UpdateField::Rename as i32],
             }
         }
     };
-
     let user_info_writer = session.env().user_info_writer();
-    user_info_writer
-        .update_user(user_info, update_fields)
-        .await?;
+    user_info_writer.update_user(request).await?;
     Ok(PgResponse::empty_result(StatementType::UPDATE_USER))
 }
 

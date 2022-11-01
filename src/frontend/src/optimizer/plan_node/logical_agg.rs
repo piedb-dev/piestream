@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,11 +174,7 @@ impl LogicalAgg {
         self.agg_calls()
             .iter()
             .map(|agg_call| match agg_call.agg_kind {
-                AggKind::Min
-                | AggKind::Max
-                | AggKind::StringAgg
-                | AggKind::ArrayAgg
-                | AggKind::FirstValue => {
+                AggKind::Min | AggKind::Max | AggKind::StringAgg | AggKind::ArrayAgg => {
                     if !in_append_only {
                         let mut sort_column_set = BTreeSet::new();
                         let sort_keys = {

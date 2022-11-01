@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,16 +28,6 @@ macro_rules! try_match_expand {
         match $e {
             $variant(internal) => Ok(internal),
             _ => Err($crate::error::anyhow_error!($($arg)+)),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! must_match {
-    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? => $action:expr) => {
-        match $expression {
-            $( $pattern )|+ $( if $guard )? => $action,
-            _ => panic!("enum variant mismatch: `{}` is required", stringify!($( $pattern )|+ $( if $guard )?)),
         }
     };
 }
@@ -73,36 +63,6 @@ mod tests {
             crate::error::ErrorCode::InternalError
         )?;
         assert_eq!(err_str, "failure");
-        Ok(())
-    }
-
-    #[test]
-    fn test_must_match() -> crate::error::Result<()> {
-        #[allow(dead_code)]
-        enum A {
-            Foo,
-            Bar,
-        }
-        let a = A::Foo;
-        let val = must_match!(a, A::Foo => 42);
-        assert_eq!(val, 42);
-
-        #[allow(dead_code)]
-        enum B {
-            Foo,
-            Bar(i32),
-            Baz { x: u32, y: u32 },
-        }
-        let b = B::Baz { x: 1, y: 2 };
-        let val = must_match!(b, B::Baz { x, y } if x == 1 => x + y);
-        assert_eq!(val, 3);
-        let b = B::Bar(42);
-        let val = must_match!(b, B::Bar(x) => {
-            let y = x + 1;
-            y * 2
-        });
-        assert_eq!(val, 86);
-
         Ok(())
     }
 }

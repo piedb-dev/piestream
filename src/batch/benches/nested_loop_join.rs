@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ fn create_nested_loop_join_executor(
     right_chunk_size: usize,
     right_chunk_num: usize,
 ) -> BoxedExecutor {
-    const CHUNK_SIZE: usize = 1024;
     let left_input = create_input(&[DataType::Int64], left_chunk_size, left_chunk_num);
     let right_input = create_input(&[DataType::Int64], right_chunk_size, right_chunk_num);
 
@@ -133,7 +132,6 @@ fn create_nested_loop_join_executor(
         left_input,
         right_input,
         "NestedLoopJoinExecutor".into(),
-        CHUNK_SIZE,
     ))
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -344,7 +344,7 @@ mod tests {
         // No task
         let compactor = hummock_manager.get_idle_compactor().await.unwrap();
         assert_eq!(
-            ScheduleStatus::PickFailure,
+            ScheduleStatus::NoTask,
             compaction_scheduler
                 .pick_and_assign(
                     StaticCompactionGroupId::StateDefault.into(),

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -220,10 +220,9 @@ impl ConcatSstableIterator {
         };
 
         if idx < self.tables.len() {
-            let table_info = &self.tables[idx];
             let table = self
                 .sstable_store
-                .sstable(table_info, &mut self.stats)
+                .sstable(&self.tables[idx], &mut self.stats)
                 .await?;
             let block_metas = &table.value().meta.block_metas;
             let start_index = match seek_key {

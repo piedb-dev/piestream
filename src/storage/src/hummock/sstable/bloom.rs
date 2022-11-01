@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ impl<'a> Bloom<'a> {
         // 0.69 is approximately ln(2)
         let k = ((bits_per_key as f64) * 0.69) as u32;
         // limit k in [1, 30]
-        let k = k.clamp(1, 30);
+        let k = k.min(30).max(1);
         // For small len(keys), we set a minimum Bloom filter length to avoid high FPR
         let nbits = (keys.len() * bits_per_key).max(64);
         let nbytes = (nbits + 7) / 8;

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,10 +28,9 @@ fn create_expand_executor(
     chunk_size: usize,
     chunk_num: usize,
 ) -> BoxedExecutor {
-    const CHUNK_SIZE: usize = 1024;
     let input_types = &[DataType::Int32, DataType::Int64, DataType::Varchar];
     let input = create_input(input_types, chunk_size, chunk_num);
-    Box::new(ExpandExecutor::new(input, column_subsets, CHUNK_SIZE))
+    Box::new(ExpandExecutor::new(input, column_subsets))
 }
 
 fn bench_expand(c: &mut Criterion) {

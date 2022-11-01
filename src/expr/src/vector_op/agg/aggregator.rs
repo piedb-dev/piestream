@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,20 +240,6 @@ pub fn create_agg_state_unary(
         (Max, max_struct, struct_type, struct_type, None),
         (Max, max_str, varchar, varchar, None),
         (Max, max_list, list, list, None),
-        (FirstValue, first, int16, int16, None),
-        (FirstValue, first, int32, int32, None),
-        (FirstValue, first, int64, int64, None),
-        (FirstValue, first, float32, float32, None),
-        (FirstValue, first, float64, float64, None),
-        (FirstValue, first, decimal, decimal, None),
-        (FirstValue, first, boolean, boolean, None),
-        (FirstValue, first, interval, interval, None),
-        (FirstValue, first, date, date, None),
-        (FirstValue, first, timestamp, timestamp, None),
-        (FirstValue, first, time, time, None),
-        (FirstValue, first_struct, struct_type, struct_type, None),
-        (FirstValue, first_str, varchar, varchar, None),
-        (FirstValue, first_list, list, list, None),
         // Global Agg
         (Sum, sum, int64, int64, None),
     ];

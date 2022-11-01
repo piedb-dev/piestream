@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@ use std::iter::once;
 use std::str::FromStr;
 
 use itertools::Itertools;
-use piestream_common::array::ListValue;
-use piestream_common::catalog::PG_CATALOG_SCHEMA_NAME;
+use piestream_common::catalog::{DEFAULT_SCHEMA_NAME, PG_CATALOG_SCHEMA_NAME};
 use piestream_common::error::{ErrorCode, Result};
-use piestream_common::session_config::USER_NAME_WILD_CARD;
-use piestream_common::types::{DataType, Scalar};
+use piestream_common::types::DataType;
 use piestream_expr::expr::AggKind;
 use piestream_sqlparser::ast::{Function, FunctionArg, FunctionArgExpr, WindowSpec};
 
@@ -34,27 +32,25 @@ use crate::utils::Condition;
 
 impl Binder {
     pub(super) fn bind_function(&mut self, f: Function) -> Result<ExprImpl> {
-        let function_name = match f.name.0.as_slice() {
-            [name] => name.real_value(),
-            [schema, name] => {
-                let schema_name = schema.real_value();
-                if schema_name == PG_CATALOG_SCHEMA_NAME {
-                    name.real_value()
-                } else {
-                    return Err(ErrorCode::BindError(format!(
-                        "Unsupported function name under schema: {}",
-                        schema_name
-                    ))
-                    .into());
-                }
-            }
-            _ => {
-                return Err(ErrorCode::NotImplemented(
-                    format!("qualified function: {}", f.name),
-                    112.into(),
-                )
+        let function_name = if f.name.0.len() == 1 {
+            f.name.0.get(0).unwrap().real_value()
+        } else if f.name.0.len() == 2 {
+            let schema_name = f.name.0.get(0).unwrap().real_value();
+            if schema_name == PG_CATALOG_SCHEMA_NAME {
+                f.name.0.get(1).unwrap().real_value()
+            } else {
+                return Err(ErrorCode::BindError(format!(
+                    "Unsupported function name under schema: {}",
+                    schema_name
+                ))
                 .into());
             }
+        } else {
+            return Err(ErrorCode::NotImplemented(
+                format!("qualified function: {}", f.name),
+                112.into(),
+            )
+            .into());
         };
 
         // agg calls
@@ -125,8 +121,6 @@ impl Binder {
             "ceil" => ExprType::Ceil,
             "floor" => ExprType::Floor,
             "abs" => ExprType::Abs,
-            // temporal/chrono
-            "to_timestamp" => ExprType::ToTimestamp,
             // string
             "substr" => ExprType::Substr,
             "length" => ExprType::Length,
@@ -170,65 +164,7 @@ impl Binder {
                 return Ok(ExprImpl::literal_varchar(self.db_name.clone()));
             }
             "current_schema" if inputs.is_empty() => {
-                return Ok(self
-                    .catalog
-                    .first_valid_schema(
-                        &self.db_name,
-                        &self.search_path,
-                        &self.auth_context.user_name,
-                    )
-                    .map(|schema| ExprImpl::literal_varchar(schema.name()))
-                    .unwrap_or_else(|_| ExprImpl::literal_null(DataType::Varchar)));
-            }
-            "current_schemas" => {
-                if inputs.len() != 1
-                    || (!inputs[0].is_null() && inputs[0].return_type() != DataType::Boolean)
-                {
-                    return Err(ErrorCode::ExprError(
-                        "No function matches the given name and argument types. You might need to add explicit type casts.".into()
-                    )
-                    .into());
-                }
-
-                let ExprImpl::Literal(literal) = &inputs[0] else {
-                    return Err(ErrorCode::NotImplemented(
-                        "Only boolean literals are supported in `current_schemas`.".to_string(), None.into()
-                    )
-                    .into());
-                };
-
-                let Some(bool) = literal.get_data().as_ref().map(|bool| bool.clone().into_bool()) else {
-                    return Ok(ExprImpl::literal_null(DataType::List {
-                        datatype: Box::new(DataType::Varchar),
-                    }));
-                };
-
-                let paths = if bool {
-                    self.search_path.path()
-                } else {
-                    self.search_path.real_path()
-                };
-
-                let mut schema_names = vec![];
-                for path in paths {
-                    let mut schema_name = path;
-                    if schema_name == USER_NAME_WILD_CARD {
-                        schema_name = &self.auth_context.user_name;
-                    }
-
-                    if self
-                        .catalog
-                        .get_schema_by_name(&self.db_name, schema_name)
-                        .is_ok()
-                    {
-                        schema_names.push(Some(schema_name.clone().to_scalar_value()));
-                    }
-                }
-
-                return Ok(ExprImpl::literal_list(
-                    ListValue::new(schema_names),
-                    DataType::Varchar,
-                ));
+                return Ok(ExprImpl::literal_varchar(DEFAULT_SCHEMA_NAME.to_string()));
             }
             "session_user" if inputs.is_empty() => {
                 return Ok(ExprImpl::literal_varchar(

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -221,7 +221,10 @@ where
         for table_frag in table_frags {
             for (frag_id, frag) in table_frag.fragments {
                 let mut actors = frag.actors.iter().map(|x| x.actor_id).collect_vec();
-                frag_actors.entry(frag_id).or_default().append(&mut actors);
+                frag_actors
+                    .entry(frag_id)
+                    .or_insert(vec![])
+                    .append(&mut actors);
             }
         }
 
@@ -406,7 +409,7 @@ where
 
             for source in sources {
                 if let Some(StreamSource(_)) = source.info {
-                    Self::create_source_worker(&source, &mut managed_sources, false).await?
+                    Self::create_source_worker(&source, &mut managed_sources).await?
                 }
             }
         }
@@ -513,10 +516,7 @@ where
         }
 
         if let Some(splits) = &handle.splits.lock().await.splits {
-            if !splits.is_empty() {
-                tracing::warn!("no splits detected for source {}", source_id);
-                return Ok(assigned);
-            }
+            assert!(!splits.is_empty());
 
             let empty_actor_splits = actor_ids
                 .into_iter()
@@ -599,7 +599,7 @@ where
         }
 
         if let Some(StreamSource(_)) = source.info {
-            Self::create_source_worker(source, &mut core.managed_sources, true).await?;
+            Self::create_source_worker(source, &mut core.managed_sources).await?;
         }
         Ok(())
     }
@@ -607,18 +607,13 @@ where
     async fn create_source_worker(
         source: &Source,
         managed_sources: &mut HashMap<SourceId, ConnectorSourceWorkerHandle>,
-        force_tick: bool,
     ) -> MetaResult<()> {
         let mut worker = ConnectorSourceWorker::create(source, Duration::from_secs(10)).await?;
         let current_splits_ref = worker.current_splits.clone();
         tracing::info!("spawning new watcher for source {}", source.id);
 
-        // don't force tick in process of recovery. One source down should not lead to meta recovery
-        // failure.
-        if force_tick {
-            // if fail to fetch meta info, will refuse to create source
-            worker.tick().await?;
-        }
+        // if fail to fetch meta info, will refuse to create source
+        worker.tick().await?;
 
         let (sync_call_tx, sync_call_rx) = tokio::sync::mpsc::unbounded_channel();
 

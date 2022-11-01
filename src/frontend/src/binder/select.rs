@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ use itertools::Itertools;
 use piestream_common::catalog::{Field, Schema, PG_CATALOG_SCHEMA_NAME};
 use piestream_common::error::{ErrorCode, Result};
 use piestream_common::types::DataType;
-use piestream_sqlparser::ast::{Distinct, Expr, Select, SelectItem};
+use piestream_sqlparser::ast::{Expr, Select, SelectItem};
 
 use super::bind_context::{Clause, ColumnBinding};
 use super::UNNAMED_COLUMN;
@@ -33,7 +33,7 @@ use crate::expr::{
 
 #[derive(Debug, Clone)]
 pub struct BoundSelect {
-    pub distinct: BoundDistinct,
+    pub distinct: bool,
     pub select_items: Vec<ExprImpl>,
     pub aliases: Vec<Option<String>>,
     pub from: Option<Relation>,
@@ -97,23 +97,6 @@ impl BoundSelect {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum BoundDistinct {
-    All,
-    Distinct,
-    DistinctOn(Vec<ExprImpl>),
-}
-
-impl BoundDistinct {
-    pub const fn is_all(&self) -> bool {
-        matches!(self, Self::All)
-    }
-
-    pub const fn is_distinct(&self) -> bool {
-        matches!(self, Self::Distinct)
-    }
-}
-
 impl Binder {
     pub(super) fn bind_select(&mut self, select: Select) -> Result<BoundSelect> {
         // Bind FROM clause.
@@ -121,9 +104,6 @@ impl Binder {
 
         // Bind SELECT clause.
         let (select_items, aliases) = self.bind_select_list(select.projection)?;
-
-        // Bind DISTINCT ON.
-        let distinct = self.bind_distinct_on(select.distinct)?;
 
         // Bind WHERE clause.
         self.context.clause = Some(Clause::Where);
@@ -161,7 +141,7 @@ impl Binder {
             .collect::<Result<Vec<Field>>>()?;
 
         Ok(BoundSelect {
-            distinct,
+            distinct: select.distinct,
             select_items,
             aliases,
             from,
@@ -286,11 +266,8 @@ impl Binder {
             ExprImpl::Literal(_) => input.clone(),
             _ => return Err(ErrorCode::BindError("Unsupported input type".to_string()).into()),
         };
-        let from = Some(self.bind_table_or_source(
-            Some(PG_CATALOG_SCHEMA_NAME),
-            PG_USER_TABLE_NAME,
-            None,
-        )?);
+        let from =
+            Some(self.bind_table_or_source(PG_CATALOG_SCHEMA_NAME, PG_USER_TABLE_NAME, None)?);
         let where_clause = Some(
             FunctionCall::new(
                 ExprType::Equal,
@@ -303,7 +280,7 @@ impl Binder {
         );
 
         Ok(BoundSelect {
-            distinct: BoundDistinct::All,
+            distinct: false,
             select_items,
             aliases: vec![None],
             from,
@@ -374,19 +351,5 @@ impl Binder {
             }
         }
         Ok(())
-    }
-
-    fn bind_distinct_on(&mut self, distinct: Distinct) -> Result<BoundDistinct> {
-        Ok(match distinct {
-            Distinct::All => BoundDistinct::All,
-            Distinct::Distinct => BoundDistinct::Distinct,
-            Distinct::DistinctOn(exprs) => {
-                let mut bound_exprs = vec![];
-                for expr in exprs {
-                    bound_exprs.push(self.bind_expr(expr)?);
-                }
-                BoundDistinct::DistinctOn(bound_exprs)
-            }
-        })
     }
 }

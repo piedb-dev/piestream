@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -508,7 +508,7 @@ fn hack_kafka_test(path: &Path) -> tempfile::NamedTempFile {
     let complex_avsc_full_path =
         std::fs::canonicalize("src/source/src/test_data/complex-schema.avsc")
             .expect("failed to get schema path");
-    let proto_full_path = std::fs::canonicalize("src/source/src/test_data/complex-schema")
+    let proto_full_path = std::fs::canonicalize("src/source/src/test_data/complex-schema.proto")
         .expect("failed to get schema path");
     let content = content
         .replace("127.0.0.1:29092", "192.168.11.1:29092")
@@ -521,7 +521,7 @@ fn hack_kafka_test(path: &Path) -> tempfile::NamedTempFile {
             complex_avsc_full_path.to_str().unwrap(),
         )
         .replace(
-            "/piestream/proto-complex-schema",
+            "/piestream/proto-complex-schema.proto",
             proto_full_path.to_str().unwrap(),
         );
     let file = tempfile::NamedTempFile::new().expect("failed to create temp file");

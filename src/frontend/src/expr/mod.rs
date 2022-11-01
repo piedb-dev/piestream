@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 use enum_as_inner::EnumAsInner;
 use fixedbitset::FixedBitSet;
 use paste::paste;
-use piestream_common::array::{ListValue, Row};
+use piestream_common::array::Row;
 use piestream_common::error::Result;
 use piestream_common::types::{DataType, Datum, Scalar};
 use piestream_expr::expr::{build_from_prost, AggKind};
@@ -112,24 +112,6 @@ impl ExprImpl {
     #[inline(always)]
     pub fn literal_varchar(v: String) -> Self {
         Literal::new(Some(v.to_scalar_value()), DataType::Varchar).into()
-    }
-
-    /// A literal null value.
-    #[inline(always)]
-    pub fn literal_null(element_type: DataType) -> Self {
-        Literal::new(None, element_type).into()
-    }
-
-    /// A literal list value.
-    #[inline(always)]
-    pub fn literal_list(v: ListValue, element_type: DataType) -> Self {
-        Literal::new(
-            Some(v.to_scalar_value()),
-            DataType::List {
-                datatype: Box::new(element_type),
-            },
-        )
-        .into()
     }
 
     /// A `count(*)` aggregate function.

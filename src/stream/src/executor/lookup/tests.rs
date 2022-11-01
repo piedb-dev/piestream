@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -250,7 +250,6 @@ async fn test_lookup_this_epoch() {
         ),
         lru_manager: None,
         cache_size: 1 << 16,
-        chunk_size: 1024,
     }));
     let mut lookup_executor = lookup_executor.execute();
 
@@ -316,7 +315,6 @@ async fn test_lookup_last_epoch() {
         ),
         lru_manager: None,
         cache_size: 1 << 16,
-        chunk_size: 1024,
     }));
     let mut lookup_executor = lookup_executor.execute();
 

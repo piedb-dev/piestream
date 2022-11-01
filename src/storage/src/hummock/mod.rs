@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,6 @@ pub mod value;
 
 pub use error::*;
 use local_version::local_version_manager::{LocalVersionManager, LocalVersionManagerRef};
-use parking_lot::RwLock;
 pub use piestream_common::cache::{CacheableEntry, LookupResult, LruCache};
 use piestream_common::catalog::TableId;
 use piestream_common_service::observer_manager::{NotificationClient, ObserverManager};
@@ -76,7 +75,6 @@ use self::iterator::HummockIterator;
 use self::key::user_key;
 pub use self::sstable_store::*;
 pub use self::state_store::HummockStateStoreIter;
-use super::hummock::store::version::HummockReadVersion;
 use super::monitor::StateStoreMetrics;
 use crate::error::StorageResult;
 use crate::hummock::compaction_group_client::CompactionGroupClientImpl;
@@ -191,9 +189,7 @@ impl HummockStorage {
         };
 
         let (pin_version_tx, pin_version_rx) = unbounded_channel();
-        compaction_group_client.update_by(hummock_version.all_compaction_groups, true, &[]);
-        let pinned_version =
-            PinnedVersion::new(hummock_version.hummock_version.unwrap(), pin_version_tx);
+        let pinned_version = PinnedVersion::new(hummock_version, pin_version_tx);
         tokio::spawn(start_pinned_version_worker(
             pin_version_rx,
             hummock_meta_client.clone(),
@@ -208,9 +204,6 @@ impl HummockStorage {
             filter_key_extractor_manager.clone(),
         ));
 
-        let memory_limiter_quota = (options.shared_buffer_capacity_mb as usize) * (1 << 20);
-        let memory_limiter = Arc::new(MemoryLimiter::new(memory_limiter_quota as u64));
-
         let local_version_manager = LocalVersionManager::new(
             options.clone(),
             pinned_version,
@@ -218,17 +211,10 @@ impl HummockStorage {
             sstable_id_manager.clone(),
             shared_buffer_uploader,
             event_tx.clone(),
-            memory_limiter,
-            compaction_group_client.clone(),
         );
 
-        let hummock_event_handler = HummockEventHandler::new(
-            local_version_manager.clone(),
-            event_rx,
-            Arc::new(RwLock::new(HummockReadVersion::new(
-                local_version_manager.get_pinned_version(),
-            ))),
-        );
+        let hummock_event_handler =
+            HummockEventHandler::new(local_version_manager.clone(), event_rx);
 
         // Buffer size manager.
         tokio::spawn(hummock_event_handler.start_hummock_event_handler_worker());
@@ -265,10 +251,6 @@ impl HummockStorage {
 
     pub fn local_version_manager(&self) -> &LocalVersionManagerRef {
         &self.local_version_manager
-    }
-
-    pub fn compaction_group_client(&self) -> &Arc<CompactionGroupClientImpl> {
-        &self.compaction_group_client
     }
 
     async fn get_compaction_group_id(&self, table_id: TableId) -> HummockResult<CompactionGroupId> {

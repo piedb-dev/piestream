@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,9 +28,10 @@ use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
 use super::{Cache, ManagedTableState};
-use crate::common::{iter_state_table, StateTableColumnMapping};
+use crate::common::StateTableColumnMapping;
 use crate::executor::aggregation::AggCall;
 use crate::executor::error::StreamExecutorResult;
+use crate::executor::managed_state::iter_state_table;
 use crate::executor::PkIndices;
 
 #[derive(Clone)]
@@ -148,6 +149,8 @@ impl<S: StateStore> ManagedStringAggState<S> {
         columns: &[&ArrayImpl],
         state_table: &mut StateTable<S>,
     ) -> StreamExecutorResult<()> {
+        debug_assert!(super::verify_batch(ops, visibility, columns));
+
         for (i, op) in ops
             .iter()
             .enumerate()
@@ -233,17 +236,20 @@ impl<S: StateStore> ManagedTableState<S> for ManagedStringAggState<S> {
 
 #[cfg(test)]
 mod tests {
-    use piestream_common::array::StreamChunk;
+    use piestream_common::array::{Row, StreamChunk, StreamChunkTestExt};
     use piestream_common::catalog::{ColumnDesc, ColumnId, TableId};
-    use piestream_common::test_prelude::*;
-    use piestream_common::types::DataType;
+    use piestream_common::types::{DataType, ScalarImpl};
     use piestream_common::util::epoch::EpochPair;
-    use piestream_common::util::sort_util::OrderPair;
+    use piestream_common::util::sort_util::{OrderPair, OrderType};
     use piestream_expr::expr::AggKind;
     use piestream_storage::memory::MemoryStateStore;
+    use piestream_storage::table::streaming_table::state_table::StateTable;
 
-    use super::*;
-    use crate::executor::aggregation::AggArgs;
+    use super::ManagedStringAggState;
+    use crate::common::StateTableColumnMapping;
+    use crate::executor::aggregation::{AggArgs, AggCall};
+    use crate::executor::managed_state::aggregation::ManagedTableState;
+    use crate::executor::StreamExecutorResult;
 
     #[tokio::test]
     async fn test_string_agg_state_simple_agg_without_order() -> StreamExecutorResult<()> {

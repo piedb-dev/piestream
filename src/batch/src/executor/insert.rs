@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ use piestream_common::catalog::{Field, Schema, TableId};
 use piestream_common::error::{Result, RwError};
 use piestream_common::types::DataType;
 use piestream_pb::batch_plan::plan_node::NodeBody;
-use piestream_source::TableSourceManagerRef;
+use piestream_source::SourceManagerRef;
 
 use crate::executor::{
     BoxedDataChunkStream, BoxedExecutor, BoxedExecutorBuilder, Executor, ExecutorBuilder,
@@ -33,7 +33,7 @@ use crate::task::BatchTaskContext;
 pub struct InsertExecutor {
     /// Target table id.
     table_id: TableId,
-    source_manager: TableSourceManagerRef,
+    source_manager: SourceManagerRef,
 
     child: BoxedExecutor,
     schema: Schema,
@@ -43,7 +43,7 @@ pub struct InsertExecutor {
 impl InsertExecutor {
     pub fn new(
         table_id: TableId,
-        source_manager: TableSourceManagerRef,
+        source_manager: SourceManagerRef,
         child: BoxedExecutor,
         identity: String,
     ) -> Self {
@@ -141,7 +141,10 @@ impl BoxedExecutorBuilder for InsertExecutor {
 
         Ok(Box::new(Self::new(
             table_id,
-            source.context().source_manager(),
+            source
+                .context()
+                .source_manager_ref()
+                .context("source manager not found")?,
             child,
             source.plan_node().get_identity().clone(),
         )))
@@ -159,7 +162,7 @@ mod tests {
     use piestream_common::column_nonnull;
     use piestream_common::types::DataType;
     use piestream_source::table_test_utils::create_table_info;
-    use piestream_source::{SourceDescBuilder, TableSourceManager, TableSourceManagerRef};
+    use piestream_source::{MemSourceManager, SourceDescBuilder, SourceManagerRef};
     use piestream_storage::memory::MemoryStateStore;
     use piestream_storage::store::ReadOptions;
     use piestream_storage::*;
@@ -170,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_executor() -> Result<()> {
-        let source_manager: TableSourceManagerRef = Arc::new(TableSourceManager::default());
+        let source_manager: SourceManagerRef = Arc::new(MemSourceManager::default());
         let store = MemoryStateStore::new();
 
         // Make struct field

@@ -396,8 +396,8 @@ do
   echo
 done
 
-echo "install: $(tput setaf 4)risinglightdb/sqllogictest-rs$(tput sgr0)"
-cargo install --git https://github.com/risinglightdb/sqllogictest-rs --bin sqllogictest
+echo "install: $(tput setaf 4)piestreamdb/sqllogictest-rs$(tput sgr0)"
+cargo install --git https://github.com/piestreamdb/sqllogictest-rs --bin sqllogictest
 echo
 
 echo "check: $(tput setaf 4)tmux >= v3.2a$(tput sgr0)"
@@ -495,22 +495,8 @@ cargo nextest run \
   "$@"
 """
 
-[tasks.sscale-test]
-category = "RiseDev - Simulation scaling tests"
-description = "Run integration scaling tests in deterministic simulation mode"
-dependencies = ["warn-on-missing-tools"]
-env = { RUSTFLAGS = "-Ctarget-cpu=native --cfg tokio_unstable --cfg madsim", RUSTDOCFLAGS = "--cfg madsim", CARGO_TARGET_DIR = "target/sim" }
-script = """
-#!/bin/bash
-set -e
-
-cargo nextest run \
-  -p piestream_simulation_scale \
-  "$@"
-"""
-
 [tasks.sarchive-scale-test]
-category = "RiseDev - Simulation scaling tests"
+category = "RiseDev - Archive simulation scaling tests"
 description = "Archive integration scaling tests in deterministic simulation mode"
 dependencies = ["warn-on-missing-tools"]
 env = { RUSTFLAGS = "-Ctarget-cpu=native --cfg tokio_unstable --cfg madsim", RUSTDOCFLAGS = "--cfg madsim", CARGO_TARGET_DIR = "target/sim" }

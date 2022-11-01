@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ pub enum AggKind {
     StringAgg,
     ApproxCountDistinct,
     ArrayAgg,
-    FirstValue,
 }
 
 impl TryFrom<Type> for AggKind {
@@ -48,7 +47,6 @@ impl TryFrom<Type> for AggKind {
             Type::StringAgg => Ok(AggKind::StringAgg),
             Type::ApproxCountDistinct => Ok(AggKind::ApproxCountDistinct),
             Type::ArrayAgg => Ok(AggKind::ArrayAgg),
-            Type::FirstValue => Ok(AggKind::FirstValue),
             Type::Unspecified => bail!("Unrecognized agg."),
         }
     }
@@ -65,7 +63,6 @@ impl AggKind {
             Self::StringAgg => Type::StringAgg,
             Self::ApproxCountDistinct => Type::ApproxCountDistinct,
             Self::ArrayAgg => Type::ArrayAgg,
-            Self::FirstValue => Type::FirstValue,
         }
     }
 }

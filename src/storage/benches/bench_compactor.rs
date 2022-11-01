@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ async fn build_table(
     let user_len = full_key.len() - 8;
     for i in range {
         let start = (i % 8) as usize;
-        let end = start + 8;
+        let end = (start + 8) as usize;
         full_key[(user_len - 8)..user_len].copy_from_slice(&i.to_be_bytes());
         builder
             .add(&full_key, HummockValue::put(&value[start..end]), true)

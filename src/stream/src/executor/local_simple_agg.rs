@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,10 @@ use piestream_common::array::column::Column;
 use piestream_common::array::{Op, StreamChunk};
 use piestream_common::catalog::Schema;
 
-use super::aggregation::agg_impl::{create_streaming_agg_impl, StreamingAggImpl};
-use super::aggregation::{agg_call_filter_res, generate_agg_schema, AggCall};
+use super::aggregation::{
+    agg_call_filter_res, create_streaming_agg_state, generate_agg_schema, AggCall,
+    StreamingAggStateImpl,
+};
 use super::error::StreamExecutorError;
 use super::*;
 use crate::error::StreamResult;
@@ -55,36 +57,30 @@ impl LocalSimpleAggExecutor {
         ctx: &ActorContextRef,
         identity: &str,
         agg_calls: &[AggCall],
-        aggregators: &mut [Box<dyn StreamingAggImpl>],
+        states: &mut [Box<dyn StreamingAggStateImpl>],
         chunk: StreamChunk,
     ) -> StreamExecutorResult<()> {
         let capacity = chunk.capacity();
         let (ops, columns, visibility) = chunk.into_inner();
-        let visibilities: Vec<_> = agg_calls
+        agg_calls
             .iter()
-            .map(|agg_call| {
-                agg_call_filter_res(
+            .zip_eq(states.iter_mut())
+            .try_for_each(|(agg_call, state)| {
+                let vis_map = agg_call_filter_res(
                     ctx,
                     identity,
                     agg_call,
                     &columns,
                     visibility.as_ref(),
                     capacity,
-                )
-            })
-            .try_collect()?;
-        agg_calls
-            .iter()
-            .zip_eq(visibilities)
-            .zip_eq(aggregators)
-            .try_for_each(|((agg_call, visibility), state)| {
-                let col_refs = agg_call
+                )?;
+                let cols = agg_call
                     .args
                     .val_indices()
                     .iter()
                     .map(|idx| columns[*idx].array_ref())
                     .collect_vec();
-                state.apply_batch(&ops, visibility.as_ref(), &col_refs)
+                state.apply_batch(&ops, vis_map.as_ref(), &cols[..])
             })?;
         Ok(())
     }
@@ -99,10 +95,10 @@ impl LocalSimpleAggExecutor {
         } = self;
         let input = input.execute();
         let mut is_dirty = false;
-        let mut aggregators: Vec<_> = agg_calls
+        let mut states: Vec<_> = agg_calls
             .iter()
             .map(|agg_call| {
-                create_streaming_agg_impl(
+                create_streaming_agg_state(
                     agg_call.args.arg_types(),
                     &agg_call.kind,
                     &agg_call.return_type,
@@ -116,7 +112,7 @@ impl LocalSimpleAggExecutor {
             let msg = msg?;
             match msg {
                 Message::Chunk(chunk) => {
-                    Self::apply_chunk(&ctx, &info.identity, &agg_calls, &mut aggregators, chunk)?;
+                    Self::apply_chunk(&ctx, &info.identity, &agg_calls, &mut states, chunk)?;
                     is_dirty = true;
                 }
                 m @ Message::Barrier(_) => {
@@ -124,16 +120,15 @@ impl LocalSimpleAggExecutor {
                         is_dirty = false;
 
                         let mut builders = info.schema.create_array_builders(1);
-                        aggregators
-                            .iter_mut()
-                            .zip_eq(builders.iter_mut())
-                            .try_for_each(|(state, builder)| {
+                        states.iter_mut().zip_eq(builders.iter_mut()).try_for_each(
+                            |(state, builder)| {
                                 let data = state.get_output()?;
                                 trace!("append_datum: {:?}", data);
                                 builder.append_datum(&data);
                                 state.reset();
                                 Ok::<_, StreamExecutorError>(())
-                            })?;
+                            },
+                        )?;
                         let columns: Vec<Column> = builders
                             .into_iter()
                             .map(|builder| Ok::<_, StreamExecutorError>(builder.finish().into()))

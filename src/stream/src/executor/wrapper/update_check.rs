@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ pub async fn update_check(info: Arc<ExecutorInfo>, input: impl MessageStream) {
                 .map(|r| (r.unzip()))
                 .tuple_windows()
             {
-                if (op1.is_none() && op2 == Some(Op::UpdateInsert)) // the first row is U+
+                if (op1 == None && op2 == Some(Op::UpdateInsert)) // the first row is U+
                     || (op1 == Some(Op::UpdateDelete) && op2 != Some(Op::UpdateInsert))
                 {
                     panic!(

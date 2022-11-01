@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use piestream_common::catalog::TableId;
-use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
 use piestream_hummock_sdk::{CompactionGroupId, HummockVersionId, INVALID_VERSION_ID};
 use piestream_pb::hummock::{HummockVersion, Level};
 use piestream_rpc_client::HummockMetaClient;
@@ -64,7 +62,7 @@ impl Drop for PinnedVersionGuard {
             .send(PinVersionAction::Unpin(self.version_id))
             .is_err()
         {
-            tracing::warn!("failed to send req unpin version id: {}", self.version_id);
+            tracing::warn!("failed to send req unpin version id:{}", self.version_id);
         }
     }
 }
@@ -72,7 +70,6 @@ impl Drop for PinnedVersionGuard {
 #[derive(Clone)]
 pub struct PinnedVersion {
     version: Arc<HummockVersion>,
-    compaction_group_index: Arc<HashMap<TableId, CompactionGroupId>>,
     guard: Arc<PinnedVersionGuard>,
 }
 
@@ -82,11 +79,9 @@ impl PinnedVersion {
         pinned_version_manager_tx: UnboundedSender<PinVersionAction>,
     ) -> Self {
         let version_id = version.id;
-        let compaction_group_index = version.build_compaction_group_info();
 
         PinnedVersion {
             version: Arc::new(version),
-            compaction_group_index: Arc::new(compaction_group_index),
             guard: Arc::new(PinnedVersionGuard::new(
                 version_id,
                 pinned_version_manager_tx,
@@ -102,10 +97,8 @@ impl PinnedVersion {
             self.version.id
         );
         let version_id = version.id;
-        let compaction_group_index = version.build_compaction_group_info();
         PinnedVersion {
             version: Arc::new(version),
-            compaction_group_index: Arc::new(compaction_group_index),
             guard: Arc::new(PinnedVersionGuard::new(
                 version_id,
                 self.guard.pinned_version_manager_tx.clone(),
@@ -121,7 +114,6 @@ impl PinnedVersion {
         );
         PinnedVersion {
             version: Arc::new(version),
-            compaction_group_index: self.compaction_group_index.clone(),
             guard: self.guard.clone(),
         }
     }
@@ -134,26 +126,13 @@ impl PinnedVersion {
         self.version.id != INVALID_VERSION_ID
     }
 
-    fn levels_by_compaction_groups_id(
-        &self,
-        compaction_group_id: CompactionGroupId,
-    ) -> Vec<&Level> {
+    pub fn levels(&self, new_compaction_group_id: CompactionGroupId) -> Vec<&Level> {
         let mut ret = vec![];
-        let levels = self.version.levels.get(&compaction_group_id).unwrap();
-        ret.extend(levels.l0.as_ref().unwrap().sub_levels.iter().rev());
-        ret.extend(levels.levels.iter());
+        if let Some(new_levels) = self.version.levels.get(&new_compaction_group_id) {
+            ret.extend(new_levels.l0.as_ref().unwrap().sub_levels.iter().rev());
+            ret.extend(new_levels.levels.iter());
+        }
         ret
-    }
-
-    pub fn levels(&self, table_id: TableId) -> Vec<&Level> {
-        #[cfg(any(test, feature = "test"))]
-        if table_id.table_id() == 0 {
-            return self.version.get_combined_levels();
-        }
-        match self.compaction_group_index.get(&table_id) {
-            Some(compaction_group_id) => self.levels_by_compaction_groups_id(*compaction_group_id),
-            None => vec![],
-        }
     }
 
     pub fn max_committed_epoch(&self) -> u64 {

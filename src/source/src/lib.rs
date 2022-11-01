@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #![feature(lint_reasons)]
 #![feature(result_option_inspect)]
 #![feature(generators)]
-#![feature(hash_drain_filter)]
 
 use std::collections::HashMap;
 use std::fmt::Debug;

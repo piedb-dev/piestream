@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,21 +31,11 @@ impl ExecutorBuilder for ProjectSetExecutorBuilder {
         let select_list: Vec<_> = node
             .get_select_list()
             .iter()
-            .map(|proto| {
-                ProjectSetSelectItem::from_prost(
-                    proto,
-                    params.env.config().developer.stream_chunk_size,
-                )
-            })
+            .map(ProjectSetSelectItem::from_prost)
             .try_collect()?;
-        let chunk_size = params.env.config().developer.stream_chunk_size;
-        Ok(ProjectSetExecutor::new(
-            input,
-            params.pk_indices,
-            select_list,
-            params.executor_id,
-            chunk_size,
+        Ok(
+            ProjectSetExecutor::new(input, params.pk_indices, select_list, params.executor_id)
+                .boxed(),
         )
-        .boxed())
     }
 }

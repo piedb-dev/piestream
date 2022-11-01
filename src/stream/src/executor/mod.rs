@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,6 +122,9 @@ pub type MessageStreamItem = StreamExecutorResult<Message>;
 pub type BoxedMessageStream = BoxStream<'static, MessageStreamItem>;
 
 pub trait MessageStream = futures::Stream<Item = MessageStreamItem> + Send;
+
+/// The maximum chunk length produced by executor at a time.
+const PROCESSING_WINDOW_SIZE: usize = 1024;
 
 /// Static information of an executor.
 #[derive(Debug, Default)]

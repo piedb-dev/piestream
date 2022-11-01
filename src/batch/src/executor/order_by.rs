@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ pub struct OrderByExecutor {
     order_pairs: Vec<OrderPair>,
     identity: String,
     schema: Schema,
-    chunk_size: usize,
 }
 
 impl Executor for OrderByExecutor {
@@ -75,7 +74,6 @@ impl BoxedExecutorBuilder for OrderByExecutor {
             child,
             order_pairs,
             source.plan_node().get_identity().clone(),
-            source.context.get_config().developer.batch_chunk_size,
         )))
     }
 }
@@ -83,7 +81,7 @@ impl BoxedExecutorBuilder for OrderByExecutor {
 impl OrderByExecutor {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
-        let mut chunk_builder = DataChunkBuilder::new(self.schema.data_types(), self.chunk_size);
+        let mut chunk_builder = DataChunkBuilder::with_default_size(self.schema.data_types());
         let mut chunks = Vec::new();
         let mut encoded_rows = Vec::new();
 
@@ -117,19 +115,13 @@ impl OrderByExecutor {
 }
 
 impl OrderByExecutor {
-    pub fn new(
-        child: BoxedExecutor,
-        order_pairs: Vec<OrderPair>,
-        identity: String,
-        chunk_size: usize,
-    ) -> Self {
+    pub fn new(child: BoxedExecutor, order_pairs: Vec<OrderPair>, identity: String) -> Self {
         let schema = child.schema().clone();
         Self {
             child,
             order_pairs,
             identity,
             schema,
-            chunk_size,
         }
     }
 }
@@ -150,8 +142,6 @@ mod tests {
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;
-
-    const CHUNK_SIZE: usize = 1024;
 
     #[tokio::test]
     async fn test_simple_order_by_executor() {
@@ -183,7 +173,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor2".to_string(),
-            CHUNK_SIZE,
         ));
         let fields = &order_by_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Int32);
@@ -232,7 +221,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor2".to_string(),
-            CHUNK_SIZE,
         ));
         let fields = &order_by_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Float32);
@@ -281,7 +269,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor2".to_string(),
-            CHUNK_SIZE,
         ));
         let fields = &order_by_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Varchar);
@@ -355,7 +342,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor".to_string(),
-            CHUNK_SIZE,
         ));
 
         let mut stream = order_by_executor.execute();
@@ -428,7 +414,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor".to_string(),
-            CHUNK_SIZE,
         ));
 
         let mut stream = order_by_executor.execute();
@@ -521,7 +506,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor".to_string(),
-            CHUNK_SIZE,
         ));
 
         let mut stream = order_by_executor.execute();
@@ -694,7 +678,6 @@ mod tests {
             Box::new(mock_executor),
             order_pairs,
             "OrderByExecutor".to_string(),
-            CHUNK_SIZE,
         ));
 
         let mut stream = order_by_executor.execute();

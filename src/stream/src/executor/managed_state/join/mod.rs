@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ use anyhow::Context;
 use fixedbitset::FixedBitSet;
 use futures::future::try_join;
 use futures_async_stream::for_await;
+use itertools::Itertools;
 pub(super) use join_entry_state::JoinEntryState;
 use local_stats_alloc::{SharedStatsAlloc, StatsAlloc};
 use piestream_common::array::{Row, RowDeserializer};
@@ -30,7 +31,6 @@ use piestream_common::bail;
 use piestream_common::buffer::Bitmap;
 use piestream_common::collection::estimate_size::EstimateSize;
 use piestream_common::hash::{HashKey, PrecomputedBuildHasher};
-use piestream_common::row::CompactedRow;
 use piestream_common::types::{DataType, Datum, ScalarImpl};
 use piestream_common::util::epoch::EpochPair;
 use piestream_common::util::ordered::OrderedRowSerde;
@@ -39,9 +39,7 @@ use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
 use self::iter_utils::zip_by_order_key;
-use crate::cache::{
-    cache_may_stale, EvictableHashMap, ExecutorCache, LruManagerRef, ManagedLruCache,
-};
+use crate::cache::{EvictableHashMap, ExecutorCache, LruManagerRef, ManagedLruCache};
 use crate::executor::error::StreamExecutorResult;
 use crate::executor::monitor::StreamingMetrics;
 use crate::task::ActorId;
@@ -102,8 +100,9 @@ impl JoinRow {
     }
 
     pub fn encode(&self) -> EncodedJoinRow {
+        let value_indices = (0..self.row.0.len()).collect_vec();
         EncodedJoinRow {
-            compacted_row: (&self.row).into(),
+            row: self.row.serialize(&value_indices),
             degree: self.degree,
         }
     }
@@ -111,14 +110,14 @@ impl JoinRow {
 
 #[derive(Clone, Debug)]
 pub struct EncodedJoinRow {
-    pub compacted_row: CompactedRow,
+    pub row: Vec<u8>,
     degree: DegreeType,
 }
 
 impl EncodedJoinRow {
     fn decode(&self, data_types: &[DataType]) -> StreamExecutorResult<JoinRow> {
         let deserializer = RowDeserializer::new(data_types.to_vec());
-        let row = deserializer.deserialize(self.compacted_row.row.as_ref())?;
+        let row = deserializer.deserialize(self.row.as_ref())?;
         Ok(JoinRow {
             row,
             degree: self.degree,
@@ -127,7 +126,7 @@ impl EncodedJoinRow {
 
     fn decode_row(&self, data_types: &[DataType]) -> StreamExecutorResult<Row> {
         let deserializer = RowDeserializer::new(data_types.to_vec());
-        let row = deserializer.deserialize(self.compacted_row.row.as_ref())?;
+        let row = deserializer.deserialize(self.row.as_ref())?;
         Ok(row)
     }
 
@@ -164,7 +163,7 @@ impl EncodedJoinRow {
 
 impl EstimateSize for EncodedJoinRow {
     fn estimated_heap_size(&self) -> usize {
-        self.compacted_row.row.estimated_heap_size()
+        self.row.estimated_heap_size()
     }
 }
 
@@ -336,17 +335,9 @@ impl<K: HashKey, S: StateStore> JoinHashMap<K, S> {
         self.inner.update_epoch(epoch)
     }
 
-    /// Update the vnode bitmap and manipulate the cache if necessary.
     pub fn update_vnode_bitmap(&mut self, vnode_bitmap: Arc<Bitmap>) {
-        let previous_vnode_bitmap = self.state.table.update_vnode_bitmap(vnode_bitmap.clone());
-        let _ = self
-            .degree_state
-            .table
-            .update_vnode_bitmap(vnode_bitmap.clone());
-
-        if cache_may_stale(&previous_vnode_bitmap, &vnode_bitmap) {
-            self.inner.clear();
-        }
+        self.state.table.update_vnode_bitmap(vnode_bitmap.clone());
+        self.degree_state.table.update_vnode_bitmap(vnode_bitmap);
     }
 
     /// Returns a mutable reference to the value of the key in the memory, if does not exist, look

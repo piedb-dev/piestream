@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,9 +115,9 @@ mod tests {
 
             assert_eq!(vnode_mapping.len(), VIRTUAL_NODE_COUNT);
 
-            let mut check: HashMap<u32, Vec<_>> = HashMap::new();
+            let mut check = HashMap::new();
             for (idx, parallel_unit_id) in vnode_mapping.into_iter().enumerate() {
-                check.entry(parallel_unit_id).or_default().push(idx);
+                check.entry(parallel_unit_id).or_insert(vec![]).push(idx);
             }
 
             assert_eq!(check.len(), parallel_units_num);

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ use piestream_common::array::column::Column;
 use piestream_common::array::DataChunk;
 use piestream_common::error::Result;
 use piestream_common::types::Datum;
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 
 use crate::SourceColumnDesc;
 
@@ -24,11 +25,10 @@ pub(crate) trait SourceChunkBuilder {
     fn build_columns<'a>(
         column_descs: &[SourceColumnDesc],
         rows: impl IntoIterator<Item = &'a Vec<Datum>>,
-        chunk_size: usize,
     ) -> Result<Vec<Column>> {
         let mut builders: Vec<_> = column_descs
             .iter()
-            .map(|k| k.data_type.create_array_builder(chunk_size))
+            .map(|k| k.data_type.create_array_builder(DEFAULT_CHUNK_BUFFER_SIZE))
             .collect();
 
         for row in rows {
@@ -43,12 +43,8 @@ pub(crate) trait SourceChunkBuilder {
             .collect())
     }
 
-    fn build_datachunk(
-        column_desc: &[SourceColumnDesc],
-        rows: &[Vec<Datum>],
-        chunk_size: usize,
-    ) -> Result<DataChunk> {
-        let columns = Self::build_columns(column_desc, rows, chunk_size)?;
+    fn build_datachunk(column_desc: &[SourceColumnDesc], rows: &[Vec<Datum>]) -> Result<DataChunk> {
+        let columns = Self::build_columns(column_desc, rows)?;
         Ok(DataChunk::new(columns, rows.len()))
     }
 }

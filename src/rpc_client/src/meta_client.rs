@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ use piestream_pb::common::WorkerType;
 use piestream_pb::ddl_service::ddl_service_client::DdlServiceClient;
 use piestream_pb::ddl_service::*;
 use piestream_pb::hummock::hummock_manager_service_client::HummockManagerServiceClient;
-use piestream_pb::hummock::rise_ctl_update_compaction_config_request::mutable_config::MutableConfig;
 use piestream_pb::hummock::*;
 use piestream_pb::meta::cluster_service_client::ClusterServiceClient;
 use piestream_pb::meta::heartbeat_request::{extra_info, ExtraInfo};
@@ -44,7 +43,6 @@ use piestream_pb::meta::scale_service_client::ScaleServiceClient;
 use piestream_pb::meta::stream_manager_service_client::StreamManagerServiceClient;
 use piestream_pb::meta::*;
 use piestream_pb::stream_plan::StreamFragmentGraph;
-use piestream_pb::user::update_user_request::UpdateField;
 use piestream_pb::user::user_service_client::UserServiceClient;
 use piestream_pb::user::*;
 use tokio::sync::oneshot::Sender;
@@ -176,14 +174,9 @@ impl MetaClient {
         Ok((resp.table_id.into(), resp.version))
     }
 
-    pub async fn drop_materialized_view(
-        &self,
-        table_id: TableId,
-        index_ids: Vec<IndexId>,
-    ) -> Result<CatalogVersion> {
+    pub async fn drop_materialized_view(&self, table_id: TableId) -> Result<CatalogVersion> {
         let request = DropMaterializedViewRequest {
             table_id: table_id.table_id(),
-            index_ids: index_ids.into_iter().map(|x| x.index_id).collect(),
         };
 
         let resp = self.inner.drop_materialized_view(request).await?;
@@ -249,12 +242,10 @@ impl MetaClient {
         &self,
         source_id: u32,
         table_id: TableId,
-        index_ids: Vec<IndexId>,
     ) -> Result<CatalogVersion> {
         let request = DropMaterializedSourceRequest {
             source_id,
             table_id: table_id.table_id(),
-            index_ids: index_ids.into_iter().map(|x| x.index_id).collect(),
         };
 
         let resp = self.inner.drop_materialized_source(request).await?;
@@ -306,18 +297,7 @@ impl MetaClient {
         Ok(resp.version)
     }
 
-    pub async fn update_user(
-        &self,
-        user: UserInfo,
-        update_fields: Vec<UpdateField>,
-    ) -> Result<u64> {
-        let request = UpdateUserRequest {
-            user: Some(user),
-            update_fields: update_fields
-                .into_iter()
-                .map(|field| field as i32)
-                .collect::<Vec<_>>(),
-        };
+    pub async fn update_user(&self, request: UpdateUserRequest) -> Result<u64> {
         let resp = self.inner.update_user(request).await?;
         Ok(resp.version)
     }
@@ -557,32 +537,6 @@ impl MetaClient {
         let req = GetAssignedCompactTaskNumRequest {};
         let resp = self.inner.get_assigned_compact_task_num(req).await?;
         Ok(resp.num_tasks as usize)
-    }
-
-    pub async fn risectl_list_compaction_group(&self) -> Result<Vec<CompactionGroup>> {
-        let req = RiseCtlListCompactionGroupRequest {};
-        let resp = self.inner.rise_ctl_list_compaction_group(req).await?;
-        Ok(resp.compaction_groups)
-    }
-
-    pub async fn risectl_update_compaction_config(
-        &self,
-        compaction_groups: &[CompactionGroupId],
-        configs: &[MutableConfig],
-    ) -> Result<()> {
-        let req = RiseCtlUpdateCompactionConfigRequest {
-            compaction_group_ids: compaction_groups.to_vec(),
-            configs: configs
-                .iter()
-                .map(
-                    |c| rise_ctl_update_compaction_config_request::MutableConfig {
-                        mutable_config: Some(c.clone()),
-                    },
-                )
-                .collect(),
-        };
-        let _resp = self.inner.rise_ctl_update_compaction_config(req).await?;
-        Ok(())
     }
 }
 
@@ -859,8 +813,6 @@ macro_rules! for_all_meta_rpc {
             ,{ hummock_client, trigger_full_gc, TriggerFullGcRequest, TriggerFullGcResponse }
             ,{ hummock_client, rise_ctl_get_pinned_versions_summary, RiseCtlGetPinnedVersionsSummaryRequest, RiseCtlGetPinnedVersionsSummaryResponse }
             ,{ hummock_client, rise_ctl_get_pinned_snapshots_summary, RiseCtlGetPinnedSnapshotsSummaryRequest, RiseCtlGetPinnedSnapshotsSummaryResponse }
-            ,{ hummock_client, rise_ctl_list_compaction_group, RiseCtlListCompactionGroupRequest, RiseCtlListCompactionGroupResponse }
-            ,{ hummock_client, rise_ctl_update_compaction_config, RiseCtlUpdateCompactionConfigRequest, RiseCtlUpdateCompactionConfigResponse }
             ,{ user_client, create_user, CreateUserRequest, CreateUserResponse }
             ,{ user_client, update_user, UpdateUserRequest, UpdateUserResponse }
             ,{ user_client, drop_user, DropUserRequest, DropUserResponse }

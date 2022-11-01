@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ pub struct FileCacheOptions {
     pub total_buffer_capacity: usize,
     pub cache_file_fallocate_unit: usize,
     pub cache_meta_fallocate_unit: usize,
-    pub cache_file_max_write_size: usize,
 
     pub flush_buffer_hooks: Vec<Arc<dyn FlushBufferHook>>,
 }
@@ -189,7 +188,6 @@ where
             buffer_capacity,
             cache_file_fallocate_unit: options.cache_file_fallocate_unit,
             cache_meta_fallocate_unit: options.cache_meta_fallocate_unit,
-            cache_file_max_write_size: options.cache_file_max_write_size,
             metrics: metrics.clone(),
         })
         .await?;
@@ -348,7 +346,6 @@ mod tests {
             total_buffer_capacity: 2 * BUFFER_CAPACITY,
             cache_file_fallocate_unit: FALLOCATE_UNIT,
             cache_meta_fallocate_unit: 1024 * 1024, // 1 MiB
-            cache_file_max_write_size: 4 * 1024 * 1024, // 4 MiB
 
             flush_buffer_hooks,
         };

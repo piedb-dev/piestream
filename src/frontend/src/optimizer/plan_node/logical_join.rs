@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1140,13 +1140,13 @@ impl ToStream for LogicalJoin {
             .logical_pk()
             .iter()
             .cloned()
-            .filter(|i| l2i.try_map(*i).is_none());
+            .filter(|i| l2i.try_map(*i) == None);
 
         let right_to_add = right
             .logical_pk()
             .iter()
             .cloned()
-            .filter(|i| r2i.try_map(*i).is_none())
+            .filter(|i| r2i.try_map(*i) == None)
             .map(|i| i + left_len);
 
         // NOTE(st1page): add join keys in the pk_indices a work around before we really have stream
@@ -1159,7 +1159,7 @@ impl ToStream for LogicalJoin {
                 eq_predicate
                     .left_eq_indexes()
                     .into_iter()
-                    .filter(|i| l2i.try_map(*i).is_none()),
+                    .filter(|i| l2i.try_map(*i) == None),
             )
             .unique();
         let right_to_add = right_to_add
@@ -1167,7 +1167,7 @@ impl ToStream for LogicalJoin {
                 eq_predicate
                     .right_eq_indexes()
                     .into_iter()
-                    .filter(|i| r2i.try_map(*i).is_none())
+                    .filter(|i| r2i.try_map(*i) == None)
                     .map(|i| i + left_len),
             )
             .unique();

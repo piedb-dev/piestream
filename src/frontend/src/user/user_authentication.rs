@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ pub fn encrypted_password(name: &str, password: &str) -> Option<AuthInfo> {
 
 /// Encrypt the password with MD5 as default.
 #[inline(always)]
-fn encrypt_default(name: &str, password: &str) -> AuthInfo {
+pub fn encrypt_default(name: &str, password: &str) -> AuthInfo {
     AuthInfo {
         encryption_type: EncryptionType::Md5 as i32,
         encrypted_value: md5_hash(name, password),

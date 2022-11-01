@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,17 +55,6 @@ pub fn extract_from_timestamp(time_unit: &str, timestamp: NaiveDateTimeWrapper) 
         res = extract_time(time, time_unit);
     }
     res
-}
-
-pub fn extract_from_timestampz(time_unit: &str, usecs: i64) -> Result<Decimal> {
-    match time_unit {
-        "EPOCH" => Ok(Decimal::from(usecs) / 1_000_000.into()),
-        // TODO(#5826): all other units depend on implicit session TimeZone
-        _ => bail!(
-            "Unsupported timestamp with time zone unit {} in extract function",
-            time_unit
-        ),
-    }
 }
 
 #[cfg(test)]

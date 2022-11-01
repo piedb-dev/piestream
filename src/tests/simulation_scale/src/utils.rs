@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait AssertResult: AsRef<str> + Sized {
+pub trait AssertResult: AsRef<str> {
     /// Asserts that the result is equal to the expected result after trimming whitespace.
     #[track_caller]
-    fn assert_result_eq(self, other: impl AsRef<str>) -> Self {
+    fn assert_result_eq(&self, other: impl AsRef<str>) -> &Self {
         assert_eq!(self.as_ref().trim(), other.as_ref().trim());
         self
     }
 
     /// Asserts that the result is not equal to the expected result after trimming whitespace.
     #[track_caller]
-    fn assert_result_ne(self, other: impl AsRef<str>) -> Self {
+    fn assert_result_ne(&self, other: impl AsRef<str>) -> &Self {
         assert_ne!(self.as_ref().trim(), other.as_ref().trim());
         self
     }

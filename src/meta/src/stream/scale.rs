@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -372,7 +372,7 @@ where
                 for downstream_actor_id in &dispatcher.downstream_actor_id {
                     upstream_dispatchers
                         .entry(*downstream_actor_id as ActorId)
-                        .or_default()
+                        .or_insert(vec![])
                         .push((
                             stream_actor.fragment_id as FragmentId,
                             *actor_id as ActorId,

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -247,7 +247,7 @@ impl ObjectStore for DiskObjectStore {
             let path_owned = path.to_owned();
             let block_loc = *block_loc_ref;
             let future = utils::asyncify(move || {
-                let mut buf = vec![0; block_loc.size];
+                let mut buf = vec![0; block_loc.size as usize];
                 file_holder
                     .value()
                     .read_exact_at(&mut buf, block_loc.offset as u64)

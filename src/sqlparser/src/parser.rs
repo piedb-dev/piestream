@@ -788,7 +788,7 @@ impl Parser {
 
     pub fn parse_extract_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let field = self.parse_date_time_field_in_extract()?;
+        let field = self.parse_date_time_field()?;
         self.expect_keyword(Keyword::FROM)?;
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
@@ -884,7 +884,10 @@ impl Parser {
         }
     }
 
-    // This function parses date/time fields for interval qualifiers.
+    // This function parses date/time fields for both the EXTRACT function-like
+    // operator and interval qualifiers. EXTRACT supports a wider set of
+    // date/time fields than interval qualifiers, so this function may need to
+    // be split in two.
     pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
@@ -896,23 +899,6 @@ impl Parser {
                 Keyword::SECOND => Ok(DateTimeField::Second),
                 _ => self.expected("date/time field", Token::Word(w))?,
             },
-            unexpected => self.expected("date/time field", unexpected),
-        }
-    }
-
-    // This function parses date/time fields for the EXTRACT function-like operator. PostgreSQL
-    // allows arbitrary inputs including invalid ones.
-    //
-    // ```
-    //   select extract(day from null::date);
-    //   select extract(invalid from null::date);
-    //   select extract("invaLId" from null::date);
-    //   select extract('invaLId' from null::date);
-    // ```
-    pub fn parse_date_time_field_in_extract(&mut self) -> Result<String, ParserError> {
-        match self.next_token() {
-            Token::Word(w) => Ok(w.value.to_uppercase()),
-            Token::SingleQuotedString(s) => Ok(s.to_uppercase()),
             unexpected => self.expected("date/time field", unexpected),
         }
     }
@@ -1417,20 +1403,6 @@ impl Parser {
         } else {
             Ok(distinct)
         }
-    }
-
-    /// Parse either `ALL` or `DISTINCT` or `DISTINCT ON (<expr>)`.
-    pub fn parse_all_or_distinct_on(&mut self) -> Result<Distinct, ParserError> {
-        if self.parse_keywords(&[Keyword::DISTINCT, Keyword::ON]) {
-            self.expect_token(&Token::LParen)?;
-            let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RParen)?;
-            return Ok(Distinct::DistinctOn(exprs));
-        } else if self.parse_keyword(Keyword::DISTINCT) {
-            return Ok(Distinct::Distinct);
-        };
-        _ = self.parse_keyword(Keyword::ALL);
-        Ok(Distinct::All)
     }
 
     /// Parse a SQL CREATE statement
@@ -2401,35 +2373,36 @@ impl Parser {
     pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
         let mut options = ExplainOptions::default();
         let parse_explain_option = |parser: &mut Parser| -> Result<(), ParserError> {
-            let keyword = parser.expect_one_of_keywords(&[
+            while let Some(keyword) = parser.parse_one_of_keywords(&[
                 Keyword::VERBOSE,
                 Keyword::TRACE,
                 Keyword::TYPE,
                 Keyword::LOGICAL,
                 Keyword::PHYSICAL,
                 Keyword::DISTSQL,
-            ])?;
-            match keyword {
-                Keyword::VERBOSE => options.verbose = parser.parse_optional_boolean(true),
-                Keyword::TRACE => options.trace = parser.parse_optional_boolean(true),
-                Keyword::TYPE => {
-                    let explain_type = parser.expect_one_of_keywords(&[
-                        Keyword::LOGICAL,
-                        Keyword::PHYSICAL,
-                        Keyword::DISTSQL,
-                    ])?;
-                    match explain_type {
-                        Keyword::LOGICAL => options.explain_type = ExplainType::Logical,
-                        Keyword::PHYSICAL => options.explain_type = ExplainType::Physical,
-                        Keyword::DISTSQL => options.explain_type = ExplainType::DistSql,
-                        _ => unreachable!("{}", keyword),
+            ]) {
+                match keyword {
+                    Keyword::VERBOSE => options.verbose = parser.parse_optional_boolean(true),
+                    Keyword::TRACE => options.trace = parser.parse_optional_boolean(true),
+                    Keyword::TYPE => {
+                        let explain_type = parser.expect_one_of_keywords(&[
+                            Keyword::LOGICAL,
+                            Keyword::PHYSICAL,
+                            Keyword::DISTSQL,
+                        ])?;
+                        match explain_type {
+                            Keyword::LOGICAL => options.explain_type = ExplainType::Logical,
+                            Keyword::PHYSICAL => options.explain_type = ExplainType::Physical,
+                            Keyword::DISTSQL => options.explain_type = ExplainType::DistSql,
+                            _ => unreachable!("{}", keyword),
+                        }
                     }
+                    Keyword::LOGICAL => options.explain_type = ExplainType::Logical,
+                    Keyword::PHYSICAL => options.explain_type = ExplainType::Physical,
+                    Keyword::DISTSQL => options.explain_type = ExplainType::DistSql,
+                    _ => unreachable!("{}", keyword),
                 }
-                Keyword::LOGICAL => options.explain_type = ExplainType::Logical,
-                Keyword::PHYSICAL => options.explain_type = ExplainType::Physical,
-                Keyword::DISTSQL => options.explain_type = ExplainType::DistSql,
-                _ => unreachable!("{}", keyword),
-            };
+            }
             Ok(())
         };
 
@@ -2607,7 +2580,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
-        let distinct = self.parse_all_or_distinct_on()?;
+        let distinct = self.parse_all_or_distinct()?;
 
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
 

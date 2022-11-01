@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,9 +42,6 @@ pub struct Args {
     /// (MiB)
     #[clap(long, default_value = "16")]
     cache_meta_fallocate_unit: usize,
-    /// (MiB)
-    #[clap(long, default_value = "4")]
-    cache_file_max_write_size: usize,
 
     /// (KiB)
     #[clap(long, default_value = "1024")]

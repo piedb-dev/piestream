@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,15 +60,9 @@ use crate::scheduler::{ExecutionContextRef, SchedulerError, SchedulerResult};
 
 const TASK_SCHEDULING_PARALLELISM: usize = 10;
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 enum StageState {
-    /// We put `msg_sender` in `Pending` state to avoid holding it in `StageExecution`. In this
-    /// way, it could be efficiently moved into `StageRunner` instead of being cloned. This also
-    /// ensures that the sender can get dropped once it is used up, preventing some issues caused
-    /// by unnecessarily long lifetime.
-    Pending {
-        msg_sender: Sender<QueryMessage>,
-    },
+    Pending,
     Started,
     Running,
     Completed,
@@ -110,7 +104,8 @@ pub struct StageExecution {
     worker_node_manager: WorkerNodeManagerRef,
     tasks: Arc<HashMap<TaskId, TaskStatusHolder>>,
     state: Arc<RwLock<StageState>>,
-    shutdown_tx: RwLock<Option<oneshot::Sender<StageMessage>>>,
+    msg_sender: Sender<QueryMessage>,
+    shutdown_rx: RwLock<Option<oneshot::Sender<StageMessage>>>,
     /// Children stage executions.
     ///
     /// We use `Vec` here since children's size is usually small.
@@ -175,8 +170,9 @@ impl StageExecution {
             stage,
             worker_node_manager,
             tasks: Arc::new(tasks),
-            state: Arc::new(RwLock::new(Pending { msg_sender })),
-            shutdown_tx: RwLock::new(None),
+            state: Arc::new(RwLock::new(Pending)),
+            shutdown_rx: RwLock::new(None),
+            msg_sender,
             children,
             compute_client_pool,
             catalog_reader,
@@ -187,15 +183,14 @@ impl StageExecution {
     /// Starts execution of this stage, returns error if already started.
     pub async fn start(&self) {
         let mut s = self.state.write().await;
-        let cur_state = mem::replace(&mut *s, StageState::Failed);
-        match cur_state {
-            StageState::Pending { msg_sender } => {
+        match &*s {
+            &StageState::Pending => {
                 let runner = StageRunner {
                     epoch: self.epoch,
                     stage: self.stage.clone(),
                     worker_node_manager: self.worker_node_manager.clone(),
                     tasks: self.tasks.clone(),
-                    msg_sender,
+                    msg_sender: self.msg_sender.clone(),
                     children: self.children.clone(),
                     state: self.state.clone(),
                     compute_client_pool: self.compute_client_pool.clone(),
@@ -206,7 +201,7 @@ impl StageExecution {
                 // The channel used for shutdown signal messaging.
                 let (sender, receiver) = oneshot::channel();
                 // Fill the shutdown sender.
-                let mut holder = self.shutdown_tx.write().await;
+                let mut holder = self.shutdown_rx.write().await;
                 *holder = Some(sender);
 
                 // Change state before spawn runner.
@@ -222,7 +217,7 @@ impl StageExecution {
 
     pub async fn stop(&self, err_str: String) {
         // Send message to tell Stage Runner stop.
-        if let Some(shutdown_tx) = self.shutdown_tx.write().await.take() {
+        if let Some(shutdown_tx) = self.shutdown_rx.write().await.take() {
             // It's possible that the stage has not been scheduled, so the channel sender is
             // None.
             if shutdown_tx.send(StageMessage::Stop(err_str)).is_err() {
@@ -238,7 +233,7 @@ impl StageExecution {
 
     pub async fn is_pending(&self) -> bool {
         let s = self.state.read().await;
-        matches!(*s, StageState::Pending { .. })
+        matches!(*s, StageState::Pending)
     }
 
     pub fn get_task_status_unchecked(&self, task_id: TaskId) -> Arc<TaskStatus> {
@@ -448,19 +443,19 @@ impl StageRunner {
                 result_tx
                     .send(chunk.map_err(|e| e.into()))
                     .await
-                    .expect("Receiver should always exist! ");
+                    .expect("The receiver should always existed! ");
                 // Different from below, return this function and report error.
                 return Err(SchedulerError::TaskExecutionError(err_str));
             } else {
                 result_tx
                     .send(chunk.map_err(|e| e.into()))
                     .await
-                    .expect("Receiver should always exist! ");
+                    .expect("The receiver should always existed! ");
             }
         }
 
         if let Some(err) = terminated_chunk_stream.take_result() {
-            let stage_message = err.expect("Sender should always exist!");
+            let stage_message = err.expect("Sender should always existed!");
 
             // Terminated by other tasks execution error, so no need to return error here.
             match stage_message {
@@ -561,7 +556,7 @@ impl StageRunner {
         {
             let mut state = self.state.write().await;
             // Ignore if already finished.
-            if let &StageState::Completed = &*state {
+            if *state == StageState::Completed {
                 return Ok(());
             }
             // FIXME: Be careful for state jump back.

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@ pub struct LocalExchangeSource {
 }
 
 impl LocalExchangeSource {
-    pub fn create(
+    pub fn create<C: BatchTaskContext>(
         output_id: TaskOutputId,
-        context: impl BatchTaskContext,
+        context: C,
         task_id: TaskId,
     ) -> Result<Self> {
         let task_output = context.get_task_output(output_id)?;

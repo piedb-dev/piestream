@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ use piestream_pb::hummock::pin_version_response;
 use tokio::sync::oneshot;
 
 use crate::hummock::shared_buffer::shared_buffer_batch::SharedBufferBatch;
-use crate::hummock::store::memtable::ImmutableMemtable;
 use crate::hummock::HummockResult;
 use crate::store::SyncResult;
 
@@ -50,11 +49,4 @@ pub enum HummockEvent {
     Shutdown,
 
     VersionUpdate(pin_version_response::Payload),
-
-    ImmToUploader(ImmutableMemtable),
-
-    SealEpoch {
-        epoch: HummockEpoch,
-        is_checkpoint: bool,
-    },
 }

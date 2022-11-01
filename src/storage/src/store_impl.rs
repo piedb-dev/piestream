@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -127,9 +127,6 @@ impl StateStoreImpl {
                 cache_meta_fallocate_unit: config.file_cache.cache_meta_fallocate_unit_mb
                     * 1024
                     * 1024,
-                cache_file_max_write_size: config.file_cache.cache_file_max_write_size_mb
-                    * 1024
-                    * 1024,
                 flush_buffer_hooks: vec![],
             };
             let metrics = Arc::new(tiered_cache_metrics_builder.file());
@@ -180,7 +177,7 @@ impl StateStoreImpl {
             }
 
             "in_memory" | "in-memory" => {
-                tracing::warn!("In-memory state store should never be used in end-to-end benchmarks or production environment. Scaling and recovery are not supported.");
+                tracing::warn!("in-memory state backend should never be used in end-to-end benchmarks or production environment.");
                 StateStoreImpl::shared_in_memory_store(state_store_stats.clone())
             }
 

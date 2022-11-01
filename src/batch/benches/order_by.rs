@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ fn create_order_by_executor(
     chunk_num: usize,
     single_column: bool,
 ) -> BoxedExecutor {
-    const CHUNK_SIZE: usize = 1024;
     let (child, order_pairs) = if single_column {
         let input = create_input(&[DataType::Int64], chunk_size, chunk_num);
         (input, vec![OrderPair::new(0, OrderType::Ascending)])
@@ -59,7 +58,6 @@ fn create_order_by_executor(
         child,
         order_pairs,
         "OrderByExecutor".into(),
-        CHUNK_SIZE,
     ))
 }
 

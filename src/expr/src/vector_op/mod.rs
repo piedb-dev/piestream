@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ pub mod round;
 pub mod rtrim;
 pub mod split_part;
 pub mod substr;
-pub mod timestampz;
 pub mod to_char;
 pub mod translate;
 pub mod trim;

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,7 @@ use piestream_hummock_sdk::compact::compact_task_to_string;
 use piestream_hummock_sdk::compaction_group::hummock_version_ext::HummockVersionExt;
 use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
 // use piestream_hummock_sdk::key_range::KeyRange;
-use piestream_hummock_sdk::{
-    CompactionGroupId, HummockContextId, HummockEpoch, HummockVersionId, FIRST_VERSION_ID,
-};
+use piestream_hummock_sdk::{HummockContextId, HummockEpoch, HummockVersionId, FIRST_VERSION_ID};
 use piestream_pb::common::{HostAddress, WorkerType};
 use piestream_pb::hummock::compact_task::TaskStatus;
 use piestream_pb::hummock::pin_version_response::Payload;
@@ -107,7 +105,6 @@ async fn test_unpin_snapshot_before() {
 
 #[tokio::test]
 async fn test_hummock_compaction_task() {
-    use crate::hummock::error::Error;
     let (_, hummock_manager, _, worker_node) = setup_compute_env(80).await;
     let sst_num = 2;
 
@@ -115,15 +112,8 @@ async fn test_hummock_compaction_task() {
     let task = hummock_manager
         .get_compact_task(StaticCompactionGroupId::StateDefault.into())
         .await
-        .unwrap_err();
-    if let Error::InvalidCompactionGroup(group_id) = task {
-        assert_eq!(
-            group_id,
-            StaticCompactionGroupId::StateDefault as CompactionGroupId
-        );
-    } else {
-        panic!();
-    }
+        .unwrap();
+    assert_eq!(task, None);
 
     // Add some sstables and commit.
     let epoch: u64 = 1;
@@ -516,12 +506,10 @@ async fn test_hummock_manager_basic() {
     commit_one(epoch, hummock_manager.clone()).await;
     epoch += 1;
 
-    let sync_group_version_id = FIRST_VERSION_ID + 1;
-
     // increased version id
     assert_eq!(
         hummock_manager.get_current_version().await.id,
-        sync_group_version_id + 1
+        FIRST_VERSION_ID + 1
     );
 
     // min pinned version id if no clients
@@ -546,13 +534,10 @@ async fn test_hummock_manager_basic() {
             }
             Payload::PinnedVersion(version) => version,
         };
-        assert_eq!(
-            version.hummock_version.as_ref().unwrap().get_id(),
-            sync_group_version_id + 1
-        );
+        assert_eq!(version.id, FIRST_VERSION_ID + 1);
         assert_eq!(
             hummock_manager.get_min_pinned_version_id().await,
-            sync_group_version_id + 1
+            FIRST_VERSION_ID + 1
         );
     }
 
@@ -567,14 +552,11 @@ async fn test_hummock_manager_basic() {
             }
             Payload::PinnedVersion(version) => version,
         };
-        assert_eq!(
-            version.hummock_version.as_ref().unwrap().get_id(),
-            sync_group_version_id + 2
-        );
+        assert_eq!(version.id, FIRST_VERSION_ID + 2);
         // pinned by context_id_1
         assert_eq!(
             hummock_manager.get_min_pinned_version_id().await,
-            sync_group_version_id + 1
+            FIRST_VERSION_ID + 1
         );
     }
 
@@ -589,7 +571,7 @@ async fn test_hummock_manager_basic() {
     );
     assert_eq!(
         hummock_manager.proceed_version_checkpoint().await.unwrap(),
-        sync_group_version_id
+        1
     );
     assert!(hummock_manager.get_ssts_to_delete().await.is_empty());
     assert_eq!(
@@ -597,7 +579,7 @@ async fn test_hummock_manager_basic() {
             .delete_version_deltas(usize::MAX)
             .await
             .unwrap(),
-        (sync_group_version_id as usize, 0)
+        (1, 0)
     );
 
     hummock_manager
@@ -606,7 +588,7 @@ async fn test_hummock_manager_basic() {
         .unwrap();
     assert_eq!(
         hummock_manager.get_min_pinned_version_id().await,
-        sync_group_version_id + 2
+        FIRST_VERSION_ID + 2
     );
     assert!(hummock_manager.get_ssts_to_delete().await.is_empty());
     assert_eq!(
@@ -844,7 +826,7 @@ async fn test_trigger_manual_compaction() {
             .await;
 
         assert_eq!(
-            "Failed to get compaction task: InvalidCompactionGroup(\n    2,\n) compaction_group 2",
+            "trigger_manual_compaction No compaction_task is available. compaction_group 2",
             result.err().unwrap().to_string()
         );
     }
@@ -977,15 +959,8 @@ async fn test_hummock_compaction_task_heartbeat() {
     let task = hummock_manager
         .get_compact_task(StaticCompactionGroupId::StateDefault.into())
         .await
-        .unwrap_err();
-    if let Error::InvalidCompactionGroup(group_id) = task {
-        assert_eq!(
-            group_id,
-            StaticCompactionGroupId::StateDefault as CompactionGroupId
-        );
-    } else {
-        panic!();
-    }
+        .unwrap();
+    assert_eq!(task, None);
 
     // Add some sstables and commit.
     let epoch: u64 = 1;
@@ -1102,15 +1077,8 @@ async fn test_hummock_compaction_task_heartbeat_removal_on_node_removal() {
     let task = hummock_manager
         .get_compact_task(StaticCompactionGroupId::StateDefault.into())
         .await
-        .unwrap_err();
-    if let Error::InvalidCompactionGroup(group_id) = task {
-        assert_eq!(
-            group_id,
-            StaticCompactionGroupId::StateDefault as CompactionGroupId
-        );
-    } else {
-        panic!();
-    }
+        .unwrap();
+    assert_eq!(task, None);
 
     // Add some sstables and commit.
     let epoch: u64 = 1;
@@ -1212,7 +1180,7 @@ async fn test_extend_ssts_to_delete() {
     // Checkpoint
     assert_eq!(
         hummock_manager.proceed_version_checkpoint().await.unwrap(),
-        4
+        3
     );
     assert_eq!(
         hummock_manager

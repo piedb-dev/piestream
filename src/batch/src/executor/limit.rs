@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,12 +51,12 @@ impl BoxedExecutorBuilder for LimitExecutor {
         let limit = limit_node.get_limit() as usize;
         let offset = limit_node.get_offset() as usize;
 
-        Ok(Box::new(Self::new(
+        Ok(Box::new(Self {
             child,
             limit,
             offset,
-            source.plan_node().get_identity().clone(),
-        )))
+            identity: source.plan_node().get_identity().clone(),
+        }))
     }
 }
 
@@ -126,17 +126,6 @@ impl Executor for LimitExecutor {
 
     fn execute(self: Box<Self>) -> BoxedDataChunkStream {
         self.do_execute()
-    }
-}
-
-impl LimitExecutor {
-    pub fn new(child: BoxedExecutor, limit: usize, offset: usize, identity: String) -> Self {
-        Self {
-            child,
-            limit,
-            offset,
-            identity,
-        }
     }
 }
 

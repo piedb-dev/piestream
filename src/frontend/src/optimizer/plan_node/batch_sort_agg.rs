@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,7 +122,9 @@ impl ToBatchProst for BatchSortAgg {
                 .group_key()
                 .iter()
                 .clone()
-                .map(|idx| ExprImpl::InputRef(Box::new(InputRef::new(*idx, DataType::Int32))))
+                .map(|idx| {
+                    ExprImpl::InputRef(Box::new(InputRef::new(*idx as usize, DataType::Int32)))
+                })
                 .map(|expr| expr.to_expr_proto())
                 .collect::<Vec<ExprNode>>(),
         })

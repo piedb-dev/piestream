@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ pub struct TopNExecutor {
     limit: usize,
     schema: Schema,
     identity: String,
-    chunk_size: usize,
 }
 
 #[async_trait::async_trait]
@@ -66,7 +65,6 @@ impl BoxedExecutorBuilder for TopNExecutor {
             top_n_node.get_offset() as usize,
             top_n_node.get_limit() as usize,
             source.plan_node().get_identity().clone(),
-            source.context.get_config().developer.batch_chunk_size,
         )))
     }
 }
@@ -78,7 +76,6 @@ impl TopNExecutor {
         offset: usize,
         limit: usize,
         identity: String,
-        chunk_size: usize,
     ) -> Self {
         let schema = child.schema().clone();
         Self {
@@ -88,7 +85,6 @@ impl TopNExecutor {
             limit,
             schema,
             identity,
-            chunk_size,
         }
     }
 }
@@ -197,7 +193,7 @@ impl TopNExecutor {
             }
         }
 
-        let mut chunk_builder = DataChunkBuilder::new(self.schema.data_types(), self.chunk_size);
+        let mut chunk_builder = DataChunkBuilder::with_default_size(self.schema.data_types());
         for HeapElem { chunk, row_id, .. } in heap.dump() {
             if let Some(spilled) =
                 chunk_builder.append_one_row_ref(chunk.row_at_unchecked_vis(row_id))
@@ -223,8 +219,6 @@ mod tests {
 
     use super::*;
     use crate::executor::test_utils::MockExecutor;
-
-    const CHUNK_SIZE: usize = 1024;
 
     #[tokio::test]
     async fn test_simple_top_n_executor() {
@@ -259,7 +253,6 @@ mod tests {
             1,
             3,
             "TopNExecutor".to_string(),
-            CHUNK_SIZE,
         ));
         let fields = &top_n_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Int32);
@@ -315,7 +308,6 @@ mod tests {
             1,
             0,
             "TopNExecutor".to_string(),
-            CHUNK_SIZE,
         ));
         let fields = &top_n_executor.schema().fields;
         assert_eq!(fields[0].data_type, DataType::Int32);

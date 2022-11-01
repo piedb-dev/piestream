@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,7 +114,6 @@ impl Sstable {
             meta_offset: self.meta.meta_offset,
             stale_key_count: 0,
             total_key_count: self.meta.key_count as u64,
-            divide_version: 0,
         }
     }
 }
@@ -197,8 +196,8 @@ impl SstableMeta {
             block_meta.encode(buf);
         }
         put_length_prefixed_slice(buf, &self.bloom_filter);
-        buf.put_u32_le(self.estimated_size);
-        buf.put_u32_le(self.key_count);
+        buf.put_u32_le(self.estimated_size as u32);
+        buf.put_u32_le(self.key_count as u32);
         put_length_prefixed_slice(buf, &self.smallest_key);
         put_length_prefixed_slice(buf, &self.largest_key);
         buf.put_u64_le(self.meta_offset);

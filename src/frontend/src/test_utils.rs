@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ use piestream_pb::hummock::HummockSnapshot;
 use piestream_pb::meta::list_table_fragments_response::TableFragmentInfo;
 use piestream_pb::stream_plan::StreamFragmentGraph;
 use piestream_pb::user::update_user_request::UpdateField;
-use piestream_pb::user::{GrantPrivilege, UserInfo};
+use piestream_pb::user::{GrantPrivilege, UpdateUserRequest, UserInfo};
 use piestream_rpc_client::error::Result as RpcResult;
 use tempfile::{Builder, NamedTempFile};
 
@@ -69,10 +69,6 @@ impl SessionManager<PgResponseStream> for LocalFrontend {
     }
 
     fn cancel_queries_in_session(&self, _session_id: SessionId) {
-        todo!()
-    }
-
-    fn end_session(&self, _session: &Self::Session) {
         todo!()
     }
 }
@@ -265,15 +261,7 @@ impl CatalogWriter for MockCatalogWriter {
         Ok(())
     }
 
-    async fn drop_materialized_source(
-        &self,
-        source_id: u32,
-        table_id: TableId,
-        indexes_id: Vec<IndexId>,
-    ) -> Result<()> {
-        for index_id in indexes_id {
-            self.drop_index(index_id).await?;
-        }
+    async fn drop_materialized_source(&self, source_id: u32, table_id: TableId) -> Result<()> {
         let (database_id, schema_id) = self.drop_table_or_source_id(source_id);
         self.drop_table_or_source_id(table_id.table_id);
         self.catalog
@@ -285,14 +273,7 @@ impl CatalogWriter for MockCatalogWriter {
         Ok(())
     }
 
-    async fn drop_materialized_view(
-        &self,
-        table_id: TableId,
-        indexes_id: Vec<IndexId>,
-    ) -> Result<()> {
-        for index_id in indexes_id {
-            self.drop_index(index_id).await?;
-        }
+    async fn drop_materialized_view(&self, table_id: TableId) -> Result<()> {
         let (database_id, schema_id) = self.drop_table_or_source_id(table_id.table_id);
         self.catalog
             .write()
@@ -490,23 +471,26 @@ impl UserInfoWriter for MockUserInfoWriter {
         Ok(())
     }
 
-    async fn update_user(
-        &self,
-        update_user: UserInfo,
-        update_fields: Vec<UpdateField>,
-    ) -> Result<()> {
+    async fn update_user(&self, request: UpdateUserRequest) -> Result<()> {
         let mut lock = self.user_info.write();
+        let update_user = request.user.unwrap();
         let id = update_user.get_id();
         let old_name = lock.get_user_name_by_id(id).unwrap();
         let mut user_info = lock.get_user_by_name(&old_name).unwrap().clone();
-        update_fields.into_iter().for_each(|field| match field {
-            UpdateField::Super => user_info.is_super = update_user.is_super,
-            UpdateField::Login => user_info.can_login = update_user.can_login,
-            UpdateField::CreateDb => user_info.can_create_db = update_user.can_create_db,
-            UpdateField::CreateUser => user_info.can_create_user = update_user.can_create_user,
-            UpdateField::AuthInfo => user_info.auth_info = update_user.auth_info.clone(),
-            UpdateField::Rename => user_info.name = update_user.name.clone(),
-            UpdateField::Unspecified => unreachable!(),
+        request.update_fields.into_iter().for_each(|field| {
+            if field == UpdateField::Super as i32 {
+                user_info.is_super = update_user.is_super;
+            } else if field == UpdateField::Login as i32 {
+                user_info.can_login = update_user.can_login;
+            } else if field == UpdateField::CreateDb as i32 {
+                user_info.can_create_db = update_user.can_create_db;
+            } else if field == UpdateField::CreateUser as i32 {
+                user_info.can_create_user = update_user.can_create_user;
+            } else if field == UpdateField::AuthInfo as i32 {
+                user_info.auth_info = update_user.auth_info.clone();
+            } else if field == UpdateField::Rename as i32 {
+                user_info.name = update_user.name.clone();
+            }
         });
         lock.update_user(update_user);
         Ok(())
@@ -669,44 +653,15 @@ pub static PROTO_FILE_DATA: &str = r#"
 /// Returns the file.
 /// (`NamedTempFile` will automatically delete the file when it goes out of scope.)
 pub fn create_proto_file(proto_data: &str) -> NamedTempFile {
-    let in_file = Builder::new()
+    let temp_file = Builder::new()
         .prefix("temp")
         .suffix(".proto")
-        .rand_bytes(8)
+        .rand_bytes(5)
         .tempfile()
         .unwrap();
 
-    let out_file = Builder::new()
-        .prefix("temp")
-        .suffix(".pb")
-        .rand_bytes(8)
-        .tempfile()
-        .unwrap();
-
-    let mut file = in_file.as_file();
+    let mut file = temp_file.as_file();
     file.write_all(proto_data.as_ref())
         .expect("writing binary to test file");
-    file.flush().expect("flush temp file failed");
-    let include_path = in_file
-        .path()
-        .parent()
-        .unwrap()
-        .to_string_lossy()
-        .into_owned();
-    let out_path = out_file.path().to_string_lossy().into_owned();
-    let in_path = in_file.path().to_string_lossy().into_owned();
-    let mut compile = std::process::Command::new("protoc");
-
-    let out = compile
-        .arg("--include_imports")
-        .arg("-I")
-        .arg(include_path)
-        .arg(format!("--descriptor_set_out={}", out_path))
-        .arg(in_path)
-        .output()
-        .expect("failed to compile proto");
-    if !out.status.success() {
-        panic!("compile proto failed \n output: {:?}", out);
-    }
-    out_file
+    temp_file
 }

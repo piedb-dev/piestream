@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ use piestream_storage::table::streaming_table::state_table::StateTable;
 
 use super::*;
 use crate::common::StateTableColumnMapping;
-use crate::executor::aggregation::{AggArgs, AggCall, AggStateStorage};
+use crate::executor::aggregation::{AggArgs, AggCall, AggStateTable};
 
 pub fn build_agg_call_from_prost(
     append_only: bool,
@@ -81,17 +81,17 @@ pub fn build_agg_call_from_prost(
 
 /// Parse from stream proto plan agg call states, generate state tables and column mappings.
 /// The `vnodes` is generally `Some` for Hash Agg and `None` for Simple Agg.
-pub fn build_agg_state_storages_from_proto<S: StateStore>(
+pub fn build_agg_state_tables_from_proto<S: StateStore>(
     agg_call_states: &[piestream_pb::stream_plan::AggCallState],
     store: S,
     vnodes: Option<Arc<Bitmap>>,
-) -> Vec<AggStateStorage<S>> {
+) -> Vec<Option<AggStateTable<S>>> {
     use piestream_pb::stream_plan::agg_call_state;
 
     agg_call_states
         .iter()
         .map(|state| match state.get_inner().unwrap() {
-            agg_call_state::Inner::ResultValueState(..) => AggStateStorage::ResultValue,
+            agg_call_state::Inner::ResultValueState(..) => None,
             agg_call_state::Inner::MaterializedState(state) => {
                 let table = StateTable::from_table_catalog(
                     state.get_table().unwrap(),
@@ -105,7 +105,7 @@ pub fn build_agg_state_storages_from_proto<S: StateStore>(
                         .map(|idx| *idx as usize)
                         .collect(),
                 );
-                AggStateStorage::MaterializedInput { table, mapping }
+                Some(AggStateTable { table, mapping })
             }
         })
         .collect()

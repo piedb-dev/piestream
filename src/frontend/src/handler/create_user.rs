@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,42 +16,22 @@ use pgwire::pg_response::{PgResponse, StatementType};
 use piestream_common::error::ErrorCode::PermissionDenied;
 use piestream_common::error::Result;
 use piestream_pb::user::UserInfo;
-use piestream_sqlparser::ast::{CreateUserStatement, UserOption, UserOptions};
+use piestream_sqlparser::ast::{CreateUserStatement, ObjectName, UserOption, UserOptions};
 
 use super::RwPgResponse;
 use crate::binder::Binder;
 use crate::catalog::CatalogError;
 use crate::session::OptimizerContext;
-use crate::user::user_authentication::encrypted_password;
+use crate::user::user_authentication::{encrypt_default, encrypted_password};
 
-fn make_prost_user_info(
-    user_name: String,
-    options: &UserOptions,
-    session_user: &UserInfo,
-) -> Result<UserInfo> {
-    if !session_user.is_super {
-        let require_super = options
-            .0
-            .iter()
-            .any(|option| matches!(option, UserOption::SuperUser));
-        if require_super {
-            return Err(
-                PermissionDenied("must be superuser to create superusers".to_string()).into(),
-            );
-        }
-
-        if !session_user.can_create_user {
-            return Err(PermissionDenied("Do not have the privilege".to_string()).into());
-        }
-    }
-
+pub(crate) fn make_prost_user_info(name: ObjectName, options: &UserOptions) -> Result<UserInfo> {
     let mut user_info = UserInfo {
-        name: user_name,
+        name: Binder::resolve_user_name(name)?,
         // the LOGIN option is implied if it is not explicitly specified.
         can_login: true,
+        can_create_user: false,
         ..Default::default()
     };
-
     for option in &options.0 {
         match option {
             UserOption::SuperUser => user_info.is_super = true,
@@ -62,15 +42,13 @@ fn make_prost_user_info(
             UserOption::NoCreateUser => user_info.can_create_user = false,
             UserOption::Login => user_info.can_login = true,
             UserOption::NoLogin => user_info.can_login = false,
-            UserOption::EncryptedPassword(password) => {
-                // TODO: Behaviour of PostgreSQL: Notice when password is empty string.
-                if !password.0.is_empty() {
-                    user_info.auth_info = encrypted_password(&user_info.name, &password.0);
+            UserOption::EncryptedPassword(p) => {
+                if !p.0.is_empty() {
+                    user_info.auth_info = Some(encrypt_default(&user_info.name, &p.0));
                 }
             }
             UserOption::Password(opt) => {
-                // TODO: Behaviour of PostgreSQL: Notice when password is empty string.
-                if let Some(password) = opt && !password.0.is_empty() {
+                if let Some(password) = opt {
                     user_info.auth_info = encrypted_password(&user_info.name, &password.0);
                 }
             }
@@ -85,19 +63,24 @@ pub async fn handle_create_user(
     stmt: CreateUserStatement,
 ) -> Result<RwPgResponse> {
     let session = context.session_ctx;
-    let user_info = {
-        let user_name = Binder::resolve_user_name(stmt.user_name)?;
-        let user_reader = session.env().user_info_reader().read_guard();
-        if user_reader.get_user_by_name(&user_name).is_some() {
-            return Err(CatalogError::Duplicated("user", user_name).into());
+    let user_info = make_prost_user_info(stmt.user_name, &stmt.with_options)?;
+
+    {
+        let user_reader = session.env().user_info_reader();
+        let reader = user_reader.read_guard();
+        if reader.get_user_by_name(&user_info.name).is_some() {
+            return Err(CatalogError::Duplicated("user", user_info.name).into());
         }
 
-        let session_user = user_reader
-            .get_user_by_name(session.user_name())
-            .ok_or_else(|| CatalogError::NotFound("user", session.user_name().to_string()))?;
-
-        make_prost_user_info(user_name, &stmt.with_options, session_user)?
-    };
+        let session_user = reader.get_user_by_name(session.user_name()).unwrap();
+        if !session_user.is_super
+            && (!session_user.can_create_user
+                || user_info.is_super
+                || (!session_user.can_create_db && user_info.can_create_db))
+        {
+            return Err(PermissionDenied("Do not have the privilege".to_string()).into());
+        }
+    }
 
     let user_info_writer = session.env().user_info_writer();
     user_info_writer.create_user(user_info).await?;

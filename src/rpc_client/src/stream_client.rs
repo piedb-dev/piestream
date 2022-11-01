@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ macro_rules! for_all_stream_rpc {
             ,{ 0, drop_actors, DropActorsRequest, DropActorsResponse }
             ,{ 0, force_stop_actors, ForceStopActorsRequest, ForceStopActorsResponse}
             ,{ 0, inject_barrier, InjectBarrierRequest, InjectBarrierResponse }
+            ,{ 0, drop_source, DropSourceRequest, DropSourceResponse }
             ,{ 0, barrier_complete, BarrierCompleteRequest, BarrierCompleteResponse }
             ,{ 0, wait_epoch_commit, WaitEpochCommitRequest, WaitEpochCommitResponse }
         }

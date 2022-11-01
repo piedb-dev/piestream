@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,20 @@
 
 use futures::StreamExt;
 use futures_async_stream::try_stream;
+use itertools::Itertools;
 use piestream_common::array::{Row, StreamChunk};
 use piestream_common::catalog::Schema;
 use piestream_storage::table::streaming_table::state_table::StateTable;
 use piestream_storage::StateStore;
 
 use super::aggregation::{
-    agg_call_filter_res, iter_table_storage, AggChangesInfo, AggStateStorage,
+    agg_call_filter_res, for_each_agg_state_table, AggChangesInfo, AggStateTable,
 };
 use super::*;
 use crate::error::StreamResult;
-use crate::executor::aggregation::{generate_agg_schema, AggCall, AggGroup};
+use crate::executor::aggregation::{
+    generate_agg_schema, generate_managed_agg_state, AggCall, AggState,
+};
 use crate::executor::error::StreamExecutorError;
 use crate::executor::{BoxedMessageStream, Message, PkIndices};
 
@@ -52,11 +55,17 @@ pub struct GlobalSimpleAggExecutor<S: StateStore> {
     /// Schema from input
     input_schema: Schema,
 
+    /// Aggregation states of the current operator.
+    /// This is an `Option` and the initial state is built when `Executor::next` is called, since
+    /// we may not want `Self::new` to be an `async` function.
+    agg_state: Option<AggState<S>>,
+
     /// An operator will support multiple aggregation calls.
     agg_calls: Vec<AggCall>,
 
-    /// State storage for each agg calls.
-    storages: Vec<AggStateStorage<S>>,
+    /// Relational state tables for each aggregation calls.
+    /// `None` means the agg call need not to maintain a state table by itself.
+    agg_state_tables: Vec<Option<AggStateTable<S>>>,
 
     /// State table for the previous result of all agg calls.
     /// The outputs of all managed agg states are collected and stored in this
@@ -94,7 +103,7 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
         ctx: ActorContextRef,
         input: Box<dyn Executor>,
         agg_calls: Vec<AggCall>,
-        storages: Vec<AggStateStorage<S>>,
+        agg_state_tables: Vec<Option<AggStateTable<S>>>,
         result_table: StateTable<S>,
         pk_indices: PkIndices,
         executor_id: u64,
@@ -113,8 +122,9 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
             },
             input_pk_indices: input_info.pk_indices,
             input_schema: input_info.schema,
+            agg_state: None,
             agg_calls,
-            storages,
+            agg_state_tables,
             result_table,
             extreme_cache_size,
             state_changed: false,
@@ -126,23 +136,27 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
         ctx: &ActorContextRef,
         identity: &str,
         agg_calls: &[AggCall],
-        storages: &mut [AggStateStorage<S>],
+        agg_state_tables: &mut [Option<AggStateTable<S>>],
         result_table: &mut StateTable<S>,
         input_pk_indices: &PkIndices,
         input_schema: &Schema,
-        agg_group: &mut Option<AggGroup<S>>,
+        agg_state: &mut Option<AggState<S>>,
         chunk: StreamChunk,
         extreme_cache_size: usize,
         state_changed: &mut bool,
     ) -> StreamExecutorResult<()> {
-        // Create `AggGroup` if not exists. This will fetch previous agg result
+        let capacity = chunk.capacity();
+        let (ops, columns, visibility) = chunk.into_inner();
+        let column_refs = columns.iter().map(|col| col.array_ref()).collect_vec();
+
+        // Create `AggState` if not exists. This will fetch previous agg result
         // from the result table.
-        if agg_group.is_none() {
-            *agg_group = Some(
-                AggGroup::create(
+        if agg_state.is_none() {
+            *agg_state = Some(
+                generate_managed_agg_state(
                     None,
                     agg_calls,
-                    storages,
+                    agg_state_tables,
                     result_table,
                     input_pk_indices,
                     extreme_cache_size,
@@ -151,55 +165,61 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
                 .await?,
             );
         }
-        let agg_group = agg_group.as_mut().unwrap();
+        let agg_state = agg_state.as_mut().unwrap();
 
         // Mark state as changed.
         *state_changed = true;
 
-        // Decompose the input chunk.
-        let capacity = chunk.capacity();
-        let (ops, columns, visibility) = chunk.into_inner();
-
-        // Apply chunk to each of the state (per agg_call)
-        let visibilities: Vec<_> = agg_calls
-            .iter()
-            .map(|agg_call| {
-                agg_call_filter_res(
-                    ctx,
-                    identity,
-                    agg_call,
-                    &columns,
-                    visibility.as_ref(),
-                    capacity,
+        // Apply batch to each of the state (per agg_call)
+        for ((managed_state, agg_call), agg_state_table) in agg_state
+            .managed_states()
+            .iter_mut()
+            .zip_eq(agg_calls.iter())
+            .zip_eq(agg_state_tables.iter_mut())
+        {
+            let vis_map = agg_call_filter_res(
+                ctx,
+                identity,
+                agg_call,
+                &columns,
+                visibility.as_ref(),
+                capacity,
+            )?;
+            managed_state
+                .apply_chunk(
+                    &ops,
+                    vis_map.as_ref(),
+                    &column_refs,
+                    agg_state_table.as_mut(),
                 )
-            })
-            .try_collect()?;
-        agg_group
-            .apply_chunk(storages, &ops, &columns, &visibilities)
-            .await?;
+                .await?;
+        }
 
         Ok(())
     }
 
     async fn flush_data(
         schema: &Schema,
-        agg_group: &mut Option<AggGroup<S>>,
+        agg_state: &mut Option<AggState<S>>,
         epoch: EpochPair,
-        storages: &mut [AggStateStorage<S>],
+        agg_state_tables: &mut [Option<AggStateTable<S>>],
         result_table: &mut StateTable<S>,
         state_changed: &mut bool,
     ) -> StreamExecutorResult<Option<StreamChunk>> {
         // --- Flush states to the state store ---
         if *state_changed {
-            let agg_group = agg_group.as_mut().unwrap();
+            let agg_state = agg_state.as_mut().unwrap();
 
             // Batch commit data.
             futures::future::try_join_all(
-                iter_table_storage(storages).map(|state_table| state_table.commit(epoch)),
+                agg_state_tables
+                    .iter_mut()
+                    .filter_map(Option::as_mut)
+                    .map(|state_table| state_table.table.commit(epoch)),
             )
             .await?;
 
-            // Create array builders.
+            // --- Create array builders ---
             // As the datatype is retrieved from schema, it contains both group key and aggregation
             // state outputs.
             let mut builders = schema.create_array_builders(2);
@@ -208,19 +228,12 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
             let AggChangesInfo {
                 result_row,
                 prev_outputs,
-                n_appended_ops,
-            } = agg_group
-                .build_changes(&mut builders, &mut new_ops, storages)
+                ..
+            } = agg_state
+                .build_changes(&mut builders, &mut new_ops, agg_state_tables)
                 .await?;
-
-            if n_appended_ops == 0 {
-                // Nothing to flush.
-                result_table.commit_no_data_expected(epoch);
-                return Ok(None);
-            }
-
             if let Some(prev_outputs) = prev_outputs {
-                let old_row = agg_group
+                let old_row = agg_state
                     .group_key()
                     .unwrap_or_else(Row::empty)
                     .concat(prev_outputs.into_iter());
@@ -242,8 +255,8 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
         } else {
             // Nothing to flush.
             // Call commit on state table to increment the epoch.
-            iter_table_storage(storages).for_each(|state_table| {
-                state_table.commit_no_data_expected(epoch);
+            for_each_agg_state_table(agg_state_tables, |state_table| {
+                state_table.table.commit_no_data_expected(epoch);
             });
             result_table.commit_no_data_expected(epoch);
             Ok(None)
@@ -258,19 +271,18 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
             info,
             input_pk_indices,
             input_schema,
+            mut agg_state,
             agg_calls,
             extreme_cache_size,
-            mut storages,
+            mut agg_state_tables,
             mut result_table,
             mut state_changed,
         } = self;
-
-        let mut agg_group = None;
-
         let mut input = input.execute();
+
         let barrier = expect_first_barrier(&mut input).await?;
-        iter_table_storage(&mut storages).for_each(|state_table| {
-            state_table.init_epoch(barrier.epoch);
+        for_each_agg_state_table(&mut agg_state_tables, |state_table| {
+            state_table.table.init_epoch(barrier.epoch);
         });
         result_table.init_epoch(barrier.epoch);
 
@@ -285,11 +297,11 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
                         &ctx,
                         &info.identity,
                         &agg_calls,
-                        &mut storages,
+                        &mut agg_state_tables,
                         &mut result_table,
                         &input_pk_indices,
                         &input_schema,
-                        &mut agg_group,
+                        &mut agg_state,
                         chunk,
                         extreme_cache_size,
                         &mut state_changed,
@@ -299,9 +311,9 @@ impl<S: StateStore> GlobalSimpleAggExecutor<S> {
                 Message::Barrier(barrier) => {
                     if let Some(chunk) = Self::flush_data(
                         &info.schema,
-                        &mut agg_group,
+                        &mut agg_state,
                         barrier.epoch,
-                        &mut storages,
+                        &mut agg_state_tables,
                         &mut result_table,
                         &mut state_changed,
                     )

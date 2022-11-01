@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -214,10 +214,6 @@ impl<S: StateStore> StorageTable<S> {
     pub fn schema(&self) -> &Schema {
         &self.schema
     }
-
-    pub fn pk_indices(&self) -> &[usize] {
-        &self.pk_indices
-    }
 }
 
 /// Point get
@@ -238,7 +234,7 @@ impl<S: StateStore> StorageTable<S> {
 
     /// Get a single row by point get
     pub async fn get_row(
-        &self,
+        &mut self,
         pk: &Row,
         wait_epoch: HummockReadEpoch,
     ) -> StorageResult<Option<Row>> {

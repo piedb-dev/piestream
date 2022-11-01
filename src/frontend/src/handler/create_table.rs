@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,6 @@ use crate::optimizer::property::{Order, RequiredDist};
 use crate::optimizer::{PlanRef, PlanRoot};
 use crate::session::{OptimizerContext, OptimizerContextRef, SessionImpl};
 use crate::stream_fragmenter::build_graph;
-use crate::Binder;
 
 /// Binds the column schemas declared in CREATE statement into `ColumnDesc`.
 /// If a column is marked as `primary key`, its `ColumnId` is also returned.
@@ -268,24 +267,6 @@ pub async fn handle_create_table(
     constraints: Vec<TableConstraint>,
 ) -> Result<RwPgResponse> {
     let session = context.session_ctx.clone();
-    {
-        let db_name = session.database();
-        let catalog_reader = session.env().catalog_reader().read_guard();
-        let (schema_name, table_name) = {
-            let (schema_name, table_name) =
-                Binder::resolve_table_or_source_name(db_name, table_name.clone())?;
-            let search_path = session.config().get_search_path();
-            let user_name = &session.auth_context().user_name;
-            let schema_name = match schema_name {
-                Some(schema_name) => schema_name,
-                None => catalog_reader
-                    .first_valid_schema(db_name, &search_path, user_name)?
-                    .name(),
-            };
-            (schema_name, table_name)
-        };
-        catalog_reader.check_relation_name_duplicated(db_name, &schema_name, &table_name)?;
-    }
 
     let (graph, source, table) = {
         let (plan, source, table) = gen_create_table_plan(
@@ -322,7 +303,6 @@ mod tests {
     use piestream_common::types::DataType;
 
     use super::*;
-    use crate::catalog::root_catalog::SchemaPath;
     use crate::catalog::row_id_column_name;
     use crate::test_utils::LocalFrontend;
 
@@ -333,20 +313,23 @@ mod tests {
         frontend.run_sql(sql).await.unwrap();
 
         let session = frontend.session_ref();
-        let catalog_reader = session.env().catalog_reader().read_guard();
-        let schema_path = SchemaPath::Name(DEFAULT_SCHEMA_NAME);
+        let catalog_reader = session.env().catalog_reader();
 
         // Check source exists.
-        let (source, schema_name) = catalog_reader
-            .get_source_by_name(DEFAULT_DATABASE_NAME, schema_path, "t")
-            .unwrap();
+        let source = catalog_reader
+            .read_guard()
+            .get_source_by_name(DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, "t")
+            .unwrap()
+            .clone();
         assert_eq!(source.name, "t");
         assert!(source.append_only);
 
         // Check table exists.
-        let (table, _) = catalog_reader
-            .get_table_by_name(DEFAULT_DATABASE_NAME, SchemaPath::Name(schema_name), "t")
-            .unwrap();
+        let table = catalog_reader
+            .read_guard()
+            .get_table_by_name(DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, "t")
+            .unwrap()
+            .clone();
         assert_eq!(table.name(), "t");
 
         let columns = table

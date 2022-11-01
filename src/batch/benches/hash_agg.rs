@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,6 @@ fn create_hash_agg_executor(
     chunk_size: usize,
     chunk_num: usize,
 ) -> BoxedExecutor {
-    const CHUNK_SIZE: usize = 1024;
     let input = create_input(
         &[DataType::Int32, DataType::Int64, DataType::Varchar],
         chunk_size,
@@ -103,7 +102,6 @@ fn create_hash_agg_executor(
         schema,
         input,
         "HashAggExecutor".to_string(),
-        CHUNK_SIZE,
     ))
 }
 

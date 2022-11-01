@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,7 +139,6 @@ where
                 parallel_unit_mappings,
                 hummock_version: None,
                 hummock_snapshot,
-                ..Default::default()
             },
 
             SubscribeType::Compactor => MetaSnapshot {
@@ -150,14 +149,6 @@ where
             SubscribeType::Hummock => MetaSnapshot {
                 tables,
                 hummock_version: Some(hummock_manager_guard.current_version.clone()),
-                compaction_groups: self
-                    .hummock_manager
-                    .compaction_group_manager()
-                    .compaction_groups()
-                    .await
-                    .iter()
-                    .map(|group| group.into())
-                    .collect_vec(),
                 ..Default::default()
             },
 

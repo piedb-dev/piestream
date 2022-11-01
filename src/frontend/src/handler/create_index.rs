@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ use piestream_sqlparser::ast::{Ident, ObjectName, OrderByExpr};
 use super::RwPgResponse;
 use crate::binder::Binder;
 use crate::catalog::check_schema_writable;
-use crate::catalog::root_catalog::SchemaPath;
 use crate::expr::{Expr, ExprImpl, InputRef};
 use crate::handler::privilege::{check_privileges, ObjectCheckItem};
 use crate::optimizer::plan_node::{LogicalProject, LogicalScan, StreamMaterialize};
@@ -46,29 +45,13 @@ pub(crate) fn gen_create_index_plan(
     distributed_by: Vec<Ident>,
 ) -> Result<(PlanRef, ProstTable, ProstIndex)> {
     let columns = check_columns(columns)?;
-    let db_name = session.database();
-    let (schema_name, table_name) = Binder::resolve_table_or_source_name(db_name, table_name)?;
-    let search_path = session.config().get_search_path();
-    let user_name = &session.auth_context().user_name;
-    let schema_path = match schema_name.as_deref() {
-        Some(schema_name) => SchemaPath::Name(schema_name),
-        None => SchemaPath::Path(&search_path, user_name),
-    };
-    let index_table_name = Binder::resolve_index_name(index_name)?;
 
+    let (schema_name, table_name) = Binder::resolve_table_name(table_name)?;
     let catalog_reader = session.env().catalog_reader();
-    let (table, schema_name) = {
-        let read_guard = catalog_reader.read_guard();
-        let (table, schema_name) =
-            read_guard.get_table_by_name(db_name, schema_path, &table_name)?;
-        (table.clone(), schema_name.to_string())
-    };
-
-    if table.is_index {
-        return Err(
-            ErrorCode::InvalidInputSyntax(format!("\"{}\" is an index", table.name)).into(),
-        );
-    }
+    let table = catalog_reader
+        .read_guard()
+        .get_table_by_name(session.database(), &schema_name, &table_name)?
+        .clone();
 
     check_privileges(
         session,
@@ -133,6 +116,8 @@ pub(crate) fn gen_create_index_plan(
         .into());
     }
 
+    let (index_schema_name, index_table_name) = Binder::resolve_table_name(index_name)?;
+
     // Manually assemble the materialization plan for the index MV.
     let materialize = assemble_materialize(
         table_name,
@@ -150,13 +135,12 @@ pub(crate) fn gen_create_index_plan(
         },
     )?;
 
+    check_schema_writable(&index_schema_name)?;
     let (index_database_id, index_schema_id) = {
         let catalog_reader = session.env().catalog_reader().read_guard();
 
-        let schema = catalog_reader.get_schema_by_name(db_name, &schema_name)?;
-
-        check_schema_writable(&schema_name)?;
         if schema_name != DEFAULT_SCHEMA_NAME {
+            let schema = catalog_reader.get_schema_by_name(session.database(), &schema_name)?;
             check_privileges(
                 session,
                 &vec![ObjectCheckItem::new(
@@ -167,9 +151,13 @@ pub(crate) fn gen_create_index_plan(
             )?;
         }
 
-        let db_id = catalog_reader.get_database_by_name(db_name)?.id();
-
-        (db_id, schema.id())
+        let db_id = catalog_reader
+            .get_database_by_name(session.database())?
+            .id();
+        let schema_id = catalog_reader
+            .get_schema_by_name(session.database(), &index_schema_name)?
+            .id();
+        (db_id, schema_id)
     };
 
     let index_table = materialize.table();
@@ -346,42 +334,34 @@ pub async fn handle_create_index(
 
     let (graph, index_table, index) = {
         {
-            // Here is some duplicate code because we need to check name duplicated outside of
-            // `gen_xxx_plan` to avoid `explain` reporting the error.
-            let db_name = session.database();
-            let (schema_name, table_name) =
-                Binder::resolve_table_or_source_name(db_name, table_name.clone())?;
-            let search_path = session.config().get_search_path();
-            let user_name = &session.auth_context().user_name;
-            let schema_path = match schema_name.as_deref() {
-                Some(schema_name) => SchemaPath::Name(schema_name),
-                None => SchemaPath::Path(&search_path, user_name),
-            };
-            let index_name = Binder::resolve_index_name(name.clone())?;
-
             let catalog_reader = session.env().catalog_reader().read_guard();
-            let (_, schema_name) =
-                catalog_reader.get_table_by_name(db_name, schema_path, &table_name)?;
+            let (index_schema_name, index_table_name) = Binder::resolve_table_name(name.clone())?;
 
-            if let Err(e) =
-                catalog_reader.check_relation_name_duplicated(db_name, schema_name, &index_name)
-            {
-                if if_not_exists {
+            let relation_duplicated = catalog_reader.check_relation_name_duplicated(
+                session.database(),
+                &index_schema_name,
+                &index_table_name,
+            );
+
+            if if_not_exists {
+                if relation_duplicated.is_err() {
                     return Ok(PgResponse::empty_result_with_notice(
                         StatementType::CREATE_INDEX,
-                        format!("relation \"{}\" already exists, skipping", index_name),
+                        format!(
+                            "NOTICE:  relation \"{}\" already exists, skipping",
+                            index_table_name
+                        ),
                     ));
-                } else {
-                    return Err(e);
                 }
+            } else {
+                relation_duplicated?;
             }
         }
-
         let (plan, index_table, index) = gen_create_index_plan(
             &session,
             context.into(),
             name.clone(),
-            table_name,
+            table_name.clone(),
             columns,
             include,
             distributed_by,

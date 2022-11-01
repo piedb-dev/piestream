@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -164,19 +164,11 @@ pub async fn handle(
             if_exists,
             drop_mode,
         }) => match object_type {
-            ObjectType::Table => {
-                drop_table::handle_drop_table(context, object_name, if_exists).await
-            }
-            ObjectType::MaterializedView => {
-                drop_mv::handle_drop_mv(context, object_name, if_exists).await
-            }
-            ObjectType::Index => {
-                drop_index::handle_drop_index(context, object_name, if_exists).await
-            }
-            ObjectType::Source => {
-                drop_source::handle_drop_source(context, object_name, if_exists).await
-            }
-            ObjectType::Sink => drop_sink::handle_drop_sink(context, object_name, if_exists).await,
+            ObjectType::Table => drop_table::handle_drop_table(context, object_name).await,
+            ObjectType::MaterializedView => drop_mv::handle_drop_mv(context, object_name).await,
+            ObjectType::Index => drop_index::handle_drop_index(context, object_name).await,
+            ObjectType::Source => drop_source::handle_drop_source(context, object_name).await,
+            ObjectType::Sink => drop_sink::handle_drop_sink(context, object_name).await,
             ObjectType::Database => {
                 drop_database::handle_drop_database(
                     context,

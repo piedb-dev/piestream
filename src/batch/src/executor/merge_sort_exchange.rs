@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ use piestream_common::array::DataChunk;
 use piestream_common::catalog::{Field, Schema};
 use piestream_common::error::{Result, RwError};
 use piestream_common::types::ToOwnedDatum;
-use piestream_common::util::sort_util::{HeapElem, OrderPair};
+use piestream_common::util::sort_util::{HeapElem, OrderPair, K_PROCESSING_WINDOW_SIZE};
 use piestream_pb::batch_plan::plan_node::NodeBody;
 use piestream_pb::batch_plan::ExchangeSource as ProstExchangeSource;
 
@@ -35,6 +35,8 @@ pub type MergeSortExchangeExecutor<C> = MergeSortExchangeExecutorImpl<DefaultCre
 
 /// `MergeSortExchangeExecutor2` takes inputs from multiple sources and
 /// The outputs of all the sources have been sorted in the same way.
+///
+/// The size of the output is determined both by `K_PROCESSING_WINDOW_SIZE`.
 pub struct MergeSortExchangeExecutorImpl<CS, C> {
     context: C,
     /// keeps one data chunk of each source if any
@@ -48,8 +50,6 @@ pub struct MergeSortExchangeExecutorImpl<CS, C> {
     schema: Schema,
     task_id: TaskId,
     identity: String,
-    /// The maximum size of the chunk produced by executor at a time.
-    chunk_size: usize,
 }
 
 impl<CS: 'static + Send + CreateSource, C: BatchTaskContext> MergeSortExchangeExecutorImpl<CS, C> {
@@ -101,8 +101,8 @@ impl<CS: 'static + Send + CreateSource, C: BatchTaskContext> Executor
     }
 }
 /// Everytime `execute` is called, it tries to produce a chunk of size
-/// `self.chunk_size`. It is possible that the chunk's size is smaller than the
-/// `self.chunk_size` as the executor runs out of input from `sources`.
+/// `K_PROCESSING_WINDOW_SIZE`. It is possible that the chunk's size is smaller than the
+/// `K_PROCESSING_WINDOW_SIZE` as the executor runs out of input from `sources`.
 impl<CS: 'static + Send + CreateSource, C: BatchTaskContext> MergeSortExchangeExecutorImpl<CS, C> {
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(mut self: Box<Self>) {
@@ -126,13 +126,17 @@ impl<CS: 'static + Send + CreateSource, C: BatchTaskContext> MergeSortExchangeEx
         while !self.min_heap.is_empty() {
             // It is possible that we cannot produce this much as
             // we may run out of input data chunks from sources.
-            let mut want_to_produce = self.chunk_size;
+            let mut want_to_produce = K_PROCESSING_WINDOW_SIZE;
 
             let mut builders: Vec<_> = self
                 .schema()
                 .fields
                 .iter()
-                .map(|field| field.data_type.create_array_builder(self.chunk_size))
+                .map(|field| {
+                    field
+                        .data_type
+                        .create_array_builder(K_PROCESSING_WINDOW_SIZE)
+                })
                 .collect();
             let mut array_len = 0;
             while want_to_produce > 0 && !self.min_heap.is_empty() {
@@ -221,7 +225,6 @@ impl BoxedExecutorBuilder for MergeSortExchangeExecutorBuilder {
             schema: Schema { fields },
             task_id: source.task_id.clone(),
             identity: source.plan_node().get_identity().clone(),
-            chunk_size: source.context.get_config().developer.batch_chunk_size,
         }))
     }
 }
@@ -239,8 +242,6 @@ mod tests {
     use super::*;
     use crate::executor::test_utils::{FakeCreateSource, FakeExchangeSource};
     use crate::task::ComputeNodeContext;
-
-    const CHUNK_SIZE: usize = 1024;
 
     #[tokio::test]
     async fn test_exchange_multiple_sources() {
@@ -281,7 +282,6 @@ mod tests {
             },
             task_id: TaskId::default(),
             identity: "MergeSortExchangeExecutor2".to_string(),
-            chunk_size: CHUNK_SIZE,
         });
 
         let mut stream = executor.execute();

@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,8 +78,6 @@ pub struct LookupExecutor<S: StateStore> {
 
     /// The cache for arrangement side.
     lookup_cache: LookupCache,
-    /// The maximum size of the chunk produced by executor at a time.
-    chunk_size: usize,
 }
 
 #[async_trait]

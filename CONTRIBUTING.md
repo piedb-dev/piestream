@@ -53,5 +53,5 @@ You may also check out previous PRs in the [PR list](https://github.com/piestrea
 
 ### Sign the CLA
 
-Contributors will need to sign PieDb Data's CLA.
+Contributors will need to sign Piedb Data's CLA.
 

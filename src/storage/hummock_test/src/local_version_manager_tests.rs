@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ use piestream_hummock_sdk::compaction_group::StaticCompactionGroupId;
 use piestream_hummock_sdk::HummockSstableId;
 use piestream_meta::hummock::test_utils::setup_compute_env;
 use piestream_pb::hummock::pin_version_response::Payload;
-use piestream_pb::hummock::{GroupHummockVersion, HummockVersion};
+use piestream_pb::hummock::HummockVersion;
+use piestream_storage::hummock::local_version::local_version_manager::LocalVersionManager;
 use piestream_storage::hummock::shared_buffer::shared_buffer_batch::SharedBufferBatch;
 use piestream_storage::hummock::shared_buffer::UncommittedData;
 use piestream_storage::hummock::test_utils::{
@@ -65,7 +66,10 @@ async fn test_update_pinned_version() {
         assert_eq!(
             local_version.get_shared_buffer(epochs[i]).unwrap().size(),
             SharedBufferBatch::measure_batch_size(
-                &SharedBufferBatch::build_shared_buffer_item_batches(batches[i].clone(), epochs[i])
+                &LocalVersionManager::build_shared_buffer_item_batches(
+                    batches[i].clone(),
+                    epochs[i]
+                )
             )
         );
     }
@@ -84,7 +88,7 @@ async fn test_update_pinned_version() {
 
     let build_batch = |pairs, epoch| {
         SharedBufferBatch::for_test(
-            SharedBufferBatch::build_shared_buffer_item_batches(pairs, epoch),
+            LocalVersionManager::build_shared_buffer_item_batches(pairs, epoch),
             epoch,
             StaticCompactionGroupId::StateDefault.into(),
             TableId::from(0),
@@ -145,16 +149,13 @@ async fn test_update_pinned_version() {
         max_committed_epoch: epochs[0],
         ..Default::default()
     };
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version));
     let local_version = local_version_manager.get_local_version();
     assert!(local_version.get_shared_buffer(epochs[0]).is_none());
     assert_eq!(
         local_version.get_shared_buffer(epochs[1]).unwrap().size(),
         SharedBufferBatch::measure_batch_size(
-            &SharedBufferBatch::build_shared_buffer_item_batches(batches[1].clone(), epochs[1])
+            &LocalVersionManager::build_shared_buffer_item_batches(batches[1].clone(), epochs[1])
         )
     );
 
@@ -169,10 +170,7 @@ async fn test_update_pinned_version() {
         max_committed_epoch: epochs[1],
         ..Default::default()
     };
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version));
     let local_version = local_version_manager.get_local_version();
     assert!(local_version.get_shared_buffer(epochs[0]).is_none());
     assert!(local_version.get_shared_buffer(epochs[1]).is_none());
@@ -188,10 +186,7 @@ async fn test_update_pinned_version() {
         ..Default::default()
     };
 
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version));
     assert!(local_version.get_shared_buffer(epochs[0]).is_none());
     assert!(local_version.get_shared_buffer(epochs[1]).is_none());
 }
@@ -231,7 +226,7 @@ async fn test_update_uncommitted_ssts() {
             .unwrap();
         let local_version = local_version_manager.get_local_version();
         let batch = SharedBufferBatch::for_test(
-            SharedBufferBatch::build_shared_buffer_item_batches(kvs[i].clone(), epochs[i]),
+            LocalVersionManager::build_shared_buffer_item_batches(kvs[i].clone(), epochs[i]),
             epochs[i],
             StaticCompactionGroupId::StateDefault.into(),
             Default::default(),
@@ -366,12 +361,9 @@ async fn test_update_uncommitted_ssts() {
         max_committed_epoch: epochs[0],
         ..Default::default()
     };
-    assert!(local_version_manager
-        .try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-            hummock_version: Some(version.clone()),
-            ..Default::default()
-        }))
-        .is_some());
+    assert!(
+        local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version.clone()))
+    );
     let local_version = local_version_manager.get_local_version();
     // Check shared buffer
     assert!(local_version.get_shared_buffer(epochs[0]).is_none());
@@ -386,10 +378,7 @@ async fn test_update_uncommitted_ssts() {
         max_committed_epoch: epochs[1],
         ..Default::default()
     };
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version.clone()),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version.clone()));
     let local_version = local_version_manager.get_local_version();
     assert!(local_version.get_shared_buffer(epochs[0]).is_none());
     assert!(local_version.get_shared_buffer(epochs[1]).is_none());
@@ -429,7 +418,10 @@ async fn test_clear_shared_buffer() {
         assert_eq!(
             local_version.get_shared_buffer(epochs[i]).unwrap().size(),
             SharedBufferBatch::measure_batch_size(
-                &SharedBufferBatch::build_shared_buffer_item_batches(batches[i].clone(), epochs[i])
+                &LocalVersionManager::build_shared_buffer_item_batches(
+                    batches[i].clone(),
+                    epochs[i]
+                )
             )
         );
     }
@@ -509,10 +501,7 @@ async fn test_sst_gc_watermark() {
         ..Default::default()
     };
     // Watermark held by epoch 0 is removed.
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version));
     // Global watermark determined by epoch 1.
     assert_eq!(
         local_version_manager
@@ -526,10 +515,7 @@ async fn test_sst_gc_watermark() {
         max_committed_epoch: epochs[1],
         ..Default::default()
     };
-    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(GroupHummockVersion {
-        hummock_version: Some(version),
-        ..Default::default()
-    }));
+    local_version_manager.try_update_pinned_version(Payload::PinnedVersion(version));
     assert_eq!(
         local_version_manager
             .sstable_id_manager()

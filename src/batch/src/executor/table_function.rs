@@ -1,4 +1,4 @@
-// Copyright 2022 PieDb Data
+// Copyright 2022 Piedb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ use futures_async_stream::try_stream;
 use piestream_common::array::DataChunk;
 use piestream_common::catalog::{Field, Schema};
 use piestream_common::error::{Result, RwError};
+use piestream_common::util::chunk_coalesce::DEFAULT_CHUNK_BUFFER_SIZE;
 use piestream_expr::table_function::{build_from_prost, BoxedTableFunction};
 use piestream_pb::batch_plan::plan_node::NodeBody;
 
@@ -27,7 +28,6 @@ pub struct TableFunctionExecutor {
     schema: Schema,
     identity: String,
     table_function: BoxedTableFunction,
-    chunk_size: usize,
 }
 
 impl Executor for TableFunctionExecutor {
@@ -52,7 +52,7 @@ impl TableFunctionExecutor {
         let mut builder = self
             .table_function
             .return_type()
-            .create_array_builder(self.chunk_size);
+            .create_array_builder(DEFAULT_CHUNK_BUFFER_SIZE);
         let mut len = 0;
         for array in self.table_function.eval(&dummy_chunk)? {
             len += array.len();
@@ -84,9 +84,7 @@ impl BoxedExecutorBuilder for TableFunctionExecutorBuilder {
 
         let identity = source.plan_node().get_identity().clone();
 
-        let chunk_size = source.context.get_config().developer.batch_chunk_size;
-
-        let table_function = build_from_prost(node.table_function.as_ref().unwrap(), chunk_size)?;
+        let table_function = build_from_prost(node.table_function.as_ref().unwrap())?;
 
         let fields = vec![Field::unnamed(table_function.return_type())];
 
@@ -94,7 +92,6 @@ impl BoxedExecutorBuilder for TableFunctionExecutorBuilder {
             schema: Schema { fields },
             identity,
             table_function,
-            chunk_size,
         }))
     }
 }
