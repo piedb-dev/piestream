@@ -49,6 +49,7 @@ mod stream_fragmenter;
 pub use stream_fragmenter::build_graph;
 mod utils;
 pub use utils::{explain_stream_graph, WithOptions};
+pub mod mysql_session;
 mod meta_client;
 pub mod test_utils;
 mod user;
@@ -62,6 +63,7 @@ use std::sync::Arc;
 use clap::Parser;
 use pgwire::pg_server::pg_serve;
 use serde::{Deserialize, Serialize};
+use mysql_session::mysql_server;
 use session::SessionManagerImpl;
 
 #[derive(Parser, Clone, Debug)]
@@ -121,4 +123,12 @@ pub struct FrontendConfig {
     // For connection
     #[serde(default)]
     pub server: ServerConfig,
+}
+
+pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move {
+        let addr = "127.0.0.1:4567".to_string();
+        let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
+        mysql_server(&addr,session_mgr).await;
+    })
 }

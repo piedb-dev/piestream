@@ -1,4 +1,4 @@
-// Copyright 2022 Piedb Data
+// Copyright 2022 PieDb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,22 +13,16 @@
 // limitations under the License.
 
 #![cfg_attr(coverage, feature(no_coverage))]
-
 use tikv_jemallocator::Jemalloc;
-
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
 #[cfg_attr(coverage, no_coverage)]
-fn main() {
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+async fn main() {
     use clap::StructOpt;
-    
     let opts = piestream_frontend::FrontendOpts::parse();
-
+    piestream_rt::oneshot_common();
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
-
-    piestream_rt::main_okk(piestream_frontend::start(opts))
-
+    piestream_frontend::mysql_start(opts).await
 }
-
-
