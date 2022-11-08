@@ -14,18 +14,19 @@
 
 use std::sync::Arc;
 use pgwire::pg_response::PgResponse;
-use pgwire::pg_server::Session;
-use pgwire::pg_server::UserAuthenticator;
+use pgwire::pg_server::{Session,UserAuthenticator,SessionManager,BoxedError,SessionId};
 use tokio::net::TcpListener;
 use std::io::{ Result,Error};
 use msql_srv::*;
 use msql_srv::OkResponse;
 // use msql_srv::ErrorKind;
-use pgwire::pg_server::SessionManager;
 use pgwire::pg_response::StatementType;
-use pgwire::pg_server::BoxedError;
+use piestream_common::catalog::{
+    DEFAULT_DATABASE_NAME, DEFAULT_SUPER_USER, DEFAULT_SUPER_USER_ID,
+};
 use crate::session::{SessionImpl, AuthContext, FrontendEnv,SessionManagerImpl};
 use async_trait::async_trait;
+use crate::{PgResponseStream};
 
 
 
@@ -65,7 +66,7 @@ pub struct MySQLApi
     id: u32,
 }
 
-impl SessionManager for MySQLApi {
+impl SessionManager<PgResponseStream> for MySQLApi {
     type Session = SessionImpl;
 
     fn connect(
@@ -74,6 +75,9 @@ impl SessionManager for MySQLApi {
         _user_name: &str,
     ) -> std::result::Result<Arc<Self::Session>, BoxedError> {
         Ok(self.session_ref())
+    }
+    fn cancel_queries_in_session(&self, _session_id: SessionId) {
+        todo!()
     }
 }
 
@@ -97,8 +101,10 @@ impl MySQLApi
             Arc::new(AuthContext::new(
                 "dev".to_string(),
                 "root".to_string(),
+                DEFAULT_SUPER_USER_ID
             )),
             UserAuthenticator::None,
+            (0, 0),
         ))
     }
 
@@ -106,7 +112,7 @@ impl MySQLApi
     pub fn write_output<'a, W: std::io::Write + Send>(
         &self,
         results: QueryResultWriter<'a, W>,
-        pg_results: PgResponse
+        pg_results: PgResponse<PgResponseStream>
     ) -> Result<()> {
         let stmt_type = pg_results.get_stmt_type();
         // todo alter more StatementType 
@@ -118,31 +124,32 @@ impl MySQLApi
                 return results.completed(OkResponse::default());
             },
             // todo support more query output
-            StatementType::SELECT => {
-                let values = pg_results.values();
-                let row_desc = pg_results.get_row_desc();
-                let mut cols = vec![];
-                for pg_field in row_desc {
-                    let pg_field_name = pg_field.get_name();
-                    // let type_oid = pg_field.get_type_oid();
-                    let col = Column {
-                        table: "table".to_string(),
-                        column: pg_field_name.to_string(),
-                        coltype: ColumnType::MYSQL_TYPE_LONGLONG,
-                        colflags: ColumnFlags::empty(),
-                    };
-                    cols.push(col);
-                }
-                let mut rw = results.start(&cols)?;
-                for value in values {
-                    let v1 = value[0].as_ref().unwrap();
-                    let v2 = value[1].as_ref().unwrap();
-                    rw.write_col(v1)?;
-                    rw.write_col(v2)?;
-                    rw.end_row()?;
-                };
-                rw.finish()
-            },
+            // StatementType::SELECT => {
+            //     let vv = pg_results.get_effected_rows_cnt();
+            //     let values = pg_results.values();
+            //     let row_desc = pg_results.get_row_desc();
+            //     let mut cols = vec![];
+            //     for pg_field in row_desc {
+            //         let pg_field_name = pg_field.get_name();
+            //         // let type_oid = pg_field.get_type_oid();
+            //         let col = Column {
+            //             table: "table".to_string(),
+            //             column: pg_field_name.to_string(),
+            //             coltype: ColumnType::MYSQL_TYPE_LONGLONG,
+            //             colflags: ColumnFlags::empty(),
+            //         };
+            //         cols.push(col);
+            //     }
+            //     let mut rw = results.start(&cols)?;
+            //     for value in values {
+            //         let v1 = value[0].as_ref().unwrap();
+            //         let v2 = value[1].as_ref().unwrap();
+            //         rw.write_col(v1)?;
+            //         rw.write_col(v2)?;
+            //         rw.end_row()?;
+            //     };
+            //     rw.finish()
+            // },
             _ => {
                 return results.completed(OkResponse::default());
             }
@@ -153,37 +160,37 @@ impl MySQLApi
         println!("pgresponse_to_sql");
     }
 
-    pub fn show_dbs<'a, W: std::io::Write + Send>(
-        &'a self,
-        results: QueryResultWriter<'a, W>,
-        pg_results: PgResponse
-    ) -> Result<()> {
-        let values = pg_results.values();
-        let str_col = [Column {
-            table: "".to_string(),
-            column: "Databases".to_string(),
-            coltype: ColumnType::MYSQL_TYPE_STRING,
-            colflags: ColumnFlags::empty(),
-        }];
-        let mut rw = results.start(&str_col)?;
-        rw.write_col("information_schema")?;
-        rw.end_row()?;
-        rw.write_col("mysql")?;
-        rw.end_row()?;
-        rw.write_col("performance_schema")?;
-        rw.end_row()?;
-        for db in values {
-            let db_name = db[0].as_ref().unwrap();
-            rw.write_col(db_name)?;
-            rw.end_row()?;
-        }
-        rw.finish()
-    }
+    // pub fn show_dbs<'a, W: std::io::Write + Send>(
+    //     &'a self,
+    //     results: QueryResultWriter<'a, W>,
+    //     pg_results: PgResponse<PgResponseStream>
+    // ) -> Result<()> {
+    //     let values = pg_results.values();
+    //     let str_col = [Column {
+    //         table: "".to_string(),
+    //         column: "Databases".to_string(),
+    //         coltype: ColumnType::MYSQL_TYPE_STRING,
+    //         colflags: ColumnFlags::empty(),
+    //     }];
+    //     let mut rw = results.start(&str_col)?;
+    //     rw.write_col("information_schema")?;
+    //     rw.end_row()?;
+    //     rw.write_col("mysql")?;
+    //     rw.end_row()?;
+    //     rw.write_col("performance_schema")?;
+    //     rw.end_row()?;
+    //     for db in values {
+    //         let db_name = db[0].as_ref().unwrap();
+    //         rw.write_col(db_name)?;
+    //         rw.end_row()?;
+    //     }
+    //     rw.finish()
+    // }
 
     pub fn show_tables<'a, W: std::io::Write + Send>(
         &'a self,
         results: QueryResultWriter<'a, W>,
-        _pg_results: PgResponse
+        _pg_results: PgResponse<PgResponseStream>
     ) -> Result<()> {
         results.completed(OkResponse::default())
     }
@@ -269,27 +276,50 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         let lower_case_sql = sql.trim().to_lowercase();
         tracing::info!("input sql: {}", lower_case_sql);
         let session = self.session.clone();
-        if lower_case_sql == VERSION_COMMENT {
-            return results.completed(OkResponse::default());
-        } else {
-            let rsp = session.run_statement(sql).await;
-            match rsp {
-                Ok(res) => {
-                    match lower_case_sql.as_str() {
-                        // todo add more ddl command function
-                        SHOW_DB => self.show_dbs(results,res),
-                        SHOW_TABLES => self.show_tables(results,res),
-                        _ => {
-                            self.write_output(results,res)
-                        }
-                    }
-                },
-                Err(e) => {
-                    // todo support more ErrorKind
-                    return results.error(ErrorKind::ER_ABORTING_CONNECTION, e.to_string().as_bytes())
-                }
-            }            
+        println!("sql ========== {:?}",&sql);
+        let mut rsp = session.run_statement(sql,false).await.unwrap();
+        for row_set in rsp.values_stream() {
+            for row in row_set.unwrap() {
+                println!("row = {:?}",&row);
+            }
         }
+
+
+
+        // for row_set in rsp.values_stream() {
+            // println!("row_set ======= {:?}",&row_set);
+            // for row in row_set.unwrap() {
+                // println!("row = = ==={:?}",&row);
+                // let row: Row = row;
+                // let row = row.values()[0].as_ref().unwrap();
+                // res += std::str::from_utf8(row).unwrap();
+                // res += "\n";
+            // }
+        // }
+        // let val = rsp.values_stream();
+        // println!("val ========== {:#?}",&rsp);
+        return results.completed(OkResponse::default());
+        // if lower_case_sql == VERSION_COMMENT {
+            // return results.completed(OkResponse::default());
+        // } else {
+            // let rsp = session.run_statement(sql).await;
+            // match rsp {
+            //     Ok(res) => {
+            //         match lower_case_sql.as_str() {
+            //             // todo add more ddl command function
+            //             SHOW_DB => self.show_dbs(results,res),
+            //             SHOW_TABLES => self.show_tables(results,res),
+            //             _ => {
+            //                 self.write_output(results,res)
+            //             }
+            //         }
+            //     },
+            //     Err(e) => {
+            //         // todo support more ErrorKind
+            //         return results.error(ErrorKind::ER_ABORTING_CONNECTION, e.to_string().as_bytes())
+            //     }
+            // }            
+        // }
     }
     async fn on_init<'a>(
         &'a mut self,

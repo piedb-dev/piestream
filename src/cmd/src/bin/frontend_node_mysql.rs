@@ -18,11 +18,12 @@ use tikv_jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 #[cfg_attr(coverage, no_coverage)]
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
-async fn main() {
+fn main() {
     use clap::StructOpt;
+
     let opts = piestream_frontend::FrontendOpts::parse();
-    piestream_rt::oneshot_common();
+
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
-    piestream_frontend::mysql_start(opts).await
+
+    piestream_rt::main_okk(piestream_frontend::mysql_start(opts))
 }
