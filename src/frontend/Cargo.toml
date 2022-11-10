@@ -44,6 +44,7 @@ piestream_storage = { path = "../storage" }
 serde = { version = "1", features = ["derive"] }
 serde_derive = "1"
 msql-srv = { git = "https://github.com/wangdexinhp/msql-srv", rev = "ee14d86" }
+regex= "1"
 serde_json = "1"
 sha2 = "0.10.2"
 smallvec = { version = "1.6.1", features = ["serde"] }
