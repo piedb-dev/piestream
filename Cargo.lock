@@ -89,7 +89,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "typed-builder",
- "uuid",
+ "uuid 1.1.2",
  "xz2",
  "zerocopy",
  "zstd",
@@ -866,14 +866,26 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitvec"
+version = "0.22.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5237f00a8c86130a0cc317830e558b966dd7850d48a953d998c813f01a41b527"
+dependencies = [
+ "funty 1.2.0",
+ "radium 0.6.2",
+ "tap",
+ "wyz 0.4.0",
+]
+
+[[package]]
+name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
- "funty",
- "radium",
+ "funty 2.0.0",
+ "radium 0.7.0",
  "tap",
- "wyz",
+ "wyz 0.5.0",
 ]
 
 [[package]]
@@ -1067,6 +1079,7 @@ dependencies = [
  "js-sys",
  "num-integer",
  "num-traits",
+ "serde",
  "time 0.1.43",
  "wasm-bindgen",
  "winapi",
@@ -1706,7 +1719,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -2067,6 +2080,12 @@ name = "function_name-proc-macro"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673464e1e314dd67a0fd9544abc99e8eb28d0c7e3b69b033bcff9b2d00b87333"
+
+[[package]]
+name = "funty"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1847abb9cb65d566acd5942e94aea9c8f547ad02c98e1649326fc0e8910b8b1e"
 
 [[package]]
 name = "funty"
@@ -3262,7 +3281,7 @@ dependencies = [
  "tagptr",
  "thiserror",
  "triomphe",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -3270,6 +3289,19 @@ name = "more-asserts"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5474f8732dc7e0635ae9df6595bcd39cd30e3cfe8479850d4fa3e69306c19712"
+
+[[package]]
+name = "msql-srv"
+version = "0.9.6"
+source = "git+https://github.com/wangdexinhp/msql-srv?rev=ee14d86#ee14d86779ba08c38ed9d84ce6362cc4321a8d59"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "chrono",
+ "mysql_common 0.28.2",
+ "nom 7.1.1",
+ "tokio",
+]
 
 [[package]]
 name = "multimap"
@@ -3292,7 +3324,7 @@ dependencies = [
  "lazy_static",
  "lru 0.7.8",
  "mio",
- "mysql_common",
+ "mysql_common 0.29.1",
  "native-tls",
  "once_cell",
  "pem",
@@ -3311,6 +3343,44 @@ dependencies = [
 
 [[package]]
 name = "mysql_common"
+version = "0.28.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4140827f2d12750de1e8755442577e4292a835f26ff2f659f0a380d1d71020b0"
+dependencies = [
+ "base64",
+ "bigdecimal",
+ "bindgen",
+ "bitflags",
+ "bitvec 0.22.3",
+ "byteorder",
+ "bytes",
+ "cc",
+ "chrono",
+ "cmake",
+ "crc32fast",
+ "flate2",
+ "frunk",
+ "lazy_static",
+ "lexical",
+ "num-bigint",
+ "num-traits",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "saturating",
+ "serde",
+ "serde_json",
+ "sha-1",
+ "sha2",
+ "smallvec",
+ "subprocess",
+ "thiserror",
+ "time 0.3.13",
+ "uuid 0.8.2",
+]
+
+[[package]]
+name = "mysql_common"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "522f2f30f72de409fc04f88df25a031f98cfc5c398a94e0b892cabb33a1464cb"
@@ -3319,7 +3389,7 @@ dependencies = [
  "bigdecimal",
  "bindgen",
  "bitflags",
- "bitvec",
+ "bitvec 1.0.1",
  "byteorder",
  "bytes",
  "cc",
@@ -3343,7 +3413,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.13",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -3947,7 +4017,7 @@ dependencies = [
  "tracing-futures",
  "twox-hash",
  "url",
- "uuid",
+ "uuid 1.1.2",
  "workspace-hack",
 ]
 
@@ -4002,6 +4072,7 @@ dependencies = [
  "global_stats_alloc",
  "log",
  "madsim-tokio",
+ "msql-srv",
  "piestream_compaction_test",
  "piestream_compactor",
  "piestream_compute",
@@ -4379,6 +4450,7 @@ dependencies = [
  "madsim-tonic",
  "maplit",
  "md5",
+ "msql-srv",
  "num-integer",
  "num-traits",
  "parking_lot 0.12.1",
@@ -4398,6 +4470,7 @@ dependencies = [
  "prometheus",
  "prost",
  "rand 0.8.5",
+ "regex",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4406,7 +4479,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "uuid",
+ "uuid 1.1.2",
  "workspace-hack",
 ]
 
@@ -4508,7 +4581,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "uuid",
+ "uuid 1.1.2",
  "workspace-hack",
 ]
 
@@ -4794,7 +4867,7 @@ dependencies = [
  "async-trait",
  "async_stack_trace",
  "auto_enums",
- "bitvec",
+ "bitvec 1.0.1",
  "byteorder",
  "bytes",
  "chrono",
@@ -4849,7 +4922,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "twox-hash",
- "uuid",
+ "uuid 1.1.2",
  "workspace-hack",
  "zstd",
 ]
@@ -5377,6 +5450,12 @@ checksum = "bbe448f377a7d6961e30f5955f9b8d106c3f5e449d493ee1b125c1d43c2b5179"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "radium"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
 
 [[package]]
 name = "radium"
@@ -6304,7 +6383,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -7072,6 +7151,12 @@ checksum = "68b90931029ab9b034b300b797048cf23723400aa757e8a2bfb9d748102f9821"
 
 [[package]]
 name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+
+[[package]]
+name = "uuid"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
@@ -7451,7 +7536,16 @@ dependencies = [
  "tracing-futures",
  "tracing-subscriber",
  "url",
- "uuid",
+ "uuid 1.1.2",
+]
+
+[[package]]
+name = "wyz"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "129e027ad65ce1453680623c3fb5163cbf7107bfe1aa32257e7d0e63f9ced188"
+dependencies = [
+ "tap",
 ]
 
 [[package]]
