@@ -50,6 +50,7 @@ impl SplitEnumerator for KafkaSplitEnumerator {
     type Split = KafkaSplit;
 
     async fn new(properties: KafkaProperties) -> anyhow::Result<KafkaSplitEnumerator> {
+        println!("kafka::enumerator::client.rs properties = {:?}",&properties);
         let broker_address = properties.brokers.clone();
         let topic = properties.topic.clone();
 

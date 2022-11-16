@@ -166,10 +166,12 @@ impl CatalogWriter for CatalogWriterImpl {
         table: ProstTable,
         graph: StreamFragmentGraph,
     ) -> Result<()> {
+        println!("catalog_service.rs 1=====================");
         let (_, _, version) = self
             .meta_client
             .create_materialized_source(source, table, graph)
             .await?;
+        println!("catalog_service.rs 2=====================");
         self.wait_version(version).await
     }
 

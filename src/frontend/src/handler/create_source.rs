@@ -118,12 +118,13 @@ pub async fn handle_create_source(
     is_materialized: bool,
     stmt: CreateSourceStatement,
 ) -> Result<RwPgResponse> {
+    println!("stmt ========= {:?}",&stmt);
     let (column_descs, pk_column_id_from_columns) = bind_sql_columns(stmt.columns)?;
     let (mut columns, pk_column_ids, row_id_index) =
         bind_sql_table_constraints(column_descs, pk_column_id_from_columns, stmt.constraints)?;
-
+    println!("columns ========== {:?}",&columns);
     let with_properties = context.with_options.inner().clone();
-
+    println!("create_source ===============");
     let source = match &stmt.source_schema {
         SourceSchema::Protobuf(protobuf_schema) => {
             assert_eq!(columns.len(), 1);
@@ -186,6 +187,7 @@ pub async fn handle_create_source(
         let (schema_name, name) = Binder::resolve_table_name(stmt.source_name.clone())?;
         catalog_reader.check_relation_name_duplicated(session.database(), &schema_name, &name)?;
     }
+    println!("create_source.rs ===== 1");
     let source = make_prost_source(&session, stmt.source_name, Info::StreamSource(source))?;
     let catalog_writer = session.env().catalog_writer();
     if is_materialized {
@@ -196,6 +198,7 @@ pub async fn handle_create_source(
 
             (graph, table)
         };
+        println!("create_source.rs ===== 2");
 
         catalog_writer
             .create_materialized_source(source, table, graph)

@@ -49,6 +49,10 @@ use crate::source::pulsar::source::reader::PulsarSplitReader;
 use crate::source::pulsar::{
     PulsarProperties, PulsarSplit, PulsarSplitEnumerator, PULSAR_CONNECTOR,
 };
+use crate::source::rabbitmq::enumerator::RabbitMQSplitEnumerator;
+use crate::source::rabbitmq::source::reader::RabbitMQSplitReader;
+use crate::source::rabbitmq::{RabbitMqProperties,RabbitmqSplit,RABBITMQ_CONNECTOR};
+
 use crate::{impl_connector_properties, impl_split, impl_split_enumerator, impl_split_reader};
 
 /// [`SplitEnumerator`] fetches the split metadata from the external source service.
@@ -91,6 +95,7 @@ pub enum SplitImpl {
     Kinesis(KinesisSplit),
     Nexmark(NexmarkSplit),
     Datagen(DatagenSplit),
+    Rabbitmq(RabbitmqSplit)
 }
 
 pub enum SplitReaderImpl {
@@ -100,6 +105,7 @@ pub enum SplitReaderImpl {
     Nexmark(Box<NexmarkSplitReader>),
     Pulsar(Box<PulsarSplitReader>),
     Datagen(Box<DatagenSplitReader>),
+    Rabbitmq(Box<RabbitMQSplitReader>),
 }
 
 pub enum SplitEnumeratorImpl {
@@ -108,6 +114,7 @@ pub enum SplitEnumeratorImpl {
     Kinesis(KinesisSplitEnumerator),
     Nexmark(NexmarkSplitEnumerator),
     Datagen(DatagenSplitEnumerator),
+    Rabbitmq(RabbitMQSplitEnumerator),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -118,6 +125,7 @@ pub enum ConnectorProperties {
     Nexmark(Box<NexmarkProperties>),
     Datagen(Box<DatagenProperties>),
     S3(Box<S3Properties>),
+    Rabbitmq(Box<RabbitMqProperties>),
     Dummy(Box<()>),
 }
 
@@ -127,6 +135,7 @@ impl_connector_properties! {
     { Kinesis, KINESIS_CONNECTOR },
     { Nexmark, NEXMARK_CONNECTOR },
     { Datagen, DATAGEN_CONNECTOR },
+    { Rabbitmq, RABBITMQ_CONNECTOR },
     { S3, S3_CONNECTOR }
 }
 
@@ -135,7 +144,8 @@ impl_split_enumerator! {
     { Pulsar, PulsarSplitEnumerator },
     { Kinesis, KinesisSplitEnumerator },
     { Nexmark, NexmarkSplitEnumerator },
-    { Datagen, DatagenSplitEnumerator }
+    { Datagen, DatagenSplitEnumerator },
+    { Rabbitmq, RabbitMQSplitEnumerator }
 }
 
 impl_split! {
@@ -143,7 +153,8 @@ impl_split! {
     { Pulsar, PULSAR_CONNECTOR, PulsarSplit },
     { Kinesis, KINESIS_CONNECTOR, KinesisSplit },
     { Nexmark, NEXMARK_CONNECTOR, NexmarkSplit },
-    { Datagen, DATAGEN_CONNECTOR, DatagenSplit }
+    { Datagen, DATAGEN_CONNECTOR, DatagenSplit },
+    { Rabbitmq, RABBITMQ_CONNECTOR, RabbitmqSplit }
 }
 
 impl_split_reader! {
@@ -152,6 +163,7 @@ impl_split_reader! {
     { Kinesis, KinesisSplitReader },
     { Nexmark, NexmarkSplitReader },
     { Datagen, DatagenSplitReader },
+    { Rabbitmq, RabbitMQSplitReader },
     { Dummy, DummySplitReader }
 }
 
