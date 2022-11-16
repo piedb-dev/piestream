@@ -397,7 +397,6 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         } else {
             let session = self.session.clone();
             let rsp = session.run_statement(sql,false).await;
-            println!("rsp ========= {:?}",&rsp);
             match rsp {
                 Ok(res) => {
                     match lower_case_sql.as_str() {
