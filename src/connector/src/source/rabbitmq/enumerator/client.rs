@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use anyhow::{anyhow, bail, Result};
+use futures::future::ok;
 use crate::source::SplitEnumerator;
 use crate::source::rabbitmq::RabbitMqProperties;
 use crate::source::rabbitmq::split::RabbitmqSplit;
@@ -21,7 +22,12 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
         })
     }
 
-    async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitmqSplit>> {}
+    async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitmqSplit>> {
+        let k = vec![RabbitmqSplit {
+            queue_name : "hello".to_string(),
+        }];
+        Ok(k)
+    }
 }
 
 

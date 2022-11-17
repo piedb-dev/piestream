@@ -6,8 +6,19 @@ use bytes::Bytes;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 pub struct RabbitmqSplit {
-    pub(crate) topic: String,
+    pub(crate) queue_name: String,
 }
+
+
+impl RabbitmqSplit {
+    pub fn copy_with_offset(&self, start_offset: String) -> Self {
+        Self {
+            queue_name: "hello".to_string(),
+            // start_offset,
+        }
+    }
+}
+
 
 impl SplitMetaData for RabbitmqSplit {
     fn id(&self) -> SplitId {
