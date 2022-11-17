@@ -657,7 +657,6 @@ impl Session<PgResponseStream> for SessionImpl {
             ));
         }
         let stmt = stmts.swap_remove(0);
-        println!("session.rs ========== sql {:?}",&sql);
         let rsp = handle(self, stmt, sql, format).await.map_err(|e| {
             tracing::error!("failed to handle sql:\n{}:\n{}", sql, e);
             e

@@ -302,7 +302,6 @@ where
             while let Some(row_set) = res.values_stream().next().await {
                 let row_set = row_set.map_err(|err| PsqlError::QueryError(err))?;
                 for row in row_set {
-                    println!("pg_protocol.rs ========= row = {:?}",&row);
                     self.stream.write_no_flush(&BeMessage::DataRow(&row))?;
                     rows_cnt += 1;
                 }

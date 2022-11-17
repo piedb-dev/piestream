@@ -180,7 +180,14 @@ impl MySQLApi
                     for row_set in pg_results.values_stream() {
                         for row in row_set.unwrap() {
                             for row_values in row.values() {
-                                rw.write_col(std::str::from_utf8(row_values.as_ref().unwrap()).unwrap())?;
+                                match row_values {
+                                    Some(va) => {
+                                        rw.write_col(std::str::from_utf8(va).unwrap())?;
+                                    },
+                                    _=> {
+                                        rw.write_col(None::<i16>)?;
+                                    }
+                                }
                             }
                             rw.end_row()?;
                         }
