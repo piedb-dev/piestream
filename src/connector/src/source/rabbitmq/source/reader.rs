@@ -40,14 +40,9 @@ pub struct SendError<T>(pub T);
 
 #[derive(Debug, Clone)]
 pub struct RabbitMQSplitReader {
-    //queue_size: i32,
-    //vec_msg: VecDeque<Message>,
-    //consumer: Channel,
     split: RabbitMQSplit,
     //sync_call_tx: UnboundedSender<Message>,
    // sync_call_rx: Sender<Message>,
-    
-    
 }
 
 #[derive(Debug, Clone)]
@@ -60,17 +55,12 @@ struct Message{
 #[derive(Debug, Clone)]
 struct MyConsumer {
     deliveries_number: u64,
-    sender: Sender<Message>,
+    sender: UnboundedSender<Message>,
 }
 
 impl amqp::Consumer for MyConsumer {
     fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, headers: protocol::basic::BasicProperties, body: Vec<u8>){
-    //fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, headers: protocol::basic::BasicProperties, body: Vec<u8>){
-        //println!("[struct] Got a delivery # {}", self.deliveries_number);
-        //println!("[struct] Deliver info: {:?}", deliver);
-        //println!("[struct] Content headers: {:?}", headers);
-        //println!("[struct] Content body: {:?}", String::from_utf8_lossy(body.as_slice()));
-        println!("handle_delivery [struct] Content body(as string): {:?}", String::from_utf8(body.clone()));
+        //println!("handle_delivery [struct] Content body(as string): {:?}", String::from_utf8(body.clone()));
         // DO SOME JOB:
         self.deliveries_number += 1;
         let msg=Message{
@@ -78,14 +68,7 @@ impl amqp::Consumer for MyConsumer {
             queue: "".to_string(),
             body: body,
         };
-       
-       // tokio::spawn(async { self.sender.send(msg).await.unwrap();});
-        
-        /*match val{
-            Ok(..)=>{println!("ok.")},
-            _=>{println!("error");}
-        }*/
-
+        self.sender.send(msg).unwrap();
         channel.basic_ack(deliver.delivery_tag, false).unwrap();
     }
 }
@@ -115,8 +98,8 @@ impl SplitReader for RabbitMQSplitReader {
 
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
-        let (sender,  receiver) = tokio::sync::mpsc::channel(1);
-        //let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         //let (sync_call_tx, sync_call_rx) = tokio::sync::mpsc::unbounded_channel();
         let  my_consumer = MyConsumer { deliveries_number: 0, sender:sender};
 
@@ -130,9 +113,9 @@ impl SplitReader for RabbitMQSplitReader {
             arc_reader.run(receiver).await;
         });
         tokio::time::sleep(Duration::from_secs(1)).await;
-        //thread::spawn(move || {
+        thread::spawn(move || {
             channel.start_consuming();
-        //});
+        });
         
         Ok(reader)
     }
@@ -162,22 +145,25 @@ impl RabbitMQSplitReader {
         }*/
     }
 
-    async fn run(
+    async  fn run(
         &self,
-        mut receiver: Receiver<Message>
-        ) {
-            let mut interval =tokio::time::interval(Duration::from_millis(10));
-            loop {  
-                tokio::select! {
-                    Some(msg) = receiver.borrow_mut().recv()=> {
-                        println!("tokio::spawn.");
-                     }
-                    _ = interval.tick() => {
-                        println!("interval.tick");
-                    }
-                }           
-            }
-    }
+        mut receiver: UnboundedReceiver<Message>,
+   ){
+       //println!("hello world.");
+       let mut interval =tokio::time::interval(Duration::from_millis(1000));
+       loop {  
+           tokio::select! {
+               Some(msg) = receiver.borrow_mut().recv() => {
+                   println!("[struct] Content body(as string): {:?}", msg.deliveries_number);
+                   //println!("[struct] Content body(as string): {:?}", String::from_utf8(msg.body))
+                   println!("[struct] Content body(as string): {:?}", String::from_utf8(msg.body));
+                }
+               _ = interval.tick() => {
+                   println!("interval.tick");
+               }
+           }           
+       }
+   }
     
 }
 
@@ -206,7 +192,13 @@ mod tests {
         let v=vec.into_iter().map(SplitImpl::RabbitMQ).collect();
     
 
-        let reader=RabbitMQSplitReader::new(properties, Some(v), None).await;
+        let mut reader=RabbitMQSplitReader::new(properties, Some(v), None)
+        .await?
+        .into_stream();
+        let v=reader.next().await.unwrap()?;
+        println!("v={:?}", v);
+
+        tokio::time::sleep(Duration::from_secs(300)).await;
         println!("end.");
         Ok(())
 
