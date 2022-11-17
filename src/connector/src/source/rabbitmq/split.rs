@@ -23,7 +23,7 @@ impl RabbitmqSplit {
 impl SplitMetaData for RabbitmqSplit {
     fn id(&self) -> SplitId {
         // TODO: should avoid constructing a string every time
-        self.topic.to_string().into()
+        self.queue_name.to_string().into()
     }
 
     fn encode_to_bytes(&self) -> Bytes {

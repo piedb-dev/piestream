@@ -31,6 +31,21 @@ struct MyConsumer {
 }
 
 
+impl amqp::Consumer for MyConsumer {
+    fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, headers: protocol::basic::BasicProperties, body: Vec<u8>){
+        self.deliveries_number += 1;
+        let msg=Message{
+            deliveries_number:self.deliveries_number ,
+            queue: "".to_string(),
+            body: body,
+        };
+        self.sender.send(msg).unwrap();
+        channel.basic_ack(deliver.delivery_tag, false).unwrap();
+    }
+}
+
+
+
 #[async_trait]
 impl SplitReader for RabbitMQSplitReader {
     type Properties = RabbitMqProperties;
@@ -41,12 +56,13 @@ impl SplitReader for RabbitMQSplitReader {
     ) -> Result<Self> {
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
-        let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
+        let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::Rabbitmq)?;
 
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
 
         tracing::debug!("creating consumer for rabbitmq split queue {}", queue_name,);
+        println!("amqp_url ====== {:?}",&amqp_url);
         let mut session = match Session::open_url(amqp_url) {
             Ok(session) => session,
             Err(error) => panic!("Can't create session: {:?}", error)
@@ -84,14 +100,14 @@ impl SplitReader for RabbitMQSplitReader {
 impl RabbitMQSplitReader {
     #[try_stream(boxed, ok = Vec<SourceMessage>, error = anyhow::Error)]
     pub async fn into_stream(self) {
-        #[for_await]
-        for msgs in self.consumer.ready_chunks(MAX_CHUNK_SIZE) {
-            let mut res = Vec::with_capacity(msgs.len());
-            for msg in msgs {
-                res.push(SourceMessage::from(msg?));
-            }
-            yield res;
-        }
+        let mut res = Vec::new();
+        let msg=SourceMessage{
+            payload:None,
+            offset:"0".to_string(),
+            split_id: "1".into()
+        };
+        res.push(msg);
+        yield res;
     }
 }
 
