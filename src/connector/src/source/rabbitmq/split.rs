@@ -21,6 +21,7 @@ use crate::source::{SplitId, SplitMetaData};
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Hash)]
 pub struct RabbitMQSplit {
     pub(crate) queue_name: String,
+    pub start_offset: Option<u64>,
 }
 
 impl SplitMetaData for RabbitMQSplit {
@@ -41,12 +42,14 @@ impl SplitMetaData for RabbitMQSplit {
 impl RabbitMQSplit {
     pub fn new(queue_name: String) -> RabbitMQSplit {
         RabbitMQSplit {
-            queue_name
+            queue_name: queue_name.trim().to_string(),
+            start_offset: None,
         }
     }
     pub fn copy_with_offset(&self, start_offset: String) -> Self {
         Self {
-            queue_name: "".to_string()
+            queue_name: self.queue_name.clone(),
+            start_offset: Some(start_offset.as_str().parse::<u64>().unwrap()),
         }
     }
 }

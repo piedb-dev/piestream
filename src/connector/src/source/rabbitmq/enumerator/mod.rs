@@ -33,13 +33,14 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
         //ensure!(splits.len() == 1, "only support single split");
         assert!(!queue_name.is_empty(), "rabbitmq queue is empty.");
         assert!(!queue_name.trim().len()>0, "rabbitmq queue name len is zero.");
-        Ok(Self { queue_name:"queue_name".to_string() })
+        Ok(Self { queue_name: queue_name.clone() })
     }
 
     async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitMQSplit>> {
         let mut splits = vec![];
         splits.push(RabbitMQSplit {
             queue_name: self.queue_name.clone(),
+            start_offset: None,
         });
         Ok(splits)
     }
