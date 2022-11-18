@@ -217,7 +217,7 @@ impl ConnectorSource {
                 }
             }))
             .await?;
-
+ 
         let stream = select_all(readers.into_iter().map(|r| r.into_stream())).boxed();
 
         Ok(ConnectorSourceReader {

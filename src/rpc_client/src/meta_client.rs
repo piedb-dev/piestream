@@ -189,7 +189,6 @@ impl MetaClient {
         };
 
         let resp = self.inner.create_source(request).await?;
-        println!("meta_client.rs-------------resp ======== {:?}",&resp);
         Ok((resp.source_id, resp.version))
     }
 
@@ -213,13 +212,11 @@ impl MetaClient {
         table: ProstTable,
         graph: StreamFragmentGraph,
     ) -> Result<(TableId, u32, CatalogVersion)> {
-        println!("meta_client.rs ========= create_materialized_source");
         let request = CreateMaterializedSourceRequest {
             materialized_view: Some(table),
             fragment_graph: Some(graph),
             source: Some(source),
         };
-        println!("meta_client.rs ========= create_materialized_source 2");
 
         let resp = self.inner.create_materialized_source(request).await?;
         // TODO: handle error in `resp.status` here

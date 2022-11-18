@@ -31,7 +31,7 @@ pub struct RabbitMQProperties {
     pub service_url: String,
 
     #[serde(rename = "auto.ack", alias = "rabbitmq.auto.ack")]
-    pub auto_ack: Option<bool>,
+    pub auto_ack: bool,
 
     #[serde(rename = "consumer.tag", alias = "rabbitmq.consumer.tag")]
     pub consumer_tag: String,

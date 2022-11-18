@@ -114,7 +114,6 @@ impl MetadataModel for SourceActorInfo {
 
 impl ConnectorSourceWorker {
     pub async fn create(source: &Source, period: Duration) -> MetaResult<Self> {
-        println!("meta::stream::source_manager.rs ==================ConnectorSourceWorker ");
         let source_id = source.get_id();
         let info = source
             .info
@@ -122,7 +121,6 @@ impl ConnectorSourceWorker {
             .ok_or_else(|| anyhow!("source info is empty"))?;
         let stream_source_info = try_match_expand!(info, Info::StreamSource)?;
         let properties = ConnectorProperties::extract(stream_source_info.properties)?;
-        println!("properties =========== {:?}",&properties);
         let enumerator = SplitEnumeratorImpl::create(properties).await?;
         // println!("enumerator =========== {:?}",&enumerator);
         let current_splits = Arc::new(Mutex::new(SharedSplitMap { splits: None }));
@@ -594,7 +592,6 @@ where
 
     /// create connector worker for source.
     pub async fn create_source(&self, source: &Source) -> MetaResult<()> {
-        println!("meta::stream::source_manager.rs ==========================");
         let mut core = self.core.lock().await;
         if core.managed_sources.contains_key(&source.get_id()) {
             tracing::warn!("source {} already registered", source.get_id());
@@ -611,7 +608,6 @@ where
         source: &Source,
         managed_sources: &mut HashMap<SourceId, ConnectorSourceWorkerHandle>,
     ) -> MetaResult<()> {
-        println!("meta::stream::source_manager.rs  create_source_worker ===============");
         let mut worker = ConnectorSourceWorker::create(source, Duration::from_secs(10)).await?;
         let current_splits_ref = worker.current_splits.clone();
         tracing::info!("spawning new watcher for source {}", source.id);

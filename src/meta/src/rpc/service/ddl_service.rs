@@ -342,7 +342,6 @@ where
         &self,
         request: Request<CreateMaterializedSourceRequest>,
     ) -> Result<Response<CreateMaterializedSourceResponse>, Status> {
-        println!("ddl_service.rs   create_materialized_source");
         let request = request.into_inner();
         let source = request.source.unwrap();
         let mview = request.materialized_view.unwrap();
@@ -599,8 +598,6 @@ where
         mut fragment_graph: StreamFragmentGraph,
     ) -> MetaResult<(SourceId, TableId, CatalogVersion)> {
         // Generate source id.
-        println!("ddl_service.rs ================== create_materialized_source_inner");
-        println!("source = {:?}",&source);
         // println!("mview = {:?}",&mview);
         // println!("fragment_graph = {:?}",&fragment_graph);
 
@@ -633,12 +630,10 @@ where
         // Fill in the correct source id for mview.
         mview.optional_associated_source_id =
             Some(OptionalAssociatedSourceId::AssociatedSourceId(source_id));
-        println!("222222222222222222222222=================");
         let mut stream_job = StreamingJob::MaterializedSource(source.clone(), mview.clone());
         let (mut ctx, table_fragments) = self
             .prepare_stream_job(&mut stream_job, fragment_graph)
             .await?;
-        println!("333333333333333333333333=================");
 
         // Create source on compute node.
         if let Err(e) = self.source_manager.create_source(&source).await {
