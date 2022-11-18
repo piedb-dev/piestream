@@ -19,8 +19,8 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
     async fn new(properties: RabbitMQProperties) -> Result<RabbitMQSplitEnumerator> {
         Ok(RabbitMQSplitEnumerator {
             service_url: "123456@39.105.209.227".to_string(),
-            queue_name: "test",
-            consumer_tag: '1'
+            queue_name: "test".to_string(),
+            consumer_tag: '1'.to_string()
         })
     }
 
