@@ -26,5 +26,4 @@ pub use kafka::KAFKA_CONNECTOR;
 pub use kinesis::KINESIS_CONNECTOR;
 pub use nexmark::NEXMARK_CONNECTOR;
 pub use rabbitmq::RABBITMQ_CONNECTOR;
-
 pub use crate::source::pulsar::PULSAR_CONNECTOR;

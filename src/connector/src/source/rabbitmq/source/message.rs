@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use bytes::Bytes;
-
 use crate::source::{SourceMessage, SplitId};
 
 #[derive(Clone, Debug)]
@@ -43,3 +42,4 @@ impl RabbitMQMessage {
         }
     }
 }
+

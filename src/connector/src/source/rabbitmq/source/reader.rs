@@ -91,7 +91,6 @@ impl SplitReader for RabbitMQSplitReader {
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
-
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
 
@@ -100,7 +99,6 @@ impl SplitReader for RabbitMQSplitReader {
             Ok(session) => session,
             Err(error) => panic!("Can't create session: {:?}", error)
         };
-
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let  my_consumer = MyConsumer { deliveries_number: 0, sender:sender };
@@ -120,7 +118,7 @@ impl SplitReader for RabbitMQSplitReader {
             split:split,
             sync_call_tx:sync_call_tx,
             sync_call_rx: sync_call_rx,
-        })
+        })    
     }
     fn into_stream(self) -> BoxSourceStream {
         self.into_stream()
@@ -138,7 +136,6 @@ impl RabbitMQSplitReader {
         };
         res.push(msg);
         yield res;
-
         /*#[for_await]
         for msg in self.sync_call_rx.borrow_mut().recv() {
             yield msg;

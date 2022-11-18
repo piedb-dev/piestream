@@ -803,6 +803,7 @@ where
         source: &Source,
         mview: &Table,
     ) -> MetaResult<()> {
+        println!("meta::manager::catalog::mod.rs =========================");
         let core = &mut self.core.lock().await.database;
         let source_key = (source.database_id, source.schema_id, source.name.clone());
         let mview_key = (mview.database_id, mview.schema_id, mview.name.clone());
