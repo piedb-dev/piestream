@@ -175,8 +175,8 @@ mod tests {
         let properties=RabbitMQProperties{
             queue_name:"test_queue".to_string(),
             service_url:"amqp://admin:123456@39.105.209.227//".to_string(),
-            auto_ack:'0'.to_string(),
-            consumer_tag:"".to_string()
+            auto_ack: Some("false".to_string()),
+            consumer_tag: Some("tag".to_string())
         };
 
         let mut vec=vec![];
