@@ -43,7 +43,7 @@ pub struct SendError<T>(pub T);
 #[derive(Debug)]
 pub struct RabbitMQSplitReader {
     split: RabbitMQSplit,
-    receiver: UnboundedReceiver<RabbitMQMessage>,
+    receiver: Receiver<RabbitMQMessage>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ struct Message{
 struct MyConsumer {
     deliveries_number: u64,
     queue_name:String,
-    sender: UnboundedSender<RabbitMQMessage>,
+    sender: Sender<RabbitMQMessage>,
 }
 
 impl amqp::Consumer for MyConsumer {
@@ -78,7 +78,14 @@ impl amqp::Consumer for MyConsumer {
             queue: "".to_string(),
             body: body,
         };*/
-        self.sender.send(msg).unwrap();
+        futures::executor::block_on(self.sender.send(msg)).unwrap();
+        /*
+        futures::stream::iter(0..2)
+            .for_each(|c| async move {
+            self.bar(v).await;
+        })
+    .await;
+        */
         channel.basic_ack(deliver.delivery_tag, false).unwrap();
     }
 }
@@ -107,7 +114,8 @@ impl SplitReader for RabbitMQSplitReader {
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
         //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        //let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1024);
         let  my_consumer = MyConsumer { 
                 deliveries_number: 0, 
                 queue_name:properties.queue_name, 
