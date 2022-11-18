@@ -5,7 +5,9 @@ use crate::source::rabbitmq::split::RabbitMQSplit;
 use crate::source::rabbitmq::RabbitMQProperties;
 
 pub struct RabbitMQSplitEnumerator {
-    broker_address: String,
+    service_url: String,
+    queue_name: String,
+    consumer_tag: String
 }
 
 impl RabbitMQSplitEnumerator {}
@@ -16,13 +18,15 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
     type Split = RabbitMQSplit;
     async fn new(properties: RabbitMQProperties) -> Result<RabbitMQSplitEnumerator> {
         Ok(RabbitMQSplitEnumerator {
-            broker_address: "127.0.0.1:1592".to_string(),
+            service_url: "123456@39.105.209.227".to_string(),
+            queue_name: "test",
+            consumer_tag: '1'
         })
     }
 
     async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitMQSplit>> {
         let k = vec![RabbitMQSplit {
-            queue_name: "hello".to_string(),
+            queue_name: "test".to_string(),
             start_offset: Some(1)
         }];
         Ok(k)
