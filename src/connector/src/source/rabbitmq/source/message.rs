@@ -16,6 +16,7 @@ use bytes::Bytes;
 
 use crate::source::{SourceMessage, SplitId};
 
+
 #[derive(Clone, Debug)]
 pub struct RabbitMQMessage {
     pub split_id: SplitId,
