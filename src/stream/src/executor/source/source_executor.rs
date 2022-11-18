@@ -270,6 +270,7 @@ impl<S: StateStore> SourceExecutor<S> {
         // created, and we should start with the paused state.
         let start_with_paused = barrier.is_update();
 
+        println!("barrier.mutation.as_ref()={:?}, self.ctx.id={:?}", barrier.mutation.as_ref(), self.ctx.id);
         if let Some(mutation) = barrier.mutation.as_ref() {
             match mutation.as_ref() {
                 Mutation::Add { splits, .. } => {
@@ -288,6 +289,7 @@ impl<S: StateStore> SourceExecutor<S> {
 
         self.split_state_store.init_epoch(barrier.epoch);
 
+        println!("self.stream_source_splits={:?}", self.stream_source_splits.clone());
         let mut boot_state = self.stream_source_splits.clone();
         for ele in &mut boot_state {
             if let Some(recover_state) = self
@@ -316,6 +318,7 @@ impl<S: StateStore> SourceExecutor<S> {
         yield Message::Barrier(barrier);
 
         while let Some(msg) = stream.next().await {
+            //println!("**********msg={:?}", msg);
             match msg {
                 // This branch will be preferred.
                 Either::Left(barrier) => {
@@ -434,6 +437,8 @@ impl<S: StateStore> SourceExecutor<S> {
         stream: &mut SourceReaderStream,
         target_state: Vec<SplitImpl>,
     ) -> StreamExecutorResult<()> {
+
+        println!("replace_stream_reader_with_target_state={:?}", target_state);
         tracing::info!(
             "actor {:?} apply source split change to {:?}",
             self.ctx.id,
