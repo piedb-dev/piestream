@@ -121,9 +121,7 @@ pub async fn handle_create_source(
     let (column_descs, pk_column_id_from_columns) = bind_sql_columns(stmt.columns)?;
     let (mut columns, pk_column_ids, row_id_index) =
         bind_sql_table_constraints(column_descs, pk_column_id_from_columns, stmt.constraints)?;
-
     let with_properties = context.with_options.inner().clone();
-
     let source = match &stmt.source_schema {
         SourceSchema::Protobuf(protobuf_schema) => {
             assert_eq!(columns.len(), 1);
@@ -196,7 +194,6 @@ pub async fn handle_create_source(
 
             (graph, table)
         };
-
         catalog_writer
             .create_materialized_source(source, table, graph)
             .await?;

@@ -35,6 +35,9 @@ tracing = { version = "0.1" }
 workspace-config = { path = "../utils/workspace-config", optional = true }
 workspace-hack = { version = "0.1.13", path = "../workspace-hack" }
 
+# remove this line after madsim-tokio adds tracing feature support
+msql-srv = { git = "https://github.com/wangdexinhp/msql-srv", rev = "ee14d86" }
+
 [[bin]]
 name = "frontend"
 path = "src/bin/frontend_node.rs"

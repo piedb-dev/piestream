@@ -93,7 +93,7 @@ mod tests {
         GetDataRequest, GetDataResponse, GetStreamRequest, GetStreamResponse,
     };
     use piestream_rpc_client::ComputeClient;
-    use tokio::time::sleep;
+    use time::sleep;
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::{Request, Response, Status};
 

@@ -43,7 +43,6 @@ pub struct SendError<T>(pub T);
 #[derive(Debug, Clone)]
 pub struct RabbitMQSplitReader {
     split: RabbitMQSplit,
-    //sync_call_tx: UnboundedSender<Message>,
     sync_call_rx: Arc<RefCell<Receiver<RabbitMQMessage>>>,
 }
 
@@ -97,7 +96,6 @@ impl SplitReader for RabbitMQSplitReader {
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
-
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
 
@@ -106,7 +104,6 @@ impl SplitReader for RabbitMQSplitReader {
             Ok(session) => session,
             Err(error) => panic!("Can't create session: {:?}", error)
         };
-
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
         //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
@@ -132,7 +129,6 @@ impl SplitReader for RabbitMQSplitReader {
         thread::spawn(move || {
             channel.start_consuming();
         });
-        
         Ok(reader)
     }
 
@@ -146,6 +142,7 @@ impl SplitReader for RabbitMQSplitReader {
 impl RabbitMQSplitReader {
     #[try_stream(boxed, ok = Vec<SourceMessage>, error = anyhow::Error)]
     pub async fn into_stream(self) {
+<<<<<<< HEAD
         //#[for_await]
         while let Some(msg) = self.sync_call_rx.borrow_mut().recv().await {
             let mut res = Vec::new();
@@ -153,6 +150,20 @@ impl RabbitMQSplitReader {
             res.push(SourceMessage::from(msg));
             yield res;
         }
+=======
+        let mut res = Vec::new();
+        let msg=SourceMessage{
+            payload:None,
+            offset:"0".to_string(),
+            split_id: "1".into()
+        };
+        res.push(msg);
+        yield res;
+        /*#[for_await]
+        for msg in self.sync_call_rx.borrow_mut().recv() {
+            yield msg;
+        }*/
+>>>>>>> c9128b687c6ab85eb76536279dacf1c9f5949a9c
     }
 
     async  fn run(
@@ -191,8 +202,8 @@ mod tests {
         let properties=RabbitMQProperties{
             queue_name:"test_queue".to_string(),
             service_url:"amqp://admin:123456@39.105.209.227//".to_string(),
-            auto_ack:false,
-            consumer_tag:"".to_string()
+            auto_ack: Some("false".to_string()),
+            consumer_tag: Some("tag".to_string())
         };
 
         let mut vec=vec![];

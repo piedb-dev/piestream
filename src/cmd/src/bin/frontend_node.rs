@@ -22,10 +22,13 @@ static GLOBAL: Jemalloc = Jemalloc;
 #[cfg_attr(coverage, no_coverage)]
 fn main() {
     use clap::StructOpt;
-
+    
     let opts = piestream_frontend::FrontendOpts::parse();
 
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
 
     piestream_rt::main_okk(piestream_frontend::start(opts))
+
 }
+
+

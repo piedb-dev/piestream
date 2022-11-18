@@ -291,7 +291,6 @@ where
             .run_statement(sql, false)
             .await
             .map_err(|err| PsqlError::QueryError(err))?;
-
         if res.is_empty() {
             self.stream.write_no_flush(&BeMessage::EmptyQueryResponse)?;
         } else if res.is_query() {

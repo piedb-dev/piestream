@@ -1,4 +1,4 @@
-// Copyright 2022 Piedb Data
+// Copyright 2022 PieDb Data
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod base;
-pub mod datagen;
-pub mod dummy_connector;
-pub mod filesystem;
-pub mod kafka;
-pub mod kinesis;
-pub mod nexmark;
-pub mod pulsar;
-pub mod rabbitmq;
-pub use base::*;
-pub use kafka::KAFKA_CONNECTOR;
-pub use kinesis::KINESIS_CONNECTOR;
-pub use nexmark::NEXMARK_CONNECTOR;
-pub use rabbitmq::RABBITMQ_CONNECTOR;
-pub use crate::source::pulsar::PULSAR_CONNECTOR;
+#![cfg_attr(coverage, feature(no_coverage))]
+use tikv_jemallocator::Jemalloc;
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
+#[cfg_attr(coverage, no_coverage)]
+fn main() {
+    use clap::StructOpt;
+
+    let opts = piestream_frontend::FrontendOpts::parse();
+
+    piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
+
+    piestream_rt::main_okk(piestream_frontend::mysql_start(opts))
+}

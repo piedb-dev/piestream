@@ -122,6 +122,7 @@ impl ConnectorSourceWorker {
         let stream_source_info = try_match_expand!(info, Info::StreamSource)?;
         let properties = ConnectorProperties::extract(stream_source_info.properties)?;
         let enumerator = SplitEnumeratorImpl::create(properties).await?;
+        // println!("enumerator =========== {:?}",&enumerator);
         let current_splits = Arc::new(Mutex::new(SharedSplitMap { splits: None }));
         Ok(Self {
             source_id,
@@ -163,7 +164,6 @@ impl ConnectorSourceWorker {
                 .map(|split| (split.id(), split))
                 .collect(),
         );
-
         Ok(())
     }
 }

@@ -45,3 +45,6 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
         Ok(splits)
     }
 }
+mod client;
+
+pub use client::*;
