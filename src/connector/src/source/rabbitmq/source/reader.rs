@@ -41,8 +41,8 @@ pub struct SendError<T>(pub T);
 #[derive(Debug, Clone)]
 pub struct RabbitMQSplitReader {
     split: RabbitMQSplit,
-    //sync_call_tx: UnboundedSender<Message>,
-   // sync_call_rx: Sender<Message>,
+    // sync_call_tx: UnboundedSender<Message>,
+//    sync_call_rx: Sender<Message>,
 }
 
 #[derive(Debug, Clone)]
@@ -114,19 +114,6 @@ impl SplitReader for RabbitMQSplitReader {
         thread::spawn(move || {
             channel.start_consuming();
         });
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        //tokio::spawn( async move { run(receiver).await;} );
-
-        let (sync_call_tx, sync_call_rx) = tokio::sync::mpsc::unbounded_channel();
-        Ok(Self {
-            //queue_size:QUEUE_SIZE,
-            //vec_msg:vec_msg,
-            //consumer:channel,
-            split:split,
-            sync_call_tx:sync_call_tx,
-            sync_call_rx: sync_call_rx,
-        })    
-        
         Ok(reader)
     }
 
