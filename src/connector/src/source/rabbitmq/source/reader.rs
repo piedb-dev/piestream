@@ -92,7 +92,7 @@ impl SplitReader for RabbitMQSplitReader {
         state: ConnectorState,
         _columns: Option<Vec<Column>>,
     ) -> Result<Self> {
-       
+        println!("*****#### new 95");
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
@@ -115,7 +115,7 @@ impl SplitReader for RabbitMQSplitReader {
             };
 
         let consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new());
-
+        println!("*****####  118");
         let mut reader=Self {
             split:split,
             receiver:receiver,
@@ -124,11 +124,14 @@ impl SplitReader for RabbitMQSplitReader {
         tokio::time::sleep(Duration::from_secs(1)).await;
         thread::spawn(move || {
             channel.start_consuming();
+            println!("*****#### 127");
+
         });
         Ok(reader)
     }
 
     fn into_stream(self) -> BoxSourceStream {
+        println!("*****#### into_stream 132");
         self.into_stream()
     }
 
@@ -138,6 +141,7 @@ impl SplitReader for RabbitMQSplitReader {
 impl RabbitMQSplitReader {
     #[try_stream(boxed, ok = Vec<SourceMessage>, error = anyhow::Error)]
     pub async fn into_stream(mut self) {
+        println!("*****#### into_stream 141");
         let mut interval =tokio::time::interval(Duration::from_millis(10));
         loop {  
                match  self.receiver.borrow_mut().recv().await  {
@@ -145,6 +149,7 @@ impl RabbitMQSplitReader {
                         let mut res = Vec::new();
                         //let m=msg.clone();
                         res.push(SourceMessage::from(msg));
+                        println!("*****#### {:?}",&res);
                         yield res;
                     }
                     None =>{
@@ -167,7 +172,7 @@ mod tests {
     #[ignore]
     async fn test_rabbitmq_reader() -> Result<()> {
         let properties=RabbitMQProperties{
-            queue_name:"test_queue".to_string(),
+            queue_name:"test5".to_string(),
             service_url:"amqp://admin:123456@39.105.209.227//".to_string(),
             auto_ack: Some("false".to_string()),
             consumer_tag: Some("tag".to_string())
@@ -175,7 +180,7 @@ mod tests {
 
         let mut vec=vec![];
         let split=RabbitMQSplit{
-            queue_name:"test_queue".to_string(),
+            queue_name:"test5".to_string(),
             start_offset:None,
         };
         vec.push(split);
