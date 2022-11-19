@@ -43,7 +43,7 @@ pub struct SendError<T>(pub T);
 #[derive(Debug)]
 pub struct RabbitMQSplitReader {
     split: RabbitMQSplit,
-    receiver: Receiver<RabbitMQMessage>,
+    receiver: UnboundedReceiver<RabbitMQMessage>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ struct Message{
 struct MyConsumer {
     deliveries_number: u64,
     queue_name:String,
-    sender: Sender<RabbitMQMessage>,
+    sender: UnboundedSender<RabbitMQMessage>,
 }
 
 impl amqp::Consumer for MyConsumer {
@@ -78,14 +78,7 @@ impl amqp::Consumer for MyConsumer {
             queue: "".to_string(),
             body: body,
         };*/
-        futures::executor::block_on(self.sender.send(msg)).unwrap();
-        /*
-        futures::stream::iter(0..2)
-            .for_each(|c| async move {
-            self.bar(v).await;
-        })
-    .await;
-        */
+        self.sender.send(msg).unwrap();
         channel.basic_ack(deliver.delivery_tag, false).unwrap();
     }
 }
@@ -114,13 +107,13 @@ impl SplitReader for RabbitMQSplitReader {
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
         //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
-        //let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1024);
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let  my_consumer = MyConsumer { 
                 deliveries_number: 0, 
                 queue_name:properties.queue_name, 
                 sender:sender
             };
+        println!("******#### {:?}",&receiver);
 
         let consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new());
         println!("*****####  118");
@@ -151,9 +144,11 @@ impl RabbitMQSplitReader {
     pub async fn into_stream(mut self) {
         println!("*****#### into_stream 141");
         let mut interval =tokio::time::interval(Duration::from_millis(10));
+        println!("*****#### into_stream 147");
         loop {  
                match  self.receiver.borrow_mut().recv().await  {
                     Some(msg)=>{    
+                        println!("*****#### into_stream 151");
                         let mut res = Vec::new();
                         //let m=msg.clone();
                         res.push(SourceMessage::from(msg));
@@ -161,6 +156,7 @@ impl RabbitMQSplitReader {
                         yield res;
                     }
                     None =>{
+                        // println!("*****#### into_stream None");
                         interval.tick().await;
                         //println!("run interval.tick");
                     }
@@ -199,6 +195,7 @@ mod tests {
         .await?
         .into_stream();
         loop {  
+            println!("*****#### loop");
             match  reader.next().await{  
                  Some(msg)=>{    
                     let vec=msg?;
