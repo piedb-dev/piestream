@@ -108,7 +108,7 @@ impl SplitReader for RabbitMQSplitReader {
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
-        let queue_name="test_queue".to_string();
+        //let queue_name="test_queue".to_string();
 
         println!("into RabbitMQSplitReader 2.");
 
