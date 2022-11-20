@@ -17,19 +17,14 @@
 
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
 use futures_async_stream::try_stream;
-use tokio::sync::mpsc::{Sender, Receiver, UnboundedSender, UnboundedReceiver};
+use tokio::sync::mpsc::{Sender, Receiver};
 
 use amqp::{Basic, Session, Channel, Table, protocol};
 //use std::default::Default;
 use std::thread;
-use std::collections::VecDeque;
 use core::time::Duration;
 use std::borrow::BorrowMut;
-use std::sync::{Arc,RwLock};
-//use std::cell::RefCell;
-//use tokio::sync;
 
 use piestream_common::try_match_expand;
 use crate::source::rabbitmq::source::message::RabbitMQMessage;
@@ -61,10 +56,7 @@ struct MyConsumer {
 }
 
 impl amqp::Consumer for MyConsumer {
-    fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, headers: protocol::basic::BasicProperties, body: Vec<u8>){
-        //println!("handle_delivery [struct] Content body(as string): {:?}", String::from_utf8(body.clone()));
-        //println!("handle_delivery [struct] Content body(as string): {:?}", String::from_utf8(body.clone()));
-        println!("handle_delivery [struct] Content body(as string): {:?}", String::from_utf8(body.clone()));
+    fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, _headers: protocol::basic::BasicProperties, body: Vec<u8>){
         // DO SOME JOB:
         self.deliveries_number += 1;
 
@@ -78,8 +70,8 @@ impl amqp::Consumer for MyConsumer {
             queue: "".to_string(),
             body: body,
         };*/
-        println!("*******###### msg = {:?}",&msg);
         self.sender.send(msg).unwrap();
+        futures::executor::block_on(self.sender.send(msg)).unwrap();
         channel.basic_ack(deliver.delivery_tag, false).unwrap();
     }
 }
@@ -93,86 +85,68 @@ impl SplitReader for RabbitMQSplitReader {
         state: ConnectorState,
         _columns: Option<Vec<Column>>,
     ) -> Result<Self> {
-        println!("*****#### new 95");
-       
-        println!("into RabbitMQSplitReader 1.");
-        println!("properties={:?}.", properties);
-        println!("state={:?}.", state);
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
-        //let queue_name="test_queue".to_string();
-
-        println!("into RabbitMQSplitReader 2.");
-
-        tracing::debug!("creating consumer for rabbitmq split queue {}", queue_name,);
+        tracing::info!("creating consumer for rabbitmq split queue {}", queue_name.clone(),);
         let mut session = match Session::open_url(amqp_url) {
             Ok(session) => session,
-            Err(error) => panic!("Can't create session: {:?}", error)
+            Err(error) =>{ 
+                //return Err(anyhow::Error::msg(format!(
+                //    "can't create rabbitmq session  queue_name:{:?}  error:{:?} ", queue_name.clone(), error)))
+                panic!("Can't create session: {:?}", error)
+            }
         };
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
-
-        println!("into RabbitMQSplitReader 3.");
-        //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = tokio::sync::mpsc::channel(1024);
         let  my_consumer = MyConsumer { 
                 deliveries_number: 0, 
                 queue_name:properties.queue_name, 
                 sender:sender
             };
-        println!("******#### {:?}",&receiver);
-
-        let consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new());
-        println!("into RabbitMQSplitReader 4. consumer={:?}", consumer);
-        /*let  reader=Self {
-            split:split,
-            receiver:receiver,
-            //sync_call_rx:Arc::new(Mutex::new(sync_call_rx)),
-        };*/
+        //let _consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new()).context("failed to create rabbitmq consumer")?;
+        let _consumer =match channel.basic_consume(my_consumer, queue_name.clone(), "".to_string(), false, false, false, false, Table::new()){
+            Ok(consumer) => consumer,
+            Err(error) =>{ 
+                panic!("failed to create rabbitmq consumer queue_name:{:?} error:{:?}", queue_name.clone(), error)
+                /*return Err(anyhow::Error::msg(format!(
+                    "failed to create rabbitmq consumer queue_name:{:?} error:{:?}", queue_name.clone(), error)))*/
+            }
+        };
+        
         tokio::time::sleep(Duration::from_secs(1)).await;
         thread::spawn(move || {
             channel.start_consuming();
 
         });
 
-        println!("into RabbitMQSplitReader 5.");
         Ok(Self {
             split:split,
             receiver:receiver,
-            //sync_call_rx:Arc::new(Mutex::new(sync_call_rx)),
         })
     }
 
     fn into_stream(self) -> BoxSourceStream {
-        println!("*****#### into_stream 132");
         self.into_stream()
     }
-
-   
 }
 
 impl RabbitMQSplitReader {
     #[try_stream(boxed, ok = Vec<SourceMessage>, error = anyhow::Error)]
     pub async fn into_stream(mut self) {
-        println!("*****#### into_stream 141");
         let mut interval =tokio::time::interval(Duration::from_millis(10));
-        println!("*****#### into_stream 147");
         loop {  
                match  self.receiver.borrow_mut().recv().await  {
                     Some(msg)=>{    
-                        println!("*****#### into_stream 151");
                         let mut res = Vec::new();
-                        //let m=msg.clone();
                         res.push(SourceMessage::from(msg));
-                        println!("*****#### {:?}",&res);
                         yield res;
                     }
                     None =>{
                         // println!("*****#### into_stream None");
                         interval.tick().await;
-                        //println!("run interval.tick");
                     }
                 }           
         }
@@ -209,7 +183,6 @@ mod tests {
         .await?
         .into_stream();
         loop {  
-            println!("*****#### loop");
             match  reader.next().await{  
                  Some(msg)=>{    
                     let vec=msg?;
@@ -217,9 +190,11 @@ mod tests {
                  }
                  None =>{
                     tokio::time::sleep(Duration::from_secs(1)).await;
+                    break;
                      //println!("run interval.tick");
                  }
              }           
+
         }
         //let v=reader.next().await.unwrap()?;
         //println!("v={:?}", v);

@@ -87,7 +87,6 @@ impl InnerConnectorSourceReader {
             split
         );
 
-        println!("InnerConnectorSourceReader->config {:?}, split {:?}", prop, split);
         // Here is a workaround, we now provide the vec with only one element
         let reader = SplitReaderImpl::create(
             prop,
@@ -125,7 +124,6 @@ impl InnerConnectorSourceReader {
         #[for_await]
         for msgs in self.reader.into_stream() {
             let msgs = msgs?;
-            println!("InnerConnectorSourceReader->into_stream msg={:?}", msgs.clone());
             self.metrics
                 .partition_input_count
                 .with_label_values(&[&actor_id, &source_id, &id])
@@ -200,7 +198,6 @@ impl ConnectorSource {
         let columns = self.get_target_columns(column_ids)?;
         let source_metrics = metrics.clone();
 
-        println!("stream_reader->columns={:?}", columns);
         let to_reader_splits = match splits {
             Some(vec_split_impl) => vec_split_impl
                 .into_iter()
@@ -209,7 +206,6 @@ impl ConnectorSource {
             None => vec![None],
         };
 
-        println!("stream_reader->to_reader_splits={:?}", to_reader_splits);
         let readers =
             try_join_all(to_reader_splits.into_iter().map(|split| {
                 tracing::debug!("spawning connector split reader for split {:?}", split);
