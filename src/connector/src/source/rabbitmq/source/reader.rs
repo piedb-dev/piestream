@@ -78,6 +78,7 @@ impl amqp::Consumer for MyConsumer {
             queue: "".to_string(),
             body: body,
         };*/
+        println!("*******###### msg = {:?}",&msg);
         self.sender.send(msg).unwrap();
         channel.basic_ack(deliver.delivery_tag, false).unwrap();
     }
@@ -93,11 +94,18 @@ impl SplitReader for RabbitMQSplitReader {
         _columns: Option<Vec<Column>>,
     ) -> Result<Self> {
         println!("*****#### new 95");
+       
+        println!("into RabbitMQSplitReader 1.");
+        println!("properties={:?}.", properties);
+        println!("state={:?}.", state);
         let splits = state.ok_or_else(|| anyhow!("no default state for reader"))?;
         ensure!(splits.len() == 1, "only support single split");
         let split = try_match_expand!(splits.into_iter().next().unwrap(), SplitImpl::RabbitMQ)?;
         let amqp_url = &properties.service_url;
         let queue_name = split.queue_name.to_string();
+        //let queue_name="test_queue".to_string();
+
+        println!("into RabbitMQSplitReader 2.");
 
         tracing::debug!("creating consumer for rabbitmq split queue {}", queue_name,);
         let mut session = match Session::open_url(amqp_url) {
@@ -106,6 +114,7 @@ impl SplitReader for RabbitMQSplitReader {
         };
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
+        println!("into RabbitMQSplitReader 3.");
         //let (sender,  receiver) = tokio::sync::mpsc::channel(1);
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let  my_consumer = MyConsumer { 
@@ -116,19 +125,24 @@ impl SplitReader for RabbitMQSplitReader {
         println!("******#### {:?}",&receiver);
 
         let consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new());
-        println!("*****####  118");
-        let mut reader=Self {
+        println!("into RabbitMQSplitReader 4. consumer={:?}", consumer);
+        /*let  reader=Self {
             split:split,
             receiver:receiver,
             //sync_call_rx:Arc::new(Mutex::new(sync_call_rx)),
-        };
+        };*/
         tokio::time::sleep(Duration::from_secs(1)).await;
         thread::spawn(move || {
             channel.start_consuming();
-            println!("*****#### 127");
 
         });
-        Ok(reader)
+
+        println!("into RabbitMQSplitReader 5.");
+        Ok(Self {
+            split:split,
+            receiver:receiver,
+            //sync_call_rx:Arc::new(Mutex::new(sync_call_rx)),
+        })
     }
 
     fn into_stream(self) -> BoxSourceStream {
@@ -184,7 +198,7 @@ mod tests {
 
         let mut vec=vec![];
         let split=RabbitMQSplit{
-            queue_name:"test5".to_string(),
+            queue_name:properties.queue_name.clone(),
             start_offset:None,
         };
         vec.push(split);

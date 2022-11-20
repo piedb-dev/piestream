@@ -29,6 +29,7 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
 
     async fn new(properties: RabbitMQProperties) -> anyhow::Result<RabbitMQSplitEnumerator> {
        
+        println!("into rabbitmq SplitEnumerator={:?}", properties);
         let queue_name = &properties.queue_name;
         //ensure!(splits.len() == 1, "only support single split");
         assert!(!queue_name.is_empty(), "rabbitmq queue is empty.");
@@ -37,14 +38,13 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
     }
 
     async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitMQSplit>> {
+        
         let mut splits = vec![];
         splits.push(RabbitMQSplit {
             queue_name: self.queue_name.clone(),
             start_offset: None,
         });
+        println!("into list_splits={:?}", splits);
         Ok(splits)
     }
 }
-mod client;
-
-pub use client::*;
