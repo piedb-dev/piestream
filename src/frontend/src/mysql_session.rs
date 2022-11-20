@@ -13,7 +13,7 @@
 // // // limitations under the License.
 
 use std::sync::Arc;
-use futures::TryFutureExt;
+//use futures::TryFutureExt;
 use futures_async_stream::for_await;
 use pgwire::pg_response::PgResponse;
 use pgwire::pg_server::{Session,UserAuthenticator,SessionManager,BoxedError,SessionId};
@@ -24,7 +24,7 @@ use msql_srv::OkResponse;
 // use msql_srv::ErrorKind;
 use pgwire::pg_response::StatementType;
 use piestream_common::catalog::{
-    DEFAULT_DATABASE_NAME, DEFAULT_SUPER_USER, DEFAULT_SUPER_USER_ID,
+    DEFAULT_SUPER_USER_ID,
 };
 use crate::session::{SessionImpl, AuthContext, FrontendEnv,SessionManagerImpl};
 use async_trait::async_trait;
