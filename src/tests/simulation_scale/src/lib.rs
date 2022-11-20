@@ -65,7 +65,7 @@ impl piestream {
     async fn connect(host: String, dbname: String) -> Self {
         let (client, connection) = tokio_postgres::Config::new()
             .host(&host)
-            .port(4566)
+            .port(5505)
             .dbname(&dbname)
             .user("root")
             .connect_timeout(Duration::from_secs(5))

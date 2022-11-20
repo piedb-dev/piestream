@@ -21,4 +21,4 @@ scrape_configs:
 
   - job_name: etcd
     static_configs:
-      - targets: ["${NODE3}:2388","${NODE4}:2388"]
+      - targets: ["${NODE3}:2389","${NODE4}:2389"]

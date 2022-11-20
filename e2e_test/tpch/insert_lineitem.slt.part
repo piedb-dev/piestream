@@ -1664,7 +1664,7 @@ INSERT INTO lineitem (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity
 (1667,95,8,3,48,47764.32,0.05,0.01,'N','O','1998-01-27','1998-01-06','1998-02-09','TAKE BACK RETURN','SHIP','tes sleep furiously. carefully eve'),
 (1667,59,1,4,24,23017.20,0.04,0.01,'N','O','1997-10-14','1997-12-01','1997-11-09','TAKE BACK RETURN','MAIL','hrash final requests. care'),
 (1667,195,9,5,2,2190.38,0.07,0.00,'N','O','1997-12-17','1997-11-22','1998-01-16','NONE','SHIP','pecial requests hag'),
-(1667,48,7,6,6,5688.24,0.01,0.03,'N','O','1998-01-21','1997-12-19','1998-01-28','NONE','TRUCK',' nag quickly above th'),
+(1667,48,7,6,6,5508.24,0.01,0.03,'N','O','1998-01-21','1997-12-19','1998-01-28','NONE','TRUCK',' nag quickly above th'),
 (1667,40,6,7,19,17860.76,0.09,0.03,'N','O','1998-01-23','1997-11-24','1998-01-26','DELIVER IN PERSON','SHIP','around the pinto beans. express, special'),
 (1668,132,8,1,8,8257.04,0.06,0.01,'N','O','1997-07-23','1997-10-09','1997-08-06','DELIVER IN PERSON','FOB','arefully regular tithes! slyl'),
 (1668,1,8,2,25,22525.00,0.01,0.06,'N','O','1997-08-08','1997-09-28','1997-09-01','NONE','TRUCK','y ironic requests. bold, final ideas a'),

@@ -41,31 +41,31 @@ cargo make link-all-in-one-binaries
 echo "--- e2e, ci-3cn-1fe, streaming"
 cargo make ci-start ci-3cn-1fe
 # Please make sure the regression is expected before increasing the timeout.
-sqllogictest -p 4566 -d dev './e2e_test/streaming/**/*.slt' --junit "streaming-${profile}"
+sqllogictest -p 5505 -d dev './e2e_test/streaming/**/*.slt' --junit "streaming-${profile}"
 
 echo "--- Kill cluster"
 cargo make ci-kill
 
 echo "--- e2e, ci-3cn-1fe, batch"
 cargo make ci-start ci-3cn-1fe
-sqllogictest -p 4566 -d dev './e2e_test/ddl/**/*.slt' --junit "batch-ddl-${profile}"
-sqllogictest -p 4566 -d dev './e2e_test/batch/**/*.slt' --junit "batch-${profile}"
-sqllogictest -p 4566 -d dev './e2e_test/database/prepare.slt'
-sqllogictest -p 4566 -d test './e2e_test/database/test.slt'
+sqllogictest -p 5505 -d dev './e2e_test/ddl/**/*.slt' --junit "batch-ddl-${profile}"
+sqllogictest -p 5505 -d dev './e2e_test/batch/**/*.slt' --junit "batch-${profile}"
+sqllogictest -p 5505 -d dev './e2e_test/database/prepare.slt'
+sqllogictest -p 5505 -d test './e2e_test/database/test.slt'
 
 echo "--- Kill cluster"
 cargo make ci-kill
 
 echo "--- e2e, ci-3cn-1fe, generated"
 cargo make ci-start ci-3cn-1fe
-sqllogictest -p 4566 -d dev './e2e_test/generated/**/*.slt' --junit "generated-${profile}"
+sqllogictest -p 5505 -d dev './e2e_test/generated/**/*.slt' --junit "generated-${profile}"
 
 echo "--- Kill cluster"
 cargo make ci-kill
 
 echo "--- e2e, ci-3cn-1fe, extended query"
 cargo make ci-start ci-3cn-1fe
-sqllogictest -p 4566 -d dev -e postgres-extended './e2e_test/extended_query/**/*.slt'
+sqllogictest -p 5505 -d dev -e postgres-extended './e2e_test/extended_query/**/*.slt'
 
 echo "--- Kill cluster"
 cargo make ci-kill

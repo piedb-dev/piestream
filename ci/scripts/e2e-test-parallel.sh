@@ -40,7 +40,7 @@ echo "--- Prepare RiseDev dev cluster"
 cargo make pre-start-dev
 cargo make link-all-in-one-binaries
 
-host_args="-h localhost -p 4565 -h localhost -p 4566 -h localhost -p 4567"
+host_args="-h localhost -p 4565 -h localhost -p 5505 -h localhost -p 4567"
 
 echo "--- e2e, ci-3cn-3fe, streaming"
 cargo make ci-start ci-3cn-3fe

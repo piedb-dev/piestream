@@ -21,4 +21,4 @@ scrape_configs:
 
   - job_name: etcd
     static_configs:
-      - targets: ["122.70.153.20:2388","122.70.153.22:2388"]
+      - targets: ["122.70.153.20:2389","122.70.153.22:2389"]

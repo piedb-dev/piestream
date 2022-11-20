@@ -22,14 +22,14 @@ services:
     environment:
       <<: *etcd-common-envs
       ETCD_NAME: etcd-1
-      ETCD_LISTEN_CLIENT_URLS: http://${HOST03}:2388
-      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST03}:2388
+      ETCD_LISTEN_CLIENT_URLS: http://${HOST03}:2389
+      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST03}:2389
       ETCD_LISTEN_PEER_URLS: http://${HOST03}:2389
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${HOST03}:2389
     volumes:
       - etcd_data1:/data
     healthcheck:
-      test: printf "" /dev/tcp/${HOST03}/2388
+      test: printf "" /dev/tcp/${HOST03}/2389
       interval: 10s
     deploy:
       placement:
@@ -40,14 +40,14 @@ services:
     environment:
       <<: *etcd-common-envs
       ETCD_NAME: etcd-2
-      ETCD_LISTEN_CLIENT_URLS: http://${HOST04}:2388
-      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST04}:2388
+      ETCD_LISTEN_CLIENT_URLS: http://${HOST04}:2389
+      ETCD_ADVERTISE_CLIENT_URLS: http://${HOST04}:2389
       ETCD_LISTEN_PEER_URLS: http://${HOST04}:2389
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${HOST04}:2389
     volumes:
       - etcd_data2:/data
     healthcheck:
-      test: printf "" /dev/tcp/${HOST04}/2388
+      test: printf "" /dev/tcp/${HOST04}/2389
       interval: 10s
     deploy:
       placement:

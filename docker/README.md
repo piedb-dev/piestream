@@ -29,7 +29,7 @@ To start a piestream playground, run
 
 ```
 # Start playground
-docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/piestreamlabs/piestream:latest playground
+docker run -it --pull=always -p 5505:5505 -p 5691:5691 ghcr.io/piestreamlabs/piestream:latest playground
 ```
 
 To start a piestream cluster, run

@@ -31,7 +31,7 @@ tar xvf piestream-v0.1.11-x86_64-unknown-linux.tar.gz
 
 ```shell
 # Start piestream in single-binary playground mode
-docker run -it --pull=always -p 4566:4566 -p 5691:5691 ghcr.io/piestreamlabs/piestream:v0.1.11 playground
+docker run -it --pull=always -p 5505:5505 -p 5691:5691 ghcr.io/piestreamlabs/piestream:v0.1.11 playground
 ```
 
 **Compile from Source with [RiseDev](docs/developer-guide.md#set-up-the-development-environment) (Linux and macOS)**
@@ -55,7 +55,7 @@ To connect to the piestream server, you will need to [install PostgreSQL shell](
 
 ```shell
 # Use psql to connect piestream cluster
-psql -h localhost -p 4566 -d dev -U root
+psql -h localhost -p 5505 -d dev -U root
 ```
 
 ```sql

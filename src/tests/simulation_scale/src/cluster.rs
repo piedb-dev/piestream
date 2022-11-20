@@ -44,7 +44,7 @@ impl Cluster {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         let meta = "192.168.1.1".parse().unwrap();
-        std::env::set_var("RW_META_ADDR", format!("https://{meta}:5690/"));
+        std::env::set_var("RW_META_ADDR", format!("https://{meta}:5507/"));
 
         // meta node
         handle
@@ -55,7 +55,7 @@ impl Cluster {
                 let opts = piestream_meta::MetaNodeOpts::parse_from([
                     "meta-node",
                     "--listen-addr",
-                    "0.0.0.0:5690",
+                    "0.0.0.0:5507",
                     "--backend",
                     "mem",
                 ]);
@@ -78,11 +78,11 @@ impl Cluster {
                     let opts = piestream_frontend::FrontendOpts::parse_from([
                         "frontend-node",
                         "--host",
-                        "0.0.0.0:4566",
+                        "0.0.0.0:5505",
                         "--client-address",
-                        &format!("{frontend_ip}:4566"),
+                        &format!("{frontend_ip}:5505"),
                         "--meta-addr",
-                        &format!("{meta}:5690"),
+                        &format!("{meta}:5507"),
                     ]);
                     piestream_frontend::start(opts).await
                 })
@@ -100,11 +100,11 @@ impl Cluster {
                     let opts = piestream_compute::ComputeNodeOpts::parse_from([
                         "compute-node",
                         "--host",
-                        "0.0.0.0:5688",
+                        "0.0.0.0:5508",
                         "--client-address",
-                        &format!("192.168.3.{i}:5688"),
+                        &format!("192.168.3.{i}:5508"),
                         "--meta-address",
-                        &format!("{meta}:5690"),
+                        &format!("{meta}:5507"),
                         "--state-store",
                         "hummock+memory-shared",
                     ]);
@@ -123,11 +123,11 @@ impl Cluster {
                     let opts = piestream_compactor::CompactorOpts::parse_from([
                         "compactor-node",
                         "--host",
-                        "0.0.0.0:6660",
+                        "0.0.0.0:5509",
                         "--client-address",
-                        &format!("192.168.4.{i}:6660"),
+                        &format!("192.168.4.{i}:5509"),
                         "--meta-address",
-                        "192.168.1.1:5690",
+                        "192.168.1.1:5507",
                         "--state-store",
                         "hummock+memory-shared",
                     ]);
