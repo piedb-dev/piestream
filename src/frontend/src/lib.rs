@@ -115,9 +115,8 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
         let addr = "127.0.0.1:5506".to_string();
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        pg_serve(&opts.host, session_mgr.clone()).await.unwrap();
+        // pg_serve(&opts.host, session_mgr.clone()).await.unwrap();
         mysql_server(&addr,session_mgr.clone()).await;
-        println!("127.0.0.1:5506");
     })
 }
 
