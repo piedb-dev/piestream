@@ -111,7 +111,7 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
 
         // Enable DEBUG level for all other crates
         // TODO: remove this in release mode
-        let filter = filter.with_default(Level::DEBUG);
+        let filter = filter.with_default(Level::INFO);
 
         fmt_layer.with_filter(filter)
     };
