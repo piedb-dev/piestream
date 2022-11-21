@@ -27,7 +27,7 @@ fn main() {
 
     piestream_rt::init_piestream_logger(piestream_rt::LoggerSettings::new_default());
 
-    piestream_rt::main_okk(piestream_frontend::start(opts))
+    piestream_rt::main_okk(piestream_frontend::mysql_start(opts))
 
 }
 

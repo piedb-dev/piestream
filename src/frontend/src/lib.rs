@@ -127,7 +127,8 @@ pub struct FrontendConfig {
 
 pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
-        let addr = "127.0.0.1:4567".to_string();
+        let addr = "127.0.0.1:5506".to_string();
+        println!("addr = {:?}",&addr);
         let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
         mysql_server(&addr,session_mgr).await;
     })
