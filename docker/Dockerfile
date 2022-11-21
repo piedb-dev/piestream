@@ -33,10 +33,11 @@ RUN if [ "$simd_disabled" == "true" ]; then \
   fi
 
 RUN cargo build -p piestream_cmd -p piestream_cmd_all --release --features "static-link static-log-level" && \
-  mv /piestream/target/release/{frontend,compute-node,meta-node,compactor,piestream} /piestream/bin/ && \
+  mv /piestream/target/release/{frontend,frontend-mysql,compute-node,meta-node,compactor,piestream} /piestream/bin/ && \
   cargo clean
 RUN objcopy --compress-debug-sections=zlib-gnu /piestream/bin/piestream && \
   objcopy --compress-debug-sections=zlib-gnu /piestream/bin/frontend && \
+  objcopy --compress-debug-sections=zlib-gnu /piestream/bin/frontend-mysql && \
   objcopy --compress-debug-sections=zlib-gnu /piestream/bin/compute-node && \
   objcopy --compress-debug-sections=zlib-gnu /piestream/bin/meta-node && \
   objcopy --compress-debug-sections=zlib-gnu /piestream/bin/compactor
@@ -50,6 +51,13 @@ RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/frontend /piestream/bin/frontend
 EXPOSE 5505
 ENTRYPOINT [ "/piestream/bin/frontend" ]
+
+FROM image-base as frontend-node-mysql
+LABEL org.opencontainers.image.source https://github.com/piedb-dev/piestream
+RUN mkdir -p /piestream/bin
+COPY --from=builder /piestream/bin/frontend /piestream/bin/frontend
+EXPOSE 5506
+ENTRYPOINT [ "/piestream/bin/frontend-mysql" ]
 
 FROM image-base as compute-node
 LABEL org.opencontainers.image.source https://github.com/piedb-dev/piestream
