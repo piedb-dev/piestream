@@ -11,7 +11,7 @@ services:
     command:
       - server
       - "--address"
-      - "0.0.0.0:9301"
+      - "0.0.0.0:9307"
       - "--console-address"
       - "0.0.0.0:9400"
       - http://${NODE1}/data
@@ -25,7 +25,7 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: curl -f http://localhost:9301/minio/health/cluster
+      test: curl -f http://localhost:9307/minio/health/cluster
       interval: 10s
 
   etcd:
@@ -33,8 +33,8 @@ services:
     network_mode: host
     environment:
       ETCD_DATA_DIR: /data
-      ETCD_LISTEN_CLIENT_URLS: http://${NODE4}:2388
-      ETCD_ADVERTISE_CLIENT_URLS: http://${NODE4}:2388
+      ETCD_LISTEN_CLIENT_URLS: http://${NODE4}:2389
+      ETCD_ADVERTISE_CLIENT_URLS: http://${NODE4}:2389
       ETCD_LISTEN_PEER_URLS: http://${NODE4}:2389
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${NODE4}:2389
       ETCD_NAME: etcd-4
@@ -50,7 +50,7 @@ services:
     volumes:
       - etcd_data:/data
     healthcheck:
-      test: printf "" /dev/tcp/${NODE1}/2388
+      test: printf "" /dev/tcp/${NODE1}/2389
       interval: 10s
 
   etcd-cluster-status:
@@ -63,7 +63,7 @@ services:
     image: alpine:3.16
     tty: true
     healthcheck:
-      test: nc -z ${META} 5690
+      test: nc -z ${META} 5507
       start_period: 30s
       interval: 30s
 
@@ -73,17 +73,17 @@ services:
     command:
       - compute-node
       - "--host"
-      - "0.0.0.0:5688"
+      - "0.0.0.0:5508"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1222"
       - "--client-address"
-      - "${NODE4}:5688"
+      - "${NODE4}:5508"
       - "--metrics-level"
       - "1"
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${META}:9000/hummock001"
       - "--meta-address"
-      - "http://${META}:5690"
+      - "http://${META}:5507"
     environment:
       - TZ=Asia/Shanghai
     depends_on:
@@ -96,7 +96,7 @@ services:
     command:
       - compactor-node
       - "--host"
-      - "0.0.0.0:6660"
+      - "0.0.0.0:5509"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1260"
       - "--metrics-level"
@@ -104,7 +104,7 @@ services:
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${META}:9000/hummock001"
       - "--meta-address"
-      - "http://${META}:5690"
+      - "http://${META}:5507"
     environment:
       - TZ=Asia/Shanghai
     depends_on:

@@ -48,7 +48,7 @@ FROM image-base as frontend-node
 LABEL org.opencontainers.image.source https://github.com/piedb-dev/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/frontend /piestream/bin/frontend
-EXPOSE 4566
+EXPOSE 5505
 ENTRYPOINT [ "/piestream/bin/frontend" ]
 
 FROM image-base as compute-node
@@ -62,14 +62,14 @@ FROM image-base as meta-node
 LABEL org.opencontainers.image.source https://github.com/piedb-dev/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/meta-node /piestream/bin/meta-node
-EXPOSE 5690
+EXPOSE 5507
 ENTRYPOINT [ "/piestream/bin/meta-node" ]
 
 FROM image-base as compactor-node
 LABEL org.opencontainers.image.source https://github.com/piedb-dev/piestream
 RUN mkdir -p /piestream/bin
 COPY --from=builder /piestream/bin/compactor /piestream/bin/compactor
-EXPOSE 6660
+EXPOSE 5509
 ENTRYPOINT [ "/piestream/bin/compactor" ]
 
 FROM image-base as piestream

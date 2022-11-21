@@ -96,7 +96,7 @@ impl SplitEnumerator for KafkaSplitEnumerator {
                 self.broker_address
             )
         })?;
-
+        println!("*****##### kafka list_splits");
         let mut start_offsets = self.fetch_start_offset(topic_partitions.as_ref()).await?;
 
         let mut stop_offsets = self.fetch_stop_offset(topic_partitions.as_ref()).await?;

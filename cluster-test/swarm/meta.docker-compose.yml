@@ -6,7 +6,7 @@ services:
     command:
       - meta-node
       - "--listen-addr"
-      - "0.0.0.0:5690"
+      - "0.0.0.0:5507"
       - "--host"
       - ${HOST04}
       - "--dashboard-host"
@@ -20,7 +20,7 @@ services:
     networks:
       - host
     healthcheck:
-      test: printf "" /dev/tcp/127.0.0.1/5690
+      test: printf "" /dev/tcp/127.0.0.1/5507
       interval: 10s
     deploy:
       placement:

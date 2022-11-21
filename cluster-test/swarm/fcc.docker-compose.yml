@@ -12,7 +12,7 @@ x-compact-common: &compact-common
   command:
     - compactor-node
     - "--host"
-    - "0.0.0.0:6660"
+    - "0.0.0.0:5509"
     - "--prometheus-listener-addr"
     - "0.0.0.0:1260"
     - "--metrics-level"
@@ -20,7 +20,7 @@ x-compact-common: &compact-common
     - "--state-store"
     - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
     - "--meta-address"
-    - "http://${HOST04}:5690"
+    - "http://${HOST04}:5507"
 
 services:
   frontend:
@@ -28,9 +28,9 @@ services:
     command:
       - frontend-node
       - "--host"
-      - "0.0.0.0:4566"
+      - "0.0.0.0:5505"
       - "--meta-addr"
-      - "http://${HOST04}:5690"
+      - "http://${HOST04}:5507"
     networks:
       - host
     deploy:
@@ -43,9 +43,9 @@ services:
     command:
       - compute-node
       - "--client-address"
-      - "${HOST01}:5688"
+      - "${HOST01}:5508"
       - "--host"
-      - "0.0.0.0:5688"
+      - "0.0.0.0:5508"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1222"
       - "--metrics-level"
@@ -53,7 +53,7 @@ services:
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
       - "--meta-address"
-      - "http://${HOST04}:5690"
+      - "http://${HOST04}:5507"
     deploy:
       placement:
         constraints:
@@ -64,9 +64,9 @@ services:
     command:
       - compute-node
       - "--client-address"
-      - "${HOST02}:5688"
+      - "${HOST02}:5508"
       - "--host"
-      - "0.0.0.0:5688"
+      - "0.0.0.0:5508"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1222"
       - "--metrics-level"
@@ -74,7 +74,7 @@ services:
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
       - "--meta-address"
-      - "http://${HOST04}:5690"
+      - "http://${HOST04}:5507"
     deploy:
       placement:
         constraints:
@@ -85,9 +85,9 @@ services:
     command:
       - compute-node
       - "--client-address"
-      - "${HOST03}:5688"
+      - "${HOST03}:5508"
       - "--host"
-      - "0.0.0.0:5688"
+      - "0.0.0.0:5508"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1222"
       - "--metrics-level"
@@ -95,7 +95,7 @@ services:
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
       - "--meta-address"
-      - "http://${HOST04}:5690"
+      - "http://${HOST04}:5507"
     deploy:
       placement:
         constraints:
@@ -106,9 +106,9 @@ services:
     command:
       - compute-node
       - "--client-address"
-      - "${HOST04}:5688"
+      - "${HOST04}:5508"
       - "--host"
-      - "0.0.0.0:5688"
+      - "0.0.0.0:5508"
       - "--prometheus-listener-addr"
       - "0.0.0.0:1222"
       - "--metrics-level"
@@ -116,7 +116,7 @@ services:
       - "--state-store"
       - "hummock+minio://hummockadmin:hummockadmin@${HOST01}:9000/hummock001"
       - "--meta-address"
-      - "http://${HOST04}:5690"
+      - "http://${HOST04}:5507"
     deploy:
       placement:
         constraints:

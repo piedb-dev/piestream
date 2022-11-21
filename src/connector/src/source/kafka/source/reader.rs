@@ -113,6 +113,7 @@ impl KafkaSplitReader {
             for msg in msgs {
                 res.push(SourceMessage::from(msg?));
             }
+            println!("*****## msg = {:?}",&res);
             yield res;
         }
     }

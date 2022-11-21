@@ -5,7 +5,7 @@ describe('PgwireTest', () => {
     const pool = new Pool({
       host: '127.0.0.1',
       database: 'dev',
-      port: 4566,
+      port: 5505,
       user: 'root',
     });
     try {

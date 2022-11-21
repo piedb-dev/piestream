@@ -761,7 +761,7 @@ mod tests {
             r#type: WorkerType::ComputeNode as i32,
             host: Some(HostAddress {
                 host: "127.0.0.1".to_string(),
-                port: 5688,
+                port: 5508,
             }),
             state: piestream_pb::common::worker_node::State::Running as i32,
             parallel_units: generate_parallel_units(8, 1),

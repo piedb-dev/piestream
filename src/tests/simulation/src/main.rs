@@ -120,7 +120,7 @@ async fn main() {
         .name("etcd")
         .ip("192.168.10.1".parse().unwrap())
         .init(|| async {
-            let addr = "0.0.0.0:2388".parse().unwrap();
+            let addr = "0.0.0.0:2389".parse().unwrap();
             etcd_client::SimServer::builder()
                 .timeout_rate(args.etcd_timeout_rate)
                 .serve(addr)
@@ -155,11 +155,11 @@ async fn main() {
                 // "--config-path",
                 // "src/config/piestream.toml",
                 "--listen-addr",
-                "0.0.0.0:5690",
+                "0.0.0.0:5507",
                 "--backend",
                 "etcd",
                 "--etcd-endpoints",
-                "192.168.10.1:2388",
+                "192.168.10.1:2389",
             ]);
             piestream_meta::start(opts).await
         })
@@ -179,11 +179,11 @@ async fn main() {
                 let opts = piestream_frontend::FrontendOpts::parse_from([
                     "frontend-node",
                     "--host",
-                    "0.0.0.0:4566",
+                    "0.0.0.0:5505",
                     "--client-address",
-                    &format!("192.168.2.{i}:4566"),
+                    &format!("192.168.2.{i}:5505"),
                     "--meta-addr",
-                    "192.168.1.1:5690",
+                    "192.168.1.1:5507",
                 ]);
                 piestream_frontend::start(opts).await
             })
@@ -203,11 +203,11 @@ async fn main() {
                     // "--config-path",
                     // "src/config/piestream.toml",
                     "--host",
-                    "0.0.0.0:5688",
+                    "0.0.0.0:5508",
                     "--client-address",
-                    &format!("192.168.3.{i}:5688"),
+                    &format!("192.168.3.{i}:5508"),
                     "--meta-address",
-                    "192.168.1.1:5690",
+                    "192.168.1.1:5507",
                     "--state-store",
                     "hummock+memory-shared",
                 ]);
@@ -231,11 +231,11 @@ async fn main() {
                     // "--config-path",
                     // "src/config/piestream.toml",
                     "--host",
-                    "0.0.0.0:6660",
+                    "0.0.0.0:5509",
                     "--client-address",
-                    &format!("192.168.4.{i}:6660"),
+                    &format!("192.168.4.{i}:5509"),
                     "--meta-address",
-                    "192.168.1.1:5690",
+                    "192.168.1.1:5507",
                     "--state-store",
                     "hummock+memory-shared",
                 ]);
@@ -541,7 +541,7 @@ impl piestream {
     async fn connect(host: String, dbname: String) -> Result<Self, tokio_postgres::error::Error> {
         let (client, connection) = tokio_postgres::Config::new()
             .host(&host)
-            .port(4566)
+            .port(5505)
             .dbname(&dbname)
             .user("root")
             .connect_timeout(Duration::from_secs(5))
