@@ -59,6 +59,8 @@ mod monitor;
 use std::ffi::OsString;
 use std::iter;
 use std::sync::Arc;
+use std::thread;
+use core::time::Duration;
 
 use clap::Parser;
 use pgwire::pg_server::pg_serve;
@@ -105,7 +107,8 @@ impl Default for FrontendOpts {
 
 use std::future::Future;
 use std::pin::Pin;
-
+use tokio::task;
+use piestream_common::error::internal_error;
 use piestream_common::config::ServerConfig;
 
 /// Start frontend
@@ -114,7 +117,25 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     // slow compile in release mode.
     Box::pin(async move {
         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        pg_serve(&opts.host, session_mgr).await.unwrap();
+        let a1=session_mgr.clone();
+        let a2=session_mgr.clone();
+        let addr1=opts.host.clone();
+        let addr2 = "127.0.0.1:4567".to_string();
+
+
+        let pg_server_join=task::spawn(pg_serve(addr1, a1));
+        //tokio::spawn(move ||futures::executor::block_on(pg_serve(addr1, a1)).unwrap());
+        //thread::spawn(move ||futures::executor::block_on(pg_serve(addr1, a1)).unwrap());
+        //let handle=thread::spawn(async move {pg_serve(addr1, a1).await.unwrap();});
+        //thread::spawn(|| async move {pg_serve(addr1, a1).await.unwrap()});
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        //pg_serve(addr1, a1).await.unwrap();
+        println!("addr ====== ,&pg_serve)");
+        let mysql_server_join=task::spawn( mysql_server(addr2, a2));
+        //mysql_server(&addr2, a2).await;
+
+       // pg_server_join.await.ok_or_else(|| internal_error("Could not compute vnode for lookup join"));
+        mysql_server_join.await.unwrap();
     })
 }
 
@@ -130,6 +151,6 @@ pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Sen
         let addr = "127.0.0.1:4567".to_string();
         println!("addr ====== {:?}",&addr);
         let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
-        mysql_server(&addr,session_mgr).await;
+        mysql_server(addr,session_mgr).await;
     })
 }

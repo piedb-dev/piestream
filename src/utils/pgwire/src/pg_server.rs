@@ -89,13 +89,15 @@ impl UserAuthenticator {
 }
 
 /// Binds a Tcp listener at `addr`. Spawn a coroutine to serve every new connection.
-pub async fn pg_serve<VS>(addr: &str, session_mgr: Arc<impl SessionManager<VS>>) -> io::Result<()>
+pub async fn pg_serve<VS>(addr: String, session_mgr: Arc<impl SessionManager<VS>>) -> io::Result<()>
 where
     VS: Stream<Item = RowSetResult> + Unpin + Send,
 {
-    let listener = TcpListener::bind(addr).await.unwrap();
+    println!("Server Listening at {:?}", addr.clone());
+    let listener = TcpListener::bind(&addr.clone()).await.unwrap();
     // accept connections and process them, spawning a new thread for each one
-    tracing::info!("Server Listening at {}", addr);
+    tracing::info!("Server Listening at {:?}", addr.clone());
+   
     loop {
         let session_mgr = session_mgr.clone();
         let conn_ret = listener.accept().await;
@@ -108,11 +110,13 @@ where
                     let mut pg_proto = PgProtocol::new(stream, session_mgr);
                     while !pg_proto.process().await {}
                     tracing::info!("Connection {} closed", peer_addr);
+                    println!("Connection {:?} closed", peer_addr);
                 });
             }
 
             Err(e) => {
                 tracing::error!("Connection failure: {}", e);
+                println!("Connection failure: {}", e);
             }
         }
     }
@@ -217,7 +221,7 @@ mod tests {
     #[tokio::test]
     async fn test_psql_extended_mode_explicit_simple() {
         let session_mgr = Arc::new(MockSessionManager {});
-        tokio::spawn(async move { pg_serve("127.0.0.1:10000", session_mgr).await });
+        tokio::spawn(async move { pg_serve("127.0.0.1:10000".into(), session_mgr).await });
         // wait for server to start
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
