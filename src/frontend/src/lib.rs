@@ -120,8 +120,7 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let a1=session_mgr.clone();
         let a2=session_mgr.clone();
         let addr1=opts.host.clone();
-        let addr2 = "127.0.0.1:4567".to_string();
-
+        let addr2 = "127.0.0.1:5506".to_string();
 
         let pg_server_join=task::spawn(pg_serve(addr1, a1));
         //tokio::spawn(move ||futures::executor::block_on(pg_serve(addr1, a1)).unwrap());
@@ -130,7 +129,6 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         //thread::spawn(|| async move {pg_serve(addr1, a1).await.unwrap()});
         tokio::time::sleep(Duration::from_secs(10)).await;
         //pg_serve(addr1, a1).await.unwrap();
-        println!("addr ====== ,&pg_serve)");
         let mysql_server_join=task::spawn( mysql_server(addr2, a2));
         //mysql_server(&addr2, a2).await;
 
