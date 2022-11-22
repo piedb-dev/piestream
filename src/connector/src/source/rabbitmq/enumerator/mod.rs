@@ -44,7 +44,6 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
             queue_name: self.queue_name.clone(),
             start_offset: None,
         });
-        println!("into list_splits={:?}", splits);
         Ok(splits)
     }
 }

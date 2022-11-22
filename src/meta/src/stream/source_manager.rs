@@ -157,7 +157,6 @@ impl ConnectorSourceWorker {
 
     async fn tick(&mut self) -> MetaResult<()> {
         let splits = self.enumerator.list_splits().await?;
-        println!("splits={:?}", splits);
         let mut current_splits = self.current_splits.lock().await;
         current_splits.splits.replace(
             splits
