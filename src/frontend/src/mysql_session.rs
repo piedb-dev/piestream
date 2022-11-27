@@ -19,6 +19,7 @@ use pgwire::pg_response::PgResponse;
 use pgwire::pg_server::{Session,UserAuthenticator,SessionManager,BoxedError,SessionId};
 use tokio::net::TcpListener;
 use std::io::{ Result,Error};
+use msql_srv::Column as MColumn;
 use msql_srv::*;
 use msql_srv::OkResponse;
 // use msql_srv::ErrorKind;
@@ -33,12 +34,12 @@ use regex::Regex;
 
 
 
-// const CURRENT_DB: &str = "select database()";
 const SHOW_DB: &str = "show databases";
 const SHOW_VIEWS: &str = "show materialized views";
 const SHOW_TABLES: &str = "show tables";
 const SHOW_SOURCES: &str = "show sources";
 const VERSION_COMMENT:&str = "select @@version_comment limit 1";
+const CURRENT_DB: &str = "select database()";
 // const SHOW_SCHEMAS: &str = "show schemas";
 // const SHOW_VERSION: &str = "select version()";
 const JDBCH_HELLO:&str=r"/* mysql-connector-java-\**";
@@ -66,8 +67,12 @@ pub async fn mysql_server(addr: &str,session_mgr: Arc<SessionManagerImpl>) -> ()
 }
 
 
+
 pub struct MySQLApi
 {
+    session_mgr: Arc<SessionManagerImpl>,
+    db: Option<String>,
+    version: String,
     session: Arc<SessionImpl>,
     salt: [u8; 20],
     id: u32,
@@ -95,6 +100,9 @@ impl MySQLApi
         let session = session_mgr.clone().connect("dev", "root").unwrap();
         Ok(
         Self {
+            session_mgr: session_mgr,
+            db: None,
+            version: String::from("2.0.0-piestream"),
             session: session,
             salt: [0; 20],
             id: 8,
@@ -217,12 +225,6 @@ impl MySQLApi
             colflags: ColumnFlags::empty(),
         }];
         let mut rw = results.start(&str_col)?;
-        // rw.write_col("information_schema")?;
-        // rw.end_row()?;
-        // rw.write_col("mysql")?;
-        // rw.end_row()?;
-        // rw.write_col("performance_schema")?;
-        // rw.end_row()?;
         #[for_await]
         for row_set in pg_results.values_stream() {
             for row in row_set.unwrap() {
@@ -283,6 +285,32 @@ impl MySQLApi
         rw.finish()
     }
 
+
+    pub fn show_current_db<'a, W: std::io::Write + Send>(
+        &'a self,
+        results: QueryResultWriter<'a, W>,
+    ) -> Result<()> {
+        let mut cols = vec![];
+        let str_col = MColumn {
+            table: "".to_string(),
+            column: "DATABASE()".to_string(),
+            coltype: ColumnType::MYSQL_TYPE_STRING,
+            colflags: ColumnFlags::empty(),
+        };
+        cols.push(str_col);
+        let mut rw = results.start(&cols)?;
+        match &self.db {
+            Some(name) => {
+                rw.write_col(name)?;
+            }
+            _ => {
+                rw.write_col("NULL")?;
+            }
+        }
+        rw.end_row()?;
+        rw.finish()
+    }
+
     pub async fn show_sources<'a, W: std::io::Write + Send>(
         &'a self,
         results: QueryResultWriter<'a, W>,
@@ -312,9 +340,9 @@ impl MySQLApi
 impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
     type Error = Error;
 
-    // fn version(&self) -> &str {
-    //     self.version.as_str()
-    // }
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
 
     fn connect_id(&self) -> u32 {
         self.id
@@ -367,10 +395,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         _param: ParamParser<'a>,
         results: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        // tracing::info!("on exec id {}", id);
         results.completed(OkResponse::default())
-
-        // Ok(())
     }
 
     async fn on_close<'a>(&'a mut self, id: u32)
@@ -398,9 +423,11 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
             tracing::info!("JDBC SET OK");
             return results.completed(OkResponse::default());
         }
-
         if lower_case_sql == VERSION_COMMENT {
             return results.completed(OkResponse::default());
+        }
+        if lower_case_sql == CURRENT_DB {
+            self.show_current_db(results)
         } else {
             let session = self.session.clone();
             let rsp = session.run_statement(sql,false).await;
@@ -410,6 +437,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
                         SHOW_DB => self.show_dbs(results,res).await,
                         SHOW_TABLES => self.show_tables(results,res).await,
                         SHOW_VIEWS => self.show_views(results,res).await,
+                        CURRENT_DB => self.show_current_db(results),
                         SHOW_SOURCES => self.show_sources(results,res).await,
                         _ => {
                             self.write_output(results,res).await
@@ -417,7 +445,6 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
                     }
                 },
                 Err(e) => {
-                    println!("error msg {:?}",&e);
                     return results.error(ErrorKind::ER_ABORTING_CONNECTION, e.to_string().as_bytes())
                 }
             }
@@ -428,6 +455,8 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for MySQLApi {
         _database_name: &'a str,
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
+        self.db = Some(_database_name.to_string());
+        self.session = self.session_mgr.clone().connect(_database_name, "root").unwrap();
         tracing::info!("enter db");
         writer.ok()
     }
