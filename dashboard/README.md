@@ -25,7 +25,7 @@ TODO: Find a suitable testing framework
 Start the piestream database, remove drop tables from `tpch_snapshot.slt`
 ```bash
 ./risedev d
-sqllogictest -p 4566 -d dev './e2e_test/streaming/tpch_snapshot.slt'
+sqllogictest -p 5505 -d dev './e2e_test/streaming/tpch_snapshot.slt'
 ```
 Install Dependencies.
 ```bash

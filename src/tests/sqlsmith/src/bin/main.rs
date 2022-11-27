@@ -34,7 +34,7 @@ struct TestOptions {
     host: String,
 
     /// The database server port.
-    #[clap(short, long, default_value = "4566")]
+    #[clap(short, long, default_value = "5505")]
     port: u16,
 
     /// The database name to connect.

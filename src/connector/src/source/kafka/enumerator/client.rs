@@ -50,6 +50,7 @@ impl SplitEnumerator for KafkaSplitEnumerator {
     type Split = KafkaSplit;
 
     async fn new(properties: KafkaProperties) -> anyhow::Result<KafkaSplitEnumerator> {
+        println!("kafka::enumerator::client.rs properties = {:?}",&properties);
         let broker_address = properties.brokers.clone();
         let topic = properties.topic.clone();
 
@@ -95,7 +96,7 @@ impl SplitEnumerator for KafkaSplitEnumerator {
                 self.broker_address
             )
         })?;
-
+        println!("*****##### kafka list_splits");
         let mut start_offsets = self.fetch_start_offset(topic_partitions.as_ref()).await?;
 
         let mut stop_offsets = self.fetch_stop_offset(topic_partitions.as_ref()).await?;

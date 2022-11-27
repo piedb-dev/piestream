@@ -89,7 +89,7 @@ You can now build RiseDev and start a dev cluster. It is as simple as:
 
 ```shell
 ./risedev d                        # shortcut for ./risedev dev
-psql -h localhost -p 4566 -d dev -U root
+psql -h localhost -p 5505 -d dev -U root
 ```
 
 If you detect memory bottlenecks while compiling, either allocate some disk space on your computer as swap memory, or lower the compilation parallelism with [`CARGO_BUILD_JOBS`](https://doc.rust-lang.org/cargo/reference/config.html#buildjobs), e.g. `CARGO_BUILD_JOBS=2`.
@@ -189,7 +189,7 @@ cargo run --bin piestream -- playground
 Then, connect to the playground instance via:
 
 ```shell
-psql -h localhost -p 4566 -d dev -U root
+psql -h localhost -p 5505 -d dev -U root
 ```
 
 ## Develop the dashboard
@@ -310,11 +310,11 @@ Then to run the end-to-end tests, you can use one of the following commands acco
 
 ```shell
 # run all streaming tests
-./risedev slt-streaming -p 4566 -d dev -j 1
+./risedev slt-streaming -p 5505 -d dev -j 1
 # run all batch tests
-./risedev slt-batch -p 4566 -d dev -j 1
+./risedev slt-batch -p 5505 -d dev -j 1
 # run both
-./risedev slt-all -p 4566 -d dev -j 1
+./risedev slt-all -p 5505 -d dev -j 1
 ```
 
 > **Note**
@@ -325,9 +325,9 @@ Alternatively, you can also run some specific tests:
 
 ```shell
 # run a single test
-./risedev slt -p 4566 -d dev './e2e_test/path/to/file.slt'
+./risedev slt -p 5505 -d dev './e2e_test/path/to/file.slt'
 # run all tests under a directory (including subdirectories)
-./risedev slt -p 4566 -d dev './e2e_test/path/to/directory/**/*.slt'
+./risedev slt -p 5505 -d dev './e2e_test/path/to/directory/**/*.slt'
 ```
 
 After running e2e tests, you may kill the cluster and clean data.
@@ -360,9 +360,9 @@ As introduced in [#5117](https://github.com/piestreamlabs/piestream/issues/5117)
 ./risedev docslt -p piestream_expr
 
 # run all generated e2e tests
-./risedev slt-generated -p 4566 -d dev
+./risedev slt-generated -p 5505 -d dev
 # or, run only some of them
-./risedev slt -p 4566 -d dev './e2e_test/generated/docslt/piestream_expr/**/*.slt'
+./risedev slt -p 5505 -d dev './e2e_test/generated/docslt/piestream_expr/**/*.slt'
 ```
 
 These will be run on CI as well.

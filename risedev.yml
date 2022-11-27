@@ -159,7 +159,7 @@ risedev:
       port: 5687
       exporter-port: 1222
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
     - use: compute-node
       port: 5689
@@ -179,6 +179,7 @@ risedev:
     - use: frontend
       listen-address: "0.0.0.0"
       address: "127.0.0.1"
+    
 
   # The profile for the online playground
   online-docker-playground:
@@ -351,7 +352,7 @@ risedev:
       exporter-port: 1222
       enable-tiered-cache: true
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
       enable-tiered-cache: true
     - use: compute-node
@@ -373,7 +374,7 @@ risedev:
       exporter-port: 1222
       enable-tiered-cache: true
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
       enable-tiered-cache: true
     - use: compute-node
@@ -384,7 +385,7 @@ risedev:
       port: 4565
       exporter-port: 2222
     - use: frontend
-      port: 4566
+      port: 5505
       exporter-port: 2223
     - use: frontend
       port: 4567
@@ -401,7 +402,7 @@ risedev:
       exporter-port: 1222
       enable-in-memory-kv-state-backend: true
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
       enable-in-memory-kv-state-backend: true
     - use: compute-node
@@ -412,7 +413,7 @@ risedev:
       port: 4565
       exporter-port: 2222
     - use: frontend
-      port: 4566
+      port: 5505
       exporter-port: 2223
     - use: frontend
       port: 4567
@@ -461,7 +462,7 @@ template:
     address: "127.0.0.1"
 
     # Advertise port of MinIO s3 endpoint
-    port: 9301
+    port: 9307
 
     # Listen address of MinIO endpoint
     listen-address: ${address}
@@ -495,7 +496,7 @@ template:
     address: "127.0.0.1"
 
     # Listen port of the single-node etcd.
-    port: 2388
+    port: 2389
 
     # Listen address
     listen-address: ${address}
@@ -517,7 +518,7 @@ template:
     listen-address: ${address}
 
     # Compute-node listen port
-    port: 5688
+    port: 5508
 
     # Prometheus exporter listen port
     exporter-port: 1222
@@ -563,7 +564,7 @@ template:
     address: "127.0.0.1"
 
     # Meta-node listen port
-    port: 5690
+    port: 5507
 
     # Listen address
     listen-address: ${address}
@@ -659,7 +660,7 @@ template:
     address: "127.0.0.1"
 
     # Listen port of frontend
-    port: 4566
+    port: 5505
 
     # Listen address
     listen-address: ${address}
@@ -681,7 +682,7 @@ template:
     address: "127.0.0.1"
 
     # Compactor listen port
-    port: 6660
+    port: 5509
 
     # Listen address
     listen-address: ${address}

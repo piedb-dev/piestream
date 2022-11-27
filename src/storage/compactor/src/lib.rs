@@ -28,7 +28,7 @@ use crate::server::compactor_serve;
 #[derive(Parser, Debug)]
 pub struct CompactorOpts {
     // TODO: rename to listen_address and separate out the port.
-    #[clap(long, default_value = "127.0.0.1:6660")]
+    #[clap(long, default_value = "127.0.0.1:5509")]
     pub host: String,
 
     // Optional, we will use listen_address if not specified.
@@ -48,7 +48,7 @@ pub struct CompactorOpts {
     #[clap(long, default_value = "0")]
     pub metrics_level: u32,
 
-    #[clap(long, default_value = "http://127.0.0.1:5690")]
+    #[clap(long, default_value = "http://127.0.0.1:5507")]
     pub meta_address: String,
 
     /// No given `config_path` means to use default config.

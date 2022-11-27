@@ -205,6 +205,7 @@ impl ConnectorSource {
                 .collect::<Vec<ConnectorState>>(),
             None => vec![None],
         };
+
         let readers =
             try_join_all(to_reader_splits.into_iter().map(|split| {
                 tracing::debug!("spawning connector split reader for split {:?}", split);
@@ -217,7 +218,7 @@ impl ConnectorSource {
                 }
             }))
             .await?;
-
+ 
         let stream = select_all(readers.into_iter().map(|r| r.into_stream())).boxed();
 
         Ok(ConnectorSourceReader {

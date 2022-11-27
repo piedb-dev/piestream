@@ -434,6 +434,7 @@ impl<S: StateStore> SourceExecutor<S> {
         stream: &mut SourceReaderStream,
         target_state: Vec<SplitImpl>,
     ) -> StreamExecutorResult<()> {
+
         tracing::info!(
             "actor {:?} apply source split change to {:?}",
             self.ctx.id,

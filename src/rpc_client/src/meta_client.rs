@@ -217,6 +217,7 @@ impl MetaClient {
             fragment_graph: Some(graph),
             source: Some(source),
         };
+
         let resp = self.inner.create_materialized_source(request).await?;
         // TODO: handle error in `resp.status` here
         Ok((resp.table_id.into(), resp.source_id, resp.version))

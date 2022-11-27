@@ -10,7 +10,7 @@ x-minio-commons: &minio-commons
   command:
     - server
     - "--address"
-    - "0.0.0.0:9301"
+    - "0.0.0.0:9307"
     - "--console-address"
     - "0.0.0.0:9400"
     - http://${HOST03}/data1
@@ -24,7 +24,7 @@ x-minio-commons: &minio-commons
     MINIO_ROOT_USER: hummockadmin
     MINIO_PROMETHEUS_AUTH_TYPE: public
   healthcheck:
-    test: curl -f http://localhost:9301/minio/health/cluster
+    test: curl -f http://localhost:9307/minio/health/cluster
     interval: 20s
 
 services:

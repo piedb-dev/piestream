@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Parser, Debug)]
 pub struct ComputeNodeOpts {
     // TODO: rename to listen_address and separate out the port.
-    #[clap(long, default_value = "127.0.0.1:5688")]
+    #[clap(long, default_value = "127.0.0.1:5508")]
     pub host: String,
 
     // Optional, we will use listen_address if not specified.
@@ -52,7 +52,7 @@ pub struct ComputeNodeOpts {
     #[clap(long, default_value = "0")]
     pub metrics_level: u32,
 
-    #[clap(long, default_value = "http://127.0.0.1:5690")]
+    #[clap(long, default_value = "http://127.0.0.1:5507")]
     pub meta_address: String,
 
     /// No given `config_path` means to use default config.

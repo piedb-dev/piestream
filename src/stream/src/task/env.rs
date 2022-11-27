@@ -64,7 +64,7 @@ impl StreamEnvironment {
         use piestream_source::MemSourceManager;
         use piestream_storage::monitor::StateStoreMetrics;
         StreamEnvironment {
-            server_addr: "127.0.0.1:5688".parse().unwrap(),
+            server_addr: "127.0.0.1:5508".parse().unwrap(),
             source_manager: Arc::new(MemSourceManager::default()),
             config: Arc::new(StreamingConfig::default()),
             worker_id: WorkerNodeId::default(),

@@ -43,8 +43,8 @@ And you will see:
 
 ```plain
 ✅ tmux: session risedev
-✅ minio: api http://127.0.0.1:9301/, console http://127.0.0.1:9400/
-.. compute-node-5688: waiting for user-managed service online... (you should start it!)
+✅ minio: api http://127.0.0.1:9307/, console http://127.0.0.1:9400/
+.. compute-node-5508: waiting for user-managed service online... (you should start it!)
 .. dev cluster: starting 5 services for dev-compute-node...
 ```
 
@@ -61,7 +61,7 @@ risedev:
       port: 5687
       exporter-port: 1222
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
     - use: compute-node
       port: 5689
@@ -80,7 +80,7 @@ risedev:
       port: 5687
       exporter-port: 1222
     - use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
     - use: meta-node
     - use: frontend
@@ -135,7 +135,7 @@ All steps for downloading components, copying config, and building piestream are
 template:
   compute-node:
     address: "127.0.0.1"
-    port: 5688
+    port: 5508
     exporter-address: "127.0.0.1"
     exporter-port: 1222
     id: compute-node-${port}
@@ -155,7 +155,7 @@ risedev will expand this config into:
 template:
   compute-node:
     address: "127.0.0.1"
-    port: 5688
+    port: 5508
     exporter-address: "127.0.0.1"
     exporter-port: 1222
     id: compute-node-${port}
@@ -226,8 +226,8 @@ For ci-3cn-1fe, there are three compute nodes, so this will be expanded into:
     address: "127.0.0.1"
     port: 4567
     id: frontend
-    provide-compute-node: ["compute-node-5687", "compute-node-5688", "compute-node-5689"]
-    provide-meta-node: ["meta-node-5690"]
+    provide-compute-node: ["compute-node-5687", "compute-node-5508", "compute-node-5689"]
+    provide-meta-node: ["meta-node-5507"]
     user-managed: false
 ```
 
@@ -249,10 +249,10 @@ All `provide-` items will be expanded to their corresponding components by id ma
       exporter-port: 1222
     - address: 127.0.0.1
       exporter-address: 127.0.0.1
-      id: compute-node-5688
+      id: compute-node-5508
       user-managed: false
       use: compute-node
-      port: 5688
+      port: 5508
       exporter-port: 1223
     - address: 127.0.0.1
       exporter-address: 127.0.0.1
@@ -273,10 +273,10 @@ RiseDev will generate config of each service using modules in risedevtool/src/co
 piestream.pgserver.ip=127.0.0.1
 piestream.pgserver.port=4567
 piestream.leader.clustermode=Distributed
-piestream.leader.computenodes=127.0.0.1:5687,127.0.0.1:5688,127.0.0.1:5689
+piestream.leader.computenodes=127.0.0.1:5687,127.0.0.1:5508,127.0.0.1:5689
 
 piestream.catalog.mode=Remote
-piestream.meta.node=127.0.0.1:5690
+piestream.meta.node=127.0.0.1:5507
 ```
 
 ### RiseDev Service

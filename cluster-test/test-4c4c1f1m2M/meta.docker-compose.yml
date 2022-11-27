@@ -18,7 +18,7 @@ services:
     image: alpine:3.16
     tty: true
     healthcheck:
-      test: nc -z ${NODE4} 5690
+      test: nc -z ${NODE4} 5507
       start_period: 30s
       interval: 30s
 
@@ -28,9 +28,9 @@ services:
     command:
       - frontend-node
       - "--host"
-      - "0.0.0.0:4566"
+      - "0.0.0.0:5505"
       - "--meta-addr"
-      - "http://${NODE4}:5690"
+      - "http://${NODE4}:5507"
     depends_on:
       meta-ok:
         condition: service_healthy
@@ -38,7 +38,7 @@ services:
   psql:
     image: postgres:14-alpine
     network_mode: host
-    entrypoint: psql -h localhost -p 4566 -d dev -U root
+    entrypoint: psql -h localhost -p 5505 -d dev -U root
 
   prometheus-init:
     image: nginx:1.23-alpine
@@ -132,7 +132,7 @@ services:
   load-view:
     image: postgres:14-alpine
     network_mode: host
-    entrypoint: psql -h localhost -p 4566 -d dev -U root -f /rise.sql
+    entrypoint: psql -h localhost -p 5505 -d dev -U root -f /rise.sql
     volumes:
       - ./rise.sql:/rise.sql
     depends_on:

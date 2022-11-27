@@ -65,11 +65,13 @@ use pgwire::pg_server::pg_serve;
 use serde::{Deserialize, Serialize};
 use mysql_session::mysql_server;
 use session::SessionManagerImpl;
+use core::time::Duration;
+
 
 #[derive(Parser, Clone, Debug)]
 pub struct FrontendOpts {
     // TODO: rename to listen_address and separate out the port.
-    #[clap(long, default_value = "127.0.0.1:4566")]
+    #[clap(long, default_value = "127.0.0.1:5505")]
     pub host: String,
 
     // Optional, we will use listen_address if not specified.
@@ -80,7 +82,7 @@ pub struct FrontendOpts {
     #[clap(long)]
     pub port: Option<u16>,
 
-    #[clap(long, default_value = "http://127.0.0.1:5690")]
+    #[clap(long, default_value = "http://127.0.0.1:5507")]
     pub meta_addr: String,
 
     /// No given `config_path` means to use default config.
@@ -105,16 +107,21 @@ impl Default for FrontendOpts {
 
 use std::future::Future;
 use std::pin::Pin;
-
+use tokio::task;
 use piestream_common::config::ServerConfig;
 
 /// Start frontend
 pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    // WARNING: don't change the function signature. Making it `async fn` will cause
-    // slow compile in release mode.
-    Box::pin(async move {
-        let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        pg_serve(&opts.host, session_mgr).await.unwrap();
+        Box::pin(async move {
+            let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+            let a1=session_mgr.clone();
+            let a2=session_mgr.clone();
+            let addr1= opts.host.clone();
+            let pg_server_join=task::spawn(pg_serve(addr1, a1));
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let addr2 = "127.0.0.1:5506".to_string();
+            let mysql_server_join=task::spawn( mysql_server(addr2, a2));    
+            mysql_server_join.await.unwrap();
     })
 }
 
@@ -125,11 +132,11 @@ pub struct FrontendConfig {
     pub server: ServerConfig,
 }
 
-pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    Box::pin(async move {
-        let addr = "127.0.0.1:4567".to_string();
-        println!("addr ====== {:?}",&addr);
-        let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
-        mysql_server(&addr,session_mgr).await;
-    })
-}
+// pub fn mysql_start(_opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+//     Box::pin(async move {
+//         let addr = "127.0.0.1:5506".to_string();
+//         println!("addr = {:?}",&addr);
+//         let session_mgr = Arc::new(SessionManagerImpl::new(&_opts).await.unwrap());
+//         mysql_server(&addr,session_mgr).await;
+//     })
+// }

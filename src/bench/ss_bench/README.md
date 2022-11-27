@@ -34,7 +34,7 @@ We use a mock meta-service for `ss_bench`, and it may not be fully functional.
 - `Hummock+MinIO`
   
   - Format: `hummock+minio://key:secret@address:port/bucket`
-  - Example: `hummock+minio://hummockadmin:hummockadmin@127.0.0.1:9301/hummock001`
+  - Example: `hummock+minio://hummockadmin:hummockadmin@127.0.0.1:9307/hummock001`
 
 - `Hummock+S3`
   

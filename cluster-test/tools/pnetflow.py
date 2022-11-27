@@ -40,13 +40,13 @@ endpoint_service = {}
 # value = service name
 #
 service_info_whitelist_port = {
-    '5690': 'meta',
-    '4566': 'frontend',
+    '5507': 'meta',
+    '5505': 'frontend',
     '9500': 'prometheus',
     '3000': 'grafana',
     '2181': 'zookeeper',
     '9092': 'kafka',
-    '9301': 'minio_api',
+    '9307': 'minio_api',
     '9400': 'minio_console',
     '9000': 'minio_api_head',
     '9001': 'minio_console_head',

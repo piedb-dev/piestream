@@ -598,6 +598,9 @@ where
         mut fragment_graph: StreamFragmentGraph,
     ) -> MetaResult<(SourceId, TableId, CatalogVersion)> {
         // Generate source id.
+        // println!("mview = {:?}",&mview);
+        // println!("fragment_graph = {:?}",&fragment_graph);
+
         let source_id = self.gen_unique_id::<{ IdCategory::Table }>().await?; // TODO: use source category
         source.id = source_id;
 
@@ -627,7 +630,6 @@ where
         // Fill in the correct source id for mview.
         mview.optional_associated_source_id =
             Some(OptionalAssociatedSourceId::AssociatedSourceId(source_id));
-
         let mut stream_job = StreamingJob::MaterializedSource(source.clone(), mview.clone());
         let (mut ctx, table_fragments) = self
             .prepare_stream_job(&mut stream_job, fragment_graph)

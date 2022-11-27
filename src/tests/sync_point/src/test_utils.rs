@@ -29,7 +29,7 @@ pub fn setup_env() {
     let current_dir =
         std::env::var("RW_WORKSPACE").expect("set env RW_WORKSPACE to project root path");
     std::env::set_current_dir(current_dir).unwrap();
-    std::env::set_var("RW_META_ADDR", "http://127.0.0.1:5690");
+    std::env::set_var("RW_META_ADDR", "http://127.0.0.1:5507");
     std::env::set_var("FORCE_SHARED_HUMMOCK_IN_MEM", "1");
     std::env::set_var("PLAYGROUND_PROFILE", "playground-test");
     std::env::set_var("OBJECT_STORE_URL", "memory-shared");
@@ -71,7 +71,7 @@ pub fn run_slt() -> Output {
             "-d",
             "dev",
             "-p",
-            "4566",
+            "5505",
             "src/tests/sync_point/slt/tpch_snapshot_no_drop.slt",
         ])
         .spawn()

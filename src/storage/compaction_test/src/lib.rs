@@ -37,7 +37,7 @@ use crate::server::compaction_test_serve;
 #[derive(Parser, Debug)]
 pub struct CompactionTestOpts {
     // TODO: rename to listen_address and separate out the port.
-    #[clap(long, default_value = "127.0.0.1:6660")]
+    #[clap(long, default_value = "127.0.0.1:5509")]
     pub host: String,
 
     // Optional, we will use listen_address if not specified.
@@ -48,7 +48,7 @@ pub struct CompactionTestOpts {
     #[clap(short, long)]
     pub state_store: String,
 
-    #[clap(long, default_value = "http://127.0.0.1:5690")]
+    #[clap(long, default_value = "http://127.0.0.1:5507")]
     pub meta_address: String,
 
     /// No given `config_path` means to use default config.

@@ -26,7 +26,7 @@ tests: boolean
 * Run tests against piestream.
 ```shell
 RUST_BACKTRACE=1 target/debug/piestream_regress_test -h 127.0.0.1 \
-  -p 4566 \
+  -p 5505 \
   -u root \
   --input `pwd`/src/tests/regress/data \
   --output `pwd`/src/tests/regress/output \
