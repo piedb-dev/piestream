@@ -89,13 +89,13 @@ impl UserAuthenticator {
 }
 
 /// Binds a Tcp listener at `addr`. Spawn a coroutine to serve every new connection.
-pub async fn pg_serve<VS>(addr: &str, session_mgr: Arc<impl SessionManager<VS>>) -> io::Result<()>
+pub async fn pg_serve<VS>(addr: String, session_mgr: Arc<impl SessionManager<VS>>) -> io::Result<()>
 where
     VS: Stream<Item = RowSetResult> + Unpin + Send,
 {
-    let listener = TcpListener::bind(addr).await.unwrap();
+    let listener = TcpListener::bind(&addr.clone()).await.unwrap();
     // accept connections and process them, spawning a new thread for each one
-    tracing::info!("Server Listening at {}", addr);
+    tracing::info!("Server Listening at {}", addr.clone());
     loop {
         let session_mgr = session_mgr.clone();
         let conn_ret = listener.accept().await;

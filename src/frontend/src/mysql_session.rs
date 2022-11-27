@@ -47,7 +47,7 @@ const SET: &str =r"set \**";
 
 
 
-pub async fn mysql_server(addr: &str,session_mgr: Arc<SessionManagerImpl>) -> () {
+pub async fn mysql_server(addr: String,session_mgr: Arc<SessionManagerImpl>) -> () {
     let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("Server Listening at {}", &addr);
     loop {
