@@ -65,6 +65,8 @@ use pgwire::pg_server::pg_serve;
 use serde::{Deserialize, Serialize};
 use mysql_session::mysql_server;
 use session::SessionManagerImpl;
+use core::time::Duration;
+
 
 #[derive(Parser, Clone, Debug)]
 pub struct FrontendOpts {
@@ -105,18 +107,21 @@ impl Default for FrontendOpts {
 
 use std::future::Future;
 use std::pin::Pin;
-
+use tokio::task;
 use piestream_common::config::ServerConfig;
 
 /// Start frontend
 pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    // WARNING: don't change the function signature. Making it `async fn` will cause
-    // slow compile in release mode.
-    Box::pin(async move {
-        let addr = "0.0.0.0:5506".to_string();
-        let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
-        // pg_serve(&opts.host, session_mgr.clone()).await.unwrap();
-        mysql_server(&addr,session_mgr.clone()).await;
+        Box::pin(async move {
+            let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+            let a1=session_mgr.clone();
+            let a2=session_mgr.clone();
+            let addr1= opts.host.clone();
+            let pg_server_join=task::spawn(pg_serve(&addr1, a1));
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let addr2 = "127.0.0.1:5506".to_string();
+            let mysql_server_join=task::spawn( mysql_server(&addr2, a2));    
+            mysql_server_join.await.unwrap();
     })
 }
 
