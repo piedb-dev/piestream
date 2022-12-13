@@ -127,6 +127,7 @@ impl SstableStore {
         tiered_cache: TieredCache<(HummockSstableId, u64), Box<Block>>,
     ) -> Self {
         let mut shard_bits = MAX_META_CACHE_SHARD_BITS;
+        //获取到shard_bits
         while (meta_cache_capacity >> shard_bits) < MIN_BUFFER_SIZE_PER_SHARD && shard_bits > 0 {
             shard_bits -= 1;
         }
@@ -508,9 +509,11 @@ impl SstableWriter for BatchUploadWriter {
         Ok(())
     }
 
+    //头部是数据文件，后面是meta?
     async fn finish(mut self, meta: SstableMeta) -> HummockResult<Self::Output> {
         fail_point!("data_upload_err");
         let join_handle = tokio::spawn(async move {
+            //meta数据编码
             meta.encode_to(&mut self.buf);
             let data = Bytes::from(self.buf);
             let _tracker = self.tracker.map(|mut t| {
@@ -522,6 +525,7 @@ impl SstableWriter for BatchUploadWriter {
             });
 
             // Upload data to object store.
+            //存储meta
             self.sstable_store
                 .clone()
                 .put_sst_data(self.sst_id, data.clone())

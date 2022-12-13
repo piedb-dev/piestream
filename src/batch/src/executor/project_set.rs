@@ -51,6 +51,10 @@ impl Executor for ProjectSetExecutor {
 }
 
 impl ProjectSetExecutor {
+    //1.输入表达式生成的DataChunk最大列数为N
+    //2.输入表达式生成的DataChunk最大行数为M
+    //3.生成一个row_id array数组，用于返回第一列
+    //最终返回DataChunk 列数等于N+1 行数为M*N
     #[try_stream(boxed, ok = DataChunk, error = RwError)]
     async fn do_execute(self: Box<Self>) {
         let data_types = self
@@ -63,7 +67,7 @@ impl ProjectSetExecutor {
         #[for_await]
         for data_chunk in self.child.execute() {
             let data_chunk = data_chunk?;
-
+            println!("*********data_chunk={:?}", data_chunk);
             // First column will be `projected_row_id`, which represents the index in the
             // output table
             let mut projected_row_id_builder = I64ArrayBuilder::new(DEFAULT_CHUNK_BUFFER_SIZE);
@@ -80,9 +84,11 @@ impl ProjectSetExecutor {
 
             let mut lens = results
                 .iter()
-                .map(|result| for_both!(result, r=>r.len()))
+                .map(|result| {let a=for_both!(result, r=>r.len()); println!("111**************na={:?}", a); a})
                 .dedup();
+            //println!("***********lens={:?}", lens);
             let cardinality = lens.next().unwrap();
+            //println!("***********cardinality={:?}", cardinality);
             assert!(
                 lens.next().is_none(),
                 "ProjectSet has mismatched output cardinalities among select list."
@@ -97,12 +103,14 @@ impl ProjectSetExecutor {
                         Either::Right(array) => Either::Right(array.value_at(row_idx)),
                     })
                     .collect_vec();
+                println!("items={:?}", items);
                 // The maximum length of the results of table functions will be the output length.
                 let max_tf_len = items
                     .iter()
                     .map(|i| i.as_ref().map_left(|arr| arr.len()).left_or(0))
                     .max()
                     .unwrap();
+                println!("max_tf_len={:?}", max_tf_len);
 
                 for i in 0..max_tf_len {
                     projected_row_id_builder.append(Some(i as i64));
@@ -200,6 +208,7 @@ mod tests {
              5     3",
         );
 
+        //InputRefExpression获取DataChunk下标为idx的Int32类型数组
         let expr1 = InputRefExpression::new(DataType::Int32, 0);
         let expr2 = repeat_tf(
             LiteralExpression::new(DataType::Int32, Some(1_i32.into())).boxed(),
@@ -213,6 +222,7 @@ mod tests {
             vec![expr1.boxed().into(), expr2.into(), expr3.into()];
 
         let schema = schema_unnamed! { DataType::Int32, DataType::Int32 };
+        //executor增加chunk
         let mut mock_executor = MockExecutor::new(schema);
         mock_executor.add(chunk);
 
@@ -220,6 +230,7 @@ mod tests {
             .iter()
             .map(|expr| Field::unnamed(expr.return_type()))
             .collect::<Vec<Field>>();
+        println!("fields={:?}", fields);
 
         let proj_executor = Box::new(ProjectSetExecutor {
             select_list,
@@ -229,6 +240,7 @@ mod tests {
         });
 
         let fields = &proj_executor.schema().fields;
+        //println!("proj_executor.fields={:?}", fields);
         assert_eq!(fields[0].data_type, DataType::Int32);
 
         let expected = vec![DataChunk::from_pretty(
@@ -250,9 +262,14 @@ mod tests {
              2 5     . 2",
         )];
 
+        //1.输入表达式生成的DataChunk最大列数为N
+        //2.输入表达式生成的DataChunk最大行数为M
+        //3.生成一个row_id array数组，用于返回第一列
+        //最终返回DataChunk 列数等于N+1 行数为M*N
         #[for_await]
         for (i, result_chunk) in proj_executor.execute().enumerate() {
             let result_chunk = result_chunk?;
+            println!("result_chunk={:?}", result_chunk);
             assert_eq!(result_chunk, expected[i]);
         }
         Ok(())

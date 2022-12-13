@@ -68,16 +68,19 @@ impl<TI: SstableIteratorType> ConcatIteratorInner<TI> {
                 old_iter.collect_local_statistic(&mut self.stats);
             }
         } else {
+            //通过SstableInfo(主要是table_id)获取到cache
             let table = self
                 .sstable_store
                 .sstable(&self.tables[idx], &mut self.stats)
                 .await?;
+            //获取到扫描数据迭代器类型，目前有两种一种是SstableIterator 另一种是BackwardSstableIterator
             let mut sstable_iter =
                 TI::create(table, self.sstable_store.clone(), self.read_options.clone());
 
             if let Some(key) = seek_key {
                 sstable_iter.seek(key).await?;
             } else {
+                //设置到数据开头
                 sstable_iter.rewind().await?;
             }
 

@@ -200,6 +200,7 @@ where
         ));
         store.restore(&indices, &hash_builder).await?;
 
+        //两个cache
         let buffer = TwoLevelBuffer::new(buffer_capacity);
         let buffer_flusher_notifier = Arc::new(Notify::new());
 

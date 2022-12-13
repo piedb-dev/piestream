@@ -155,6 +155,7 @@ mod tests {
         {
             let epoch = Epoch::now();
             let physical_time = epoch.physical_time();
+            println!("epoch={:?} physical_time={:?}", epoch, physical_time);
             let interval = 10;
 
             assert_ne!(0, physical_time);
@@ -162,6 +163,7 @@ mod tests {
                 physical_time - interval,
                 epoch.subtract_ms(interval).physical_time()
             );
+            println!("physical_time - interval={:?} physical_time={:?}", physical_time - interval,epoch.subtract_ms(interval).physical_time());
         }
     }
 }

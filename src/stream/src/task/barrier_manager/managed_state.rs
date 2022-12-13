@@ -58,6 +58,7 @@ pub(super) struct ManagedBarrierState {
     /// The key is curr_epoch, and the first value is prev_epoch
     epoch_barrier_state_map: BTreeMap<u64, BarrierState>,
 
+    //记录并发检查点的每个epoch创建mviews的进度更新
     /// Record the progress updates of creating mviews for each epoch of concurrent checkpoints.
     pub(super) create_mview_progress: HashMap<u64, HashMap<ActorId, ChainState>>,
 
@@ -76,6 +77,7 @@ impl ManagedBarrierState {
 
     /// Notify if we have collected barriers from all actor ids. The state must be `Issued`.
     fn may_notify(&mut self, curr_epoch: u64) {
+        //remaining_actors是否为空
         let to_notify = match self.epoch_barrier_state_map.get(&curr_epoch) {
             Some(BarrierState {
                 inner:
@@ -106,6 +108,7 @@ impl ManagedBarrierState {
                     }
                     _ => break,
                 }
+                //remaining_actors为空
                 let (epoch, barrier_state) = self.epoch_barrier_state_map.pop_first().unwrap();
                 let create_mview_progress = self
                     .create_mview_progress
@@ -123,6 +126,7 @@ impl ManagedBarrierState {
                     .collect();
 
                 dispatch_state_store!(&self.state_store, state_store, {
+                    //checkpoint=true会利用epoch切割sharebuffer,并提交至uncommit
                     state_store.seal_epoch(barrier_state.prev_epoch, barrier_state.checkpoint);
                 });
 

@@ -57,6 +57,7 @@ impl CompactionFilter for StateCleanUpCompactionFilter {
                         return *removed;
                     }
                 }
+                //table_id不在列表里，删除
                 let removed = !self.existing_table_ids.contains(&table_id);
                 self.last_table = Some((table_id, removed));
                 removed
@@ -75,9 +76,10 @@ pub struct TtlCompactionFilter {
 impl CompactionFilter for TtlCompactionFilter {
     fn should_delete(&mut self, key: &[u8]) -> bool {
         pub use piestream_common::util::epoch::Epoch;
+        //获取到table_id和epoch
         let (table_id, epoch) = extract_table_id_and_epoch(key);
         match table_id {
-            Some(table_id) => {
+            Some(table_id) => {   
                 if let Some((last_table_id, ttl_mill)) = self.last_table_and_ttl.as_ref() {
                     if *last_table_id == table_id {
                         let min_epoch = Epoch(self.expire_epoch).subtract_ms(*ttl_mill);

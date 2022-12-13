@@ -890,6 +890,7 @@ mod tests {
             (Float64, Float64, Float64),
         ];
         for (expr, (t1, t2, tr)) in iproduct!(atm_exprs, num_promote_table) {
+            println!("expr={:?} t1={:?}, t2={:?} tr={:?}", expr, t1, t2, tr);
             test_simple_infer_type(expr, vec![t1, t2], tr);
         }
     }

@@ -92,6 +92,7 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
         let fmt_layer = tracing_subscriber::fmt::layer()
             .compact()
             .with_ansi(settings.colorful);
+            
 
         let filter = filter::Targets::new()
             .with_target("aws_sdk_s3", Level::INFO)
@@ -111,7 +112,8 @@ pub fn init_piestream_logger(settings: LoggerSettings) {
 
         // Enable DEBUG level for all other crates
         // TODO: remove this in release mode
-        let filter = filter.with_default(Level::INFO);
+        //let filter = filter.with_default(Level::INFO);
+        let filter = filter.with_default(Level::DEBUG);
 
         fmt_layer.with_filter(filter)
     };

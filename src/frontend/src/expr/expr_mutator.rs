@@ -41,7 +41,7 @@ pub trait ExprMutator {
         agg_call
             .inputs_mut()
             .iter_mut()
-            .for_each(|expr| self.visit_expr(expr));
+            .for_each(|expr| self.visit_exp
         agg_call.order_by_mut().visit_expr_mut(self);
         agg_call.filter_mut().visit_expr_mut(self);
     }

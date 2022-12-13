@@ -137,8 +137,10 @@ pub struct GlobalBarrierManager<S: MetaStore> {
 }
 
 /// Controls the concurrent execution of commands.
+/// 控制命令的并发执行。
 struct CheckpointControl<S: MetaStore> {
     /// Save the state and message of barrier in order.
+    /// 按顺序保存屏障的状态和消息
     command_ctx_queue: VecDeque<EpochNode<S>>,
 
     // Below for uncommitted changes for the inflight barriers.
@@ -187,11 +189,13 @@ where
     /// Returns whether there are still remaining stashed commands to finish.
     fn finish_commands(&mut self, checkpoint: bool) -> bool {
         if checkpoint {
+            //通知所有
             self.finished_commands
                 .drain(..)
                 .flat_map(|c| c.notifiers)
                 .for_each(Notifier::notify_finished);
         } else {
+            //通知所有checkpoint=false，留下等于true结果
             self.finished_commands
                 .drain_filter(|c| !c.context.checkpoint)
                 .flat_map(|c| c.notifiers)
@@ -210,6 +214,7 @@ where
                     !self.dropping_tables.contains(&table),
                     "conflict table in concurrent checkpoint"
                 );
+                //加入创建表列表
                 assert!(
                     self.creating_tables.insert(table),
                     "duplicated table in concurrent checkpoint"
@@ -218,6 +223,7 @@ where
 
             CommandChanges::Actor { to_add, .. } => {
                 assert!(
+                    //is_disjoint没有重复
                     self.adding_actors.is_disjoint(&to_add),
                     "duplicated actor in concurrent checkpoint"
                 );
@@ -231,6 +237,8 @@ where
     /// After resolving the actors to be sent or collected, we should remove the dropped table and
     /// removed actors from checkpoint control, so that `can_actor_send_or_collect` will return
     /// `false`.
+    /// 在解决要发送或收集的 actors 之后，
+    /// 我们应该从检查点控制中删除 dropped table 和 removed actor，这样 can_actor_send_or_collect 将返回 false。
     fn post_resolve(&mut self, command: &Command) {
         match command.changes() {
             CommandChanges::DropTable(table) => {
@@ -259,6 +267,9 @@ where
     /// Barrier can be sent to and collected from an actor if:
     /// 1. The actor is Running and not being dropped or removed in rescheduling.
     /// 2. The actor is Inactive and belongs to a creating MV or adding in rescheduling.
+    /// 在以下情况下，可以将 Barrier 发送给 actor 或从 actor 收集：
+    ///1. actor 正在运行并且没有在重新调度中被删除或移除。
+    ///2. actor处于Inactive状态，，属于调度中正在创建或添加mv。
     fn can_actor_send_or_collect(
         &self,
         s: ActorState,
@@ -270,6 +281,7 @@ where
         let adding =
             self.creating_tables.contains(&table_id) || self.adding_actors.contains(&actor_id);
 
+        //
         match s {
             ActorState::Inactive => adding,
             ActorState::Running => !removing,
@@ -279,12 +291,14 @@ where
 
     /// Update the metrics of barrier nums.
     fn update_barrier_nums_metrics(&self) {
+        //InFlight状态数
         self.metrics.in_flight_barrier_nums.set(
             self.command_ctx_queue
                 .iter()
                 .filter(|x| matches!(x.state, InFlight))
                 .count() as i64,
         );
+        //所有
         self.metrics
             .all_barrier_nums
             .set(self.command_ctx_queue.len() as i64);
@@ -304,6 +318,8 @@ where
 
     /// Change the state of this `prev_epoch` to `Completed`. Return continuous nodes
     /// with `Completed` starting from first node [`Completed`..`InFlight`) and remove them.
+    /// 将此 `prev_epoch` 的状态更改为 `Completed`。返回连续节点
+    ///从第一个节点 [`Completed`..`InFlight`) 开始使用 `Completed` 并删除它们。
     fn barrier_completed(
         &mut self,
         prev_epoch: u64,
@@ -311,6 +327,7 @@ where
     ) -> Vec<EpochNode<S>> {
         // change state to complete, and wait for nodes with the smaller epoch to commit
         let wait_commit_timer = self.metrics.barrier_wait_commit_latency.start_timer();
+        //状态从InFlight变更为Completed
         if let Some(node) = self
             .command_ctx_queue
             .iter_mut()
@@ -326,7 +343,9 @@ where
             .iter()
             .position(|x| !matches!(x.state, Completed(_)))
             .unwrap_or(self.command_ctx_queue.len());
+        //所有Completed状态节点
         let complete_nodes = self.command_ctx_queue.drain(..index).collect_vec();
+        //已经结束了，所有删除改变？？？
         complete_nodes
             .iter()
             .for_each(|node| self.remove_changes(node.command_ctx.command.changes()));

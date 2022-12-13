@@ -142,7 +142,7 @@ impl<I: HummockIterator, NE: NodeExtraOrderInfo> MergeIteratorInner<I, NE> {
     }
 }
 
-#[allow(type_alias_bounds)]
+#[allow(type_alias_bounds)]  
 pub type UnorderedMergeIteratorInner<I: HummockIterator> =
     MergeIteratorInner<I, UnorderedNodeExtra>;
 
@@ -174,6 +174,7 @@ where
     Node<I, NE>: Ord,
 {
     /// Moves all iterators from the `heap` to the linked list.
+    /// heap节点加入unused_iters
     fn reset_heap(&mut self) {
         self.unused_iters.extend(self.heap.drain());
     }
@@ -183,6 +184,7 @@ where
     fn build_heap(&mut self) {
         assert!(self.heap.is_empty());
 
+        //所有节点赋值给heap
         self.heap = self
             .unused_iters
             .drain_filter(|i| i.iter.is_valid())
@@ -202,15 +204,19 @@ trait MergeIteratorNext {
 impl<I: HummockIterator> MergeIteratorNext for OrderedMergeIteratorInner<I> {
     type HummockResultFuture<'a> = impl Future<Output = HummockResult<()>>;
 
+    //相同key,只会返回一个
     fn next_inner(&mut self) -> Self::HummockResultFuture<'_> {
         async {
+            //先弹出一个节点
             let top_node = self.heap.pop().expect("no inner iter");
+            //存储和top_node相同节点
             let mut popped_nodes = vec![];
 
             // Take all nodes with the same current key as the top_node out of the heap.
             while let Some(next_node) = self.heap.peek_mut() {
                 match VersionedComparator::compare_key(top_node.iter.key(), next_node.iter.key()) {
                     Ordering::Equal => {
+                        //等于从heap里弹出，并插入到popped_nodes
                         popped_nodes.push(PeekMut::pop(next_node));
                     }
                     _ => break,
@@ -224,6 +230,7 @@ impl<I: HummockIterator> MergeIteratorNext for OrderedMergeIteratorInner<I> {
             // before returning.
 
             // Put the popped nodes back to the heap if valid or unused_iters if invalid.
+            //所有相同key迭代器next,相同key只返回一个
             for mut node in popped_nodes {
                 match node.iter.next().await {
                     Ok(_) => {}
@@ -236,6 +243,7 @@ impl<I: HummockIterator> MergeIteratorNext for OrderedMergeIteratorInner<I> {
                 }
 
                 if !node.iter.is_valid() {
+                    //遍历完成
                     self.unused_iters.push_back(node);
                 } else {
                     self.heap.push(node);
@@ -313,6 +321,7 @@ where
     fn rewind(&mut self) -> Self::RewindFuture<'_> {
         async move {
             self.reset_heap();
+            //迭代器设置到开始位置
             futures::future::try_join_all(self.unused_iters.iter_mut().map(|x| x.iter.rewind()))
                 .await?;
             self.build_heap();

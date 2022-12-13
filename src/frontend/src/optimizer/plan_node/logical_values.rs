@@ -37,6 +37,7 @@ pub struct LogicalValues {
 impl LogicalValues {
     /// Create a [`LogicalValues`] node. Used internally by optimizer.
     pub fn new(rows: Vec<Vec<ExprImpl>>, schema: Schema, ctx: OptimizerContextRef) -> Self {
+        //schema字段数据类型和expr返回类型一致
         for exprs in &rows {
             for (i, expr) in exprs.iter().enumerate() {
                 assert_eq!(schema.fields()[i].data_type(), expr.return_type())

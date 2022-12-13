@@ -69,7 +69,12 @@ impl<'a> Bloom<'a> {
 
     /// Gets Bloom filter bits per key from entries count and FPR
     pub fn bloom_bits_per_key(entries: usize, false_positive_rate: f64) -> usize {
+        println!("false_positive_rate.ln={:?}", false_positive_rate.ln());
+        println!("f64::consts::LN_2.powi(2)={:?}", f64::consts::LN_2.powi(2));
         let size = -1.0 * (entries as f64) * false_positive_rate.ln() / f64::consts::LN_2.powi(2);
+        println!("size={:?}", size);
+        println!("f64::consts::LN_2={:?}", f64::consts::LN_2);
+        println!("f64::consts::LN_2 * size={:?}", f64::consts::LN_2 * size);
         let locs = (f64::consts::LN_2 * size / (entries as f64)).ceil();
         locs as usize
     }
@@ -82,7 +87,9 @@ impl<'a> Bloom<'a> {
         let k = k.min(30).max(1);
         // For small len(keys), we set a minimum Bloom filter length to avoid high FPR
         let nbits = (keys.len() * bits_per_key).max(64);
+        println!("nbits={:?}", nbits);
         let nbytes = (nbits + 7) / 8;
+        println!("nbytes={:?}", nbytes);
         // nbits is always multiplication of 8
         let nbits = nbytes * 8;
         let mut filter = Vec::with_capacity(nbytes + 1);
@@ -90,6 +97,7 @@ impl<'a> Bloom<'a> {
         for h in keys {
             let mut h = *h;
             let delta = (h >> 17) | (h << 15);
+            println!("delta={:?}", delta);
             for _ in 0..k {
                 let bit_pos = (h as usize) % nbits;
                 filter.set_bit(bit_pos, true);
@@ -136,6 +144,10 @@ mod tests {
             .into_iter()
             .map(|x| farmhash::fingerprint32(&x))
             .collect();
+        
+        let key=Bloom::bloom_bits_per_key(100, 0.01);
+        println!("hash={:?}", key );
+ 
         let buf = Bloom::build_from_key_hashes(&hash, 10);
 
         let check_hash: Vec<u32> = vec![

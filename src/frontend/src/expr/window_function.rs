@@ -36,6 +36,8 @@ pub struct WindowFunction {
     pub order_by: OrderBy,
 }
 
+
+//https://www.cnblogs.com/bufuzhou/p/14166167.html 窗口函数说明
 #[derive(Debug, Display, Copy, Clone, PartialEq, Eq, Hash)]
 #[display(style = "SNAKE_CASE")]
 pub enum WindowFunctionType {

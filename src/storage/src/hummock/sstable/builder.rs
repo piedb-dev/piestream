@@ -160,6 +160,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
     ) -> HummockResult<()> {
         // Rotate block builder if the previous one has been built.
         if self.block_builder.is_empty() {
+            //新block_builder 构建block_metas
             self.block_metas.push(BlockMeta {
                 offset: self.writer.data_len() as u32,
                 len: 0,
@@ -168,16 +169,19 @@ impl<W: SstableWriter> SstableBuilder<W> {
             })
         }
 
-        // TODO: refine me
+        // TODO: refine me 编码vlaue
         value.encode(&mut self.raw_value);
         if is_new_user_key {
+            //抽取key
             let mut extract_key = user_key(full_key);
+            //table id
             if let Some(table_id) = get_table_id(full_key) {
                 if self.last_table_id != table_id {
                     self.table_ids.insert(table_id);
                     self.last_table_id = table_id;
                 }
             }
+            //获取到key
             extract_key = self.filter_key_extractor.extract(extract_key);
 
             // add bloom_filter check
@@ -187,6 +191,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
                 && (extract_key != &self.last_full_key[0..self.last_bloom_filter_key_length])
             {
                 // avoid duplicate add to bloom filter
+                //存储key hash
                 self.user_key_hashes
                     .push(farmhash::fingerprint32(extract_key));
                 self.last_bloom_filter_key_length = extract_key.len();
@@ -196,15 +201,19 @@ impl<W: SstableWriter> SstableBuilder<W> {
         }
         self.total_key_count += 1;
 
+        //block增加一条记录
         self.block_builder.add(full_key, self.raw_value.as_ref());
         self.total_key_size += full_key.len();
         self.total_value_size += self.raw_value.len();
         self.raw_value.clear();
 
         self.last_full_key.clear();
+        //谁last_full_key
         self.last_full_key.extend_from_slice(full_key);
 
+        //内存使用已经超过阀值
         if self.block_builder.approximate_len() >= self.options.block_capacity {
+            //build一个block
             self.build_block().await?;
         }
         self.key_count += 1;
@@ -225,20 +234,25 @@ impl<W: SstableWriter> SstableBuilder<W> {
     /// | Block 0 | ... | Block N-1 | N (4B) |
     /// ```
     pub async fn finish(mut self) -> HummockResult<SstableBuilderOutput<W::Output>> {
+        //获取文件最大/最小key
         let smallest_key = self.block_metas[0].smallest_key.clone();
         let largest_key = self.last_full_key.clone();
 
+        //build最后一个block
         self.build_block().await?;
         let meta_offset = self.writer.data_len() as u64;
         assert!(!smallest_key.is_empty());
 
+        //构建SstableMeta
         let mut meta = SstableMeta {
             block_metas: self.block_metas,
             bloom_filter: if self.options.bloom_false_positive > 0.0 {
+                //通过user_key_hashes.len()，误差计算需要字节数
                 let bits_per_key = Bloom::bloom_bits_per_key(
                     self.user_key_hashes.len(),
                     self.options.bloom_false_positive,
                 );
+                //构建bloom过滤器hash，主要计算每个key需要设置几个bit位数，计算步长，相关位置并设置为1
                 Bloom::build_from_key_hashes(&self.user_key_hashes, bits_per_key)
             } else {
                 vec![]
@@ -250,7 +264,9 @@ impl<W: SstableWriter> SstableBuilder<W> {
             version: VERSION,
             meta_offset,
         };
+        //当前文件大小
         meta.estimated_size = meta.encoded_size() as u32 + meta_offset as u32;
+        //构建SstableInfo
         let sst_info = SstableInfo {
             id: self.sstable_id,
             key_range: Some(piestream_pb::hummock::KeyRange {
@@ -273,7 +289,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
         let bloom_filter_size = meta.bloom_filter.len();
         let avg_key_size = self.total_key_size / self.key_count;
         let avg_value_size = self.total_value_size / self.key_count;
-
+        //完成写操作
         let writer_output = self.writer.finish(meta).await?;
         Ok(SstableBuilderOutput::<W::Output> {
             sst_info,
@@ -299,6 +315,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
         let mut block_meta = self.block_metas.last_mut().unwrap();
         block_meta.uncompressed_size = self.block_builder.uncompressed_block_size() as u32;
         let block = self.block_builder.build();
+        //写入远端
         self.writer.write_block(block, block_meta).await?;
         block_meta.len = self.writer.data_len() as u32 - block_meta.offset;
         self.block_builder.clear();

@@ -218,10 +218,12 @@ impl<K: LruKey, T: LruValue> LruHandleTable<K, T> {
     ) -> (*mut LruHandle<K, T>, *mut LruHandle<K, T>) {
         let mut ptr = self.list[idx];
         let mut prev = null_mut();
+        //不为空，key不相等，
         while !ptr.is_null() && !(*ptr).is_same_key(key) {
             prev = ptr;
             ptr = (*ptr).next_hash;
         }
+        //key相等，或者ptr为空
         (prev, ptr)
     }
 
@@ -229,14 +231,18 @@ impl<K: LruKey, T: LruValue> LruHandleTable<K, T> {
         debug_assert!(self.list.len().is_power_of_two());
         let idx = (hash as usize) & (self.list.len() - 1);
         let (mut prev, ptr) = self.find_pointer(idx, key);
+        //理解没找到
         if ptr.is_null() {
             return null_mut();
         }
         debug_assert!((*ptr).is_in_cache());
+        //删除前设置不在cache
         (*ptr).set_in_cache(false);
         if prev.is_null() {
+            //idx=0 prev为空
             self.list[idx] = (*ptr).next_hash;
         } else {
+            //list 下个节点
             (*prev).next_hash = (*ptr).next_hash;
         }
         self.elems -= 1;
@@ -258,15 +264,18 @@ impl<K: LruKey, T: LruValue> LruHandleTable<K, T> {
             (*prev).next_hash = h;
         }
 
+        //有重复key
         if !ptr.is_null() {
             debug_assert!((*ptr).is_same_key((*h).get_key()));
             debug_assert!((*ptr).is_in_cache());
             // The handle to be removed is set not in cache.
             (*ptr).set_in_cache(false);
+            //摘除重复老的key
             (*h).next_hash = (*ptr).next_hash;
             return ptr;
         }
 
+        
         (*h).next_hash = ptr;
 
         self.elems += 1;
@@ -380,6 +389,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
             (*e).set_in_lru(true);
         }
 
+        //插入lru前面
         (*e).next = self.lru.as_mut();
         (*e).prev = self.lru.prev;
         (*(*e).prev).next = e;
@@ -393,6 +403,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         while self.usage.load(Ordering::Relaxed) + charge > self.capacity
             && !std::ptr::eq(self.lru.next, self.lru.as_mut())
         {
+            println!("evict_from_lru");
             let old_ptr = self.lru.next;
             self.table.remove((*old_ptr).hash, (*old_ptr).get_key());
             self.lru_remove(old_ptr);
@@ -410,6 +421,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
         debug_assert!(!(*h).is_in_cache());
         debug_assert!(!(*h).has_refs());
         self.usage.fetch_sub((*h).charge, Ordering::Relaxed);
+        println!("self.usage.fetch_sub={:?}", self.usage);
         let (key, value) = (*h).take_kv();
         self.try_recycle_handle_object(h);
         (key, value)
@@ -455,6 +467,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
             }
         }
         self.usage.fetch_add(charge, Ordering::Relaxed);
+        println!("self.usage={:?}", self.usage);
         (*ptr).add_ref();
         ptr
     }
@@ -473,9 +486,11 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
             return None;
         }
 
+        println!("release release");
         // Keep the handle in lru list if it is still in the cache and the cache is not over-sized.
         if (*h).is_in_cache() {
             if self.usage.load(Ordering::Relaxed) <= self.capacity {
+                println!("self.usage.load");
                 self.lru_insert(h);
                 return None;
             }
@@ -498,6 +513,7 @@ impl<K: LruKey, T: LruValue> LruCacheShard<K, T> {
             // If the handle previously has not ref, it must exist in the lru. And therefore we are
             // safe to remove it from lru.
             if !(*e).has_refs() {
+                println!("lru_remove");
                 self.lru_remove(e);
             }
             (*e).add_ref();
@@ -645,6 +661,7 @@ impl<K: LruKey, T: LruValue> LruCache<K, T> {
                     handle: ptr,
                 });
             }
+            //没有找到的返回接收器
             if let Some(que) = shard.write_request.get_mut(&key) {
                 let (tx, recv) = channel();
                 que.push(tx);
@@ -679,6 +696,7 @@ impl<K: LruKey, T: LruValue> LruCache<K, T> {
             let mut shard = self.shards[self.shard(hash)].lock();
             let pending_request = shard.write_request.remove(&key);
             let ptr = shard.insert(key, hash, charge, value, &mut to_delete);
+            println!("debug_assert debug_assert");
             debug_assert!(!ptr.is_null());
             if let Some(que) = pending_request {
                 for sender in que {
@@ -700,6 +718,7 @@ impl<K: LruKey, T: LruValue> LruCache<K, T> {
                 listener.on_release(key, value);
             }
         }
+        println!("***********handle");
         handle
     }
 
@@ -776,6 +795,7 @@ pub struct CleanCacheGuard<'a, K: LruKey + Clone + 'static, T: LruValue + 'stati
 
 impl<'a, K: LruKey + Clone + 'static, T: LruValue + 'static> Drop for CleanCacheGuard<'a, K, T> {
     fn drop(&mut self) {
+        //不成功则删除
         if !self.success {
             self.cache.clear_pending_request(&self.key, self.hash);
         }
@@ -796,6 +816,7 @@ impl<K: LruKey + Clone + 'static, T: LruValue + 'static> LruCache<K, T> {
         E: Error + Send + 'static,
         VC: Future<Output = Result<(T, usize), E>> + Send + 'static,
     {
+        println!("lookup_with_request_dedup");
         match self.lookup_for_request(hash, key.clone()) {
             LookupResult::Cached(entry) => Ok(Ok(entry)),
             LookupResult::WaitPendingRequest(recv) => {
@@ -812,9 +833,11 @@ impl<K: LruKey + Clone + 'static, T: LruValue + 'static> LruCache<K, T> {
                     hash,
                     success: false,
                 };
+                println!("1 LookupResult::Miss");
                 let ret = tokio::spawn(async move {
                     match fetch_value.await {
                         Ok((value, charge)) => {
+                            println!("charge={:?}", charge);
                             let entry = this.insert(key2, hash, charge, value);
                             Ok(Ok(entry))
                         }
@@ -823,6 +846,7 @@ impl<K: LruKey + Clone + 'static, T: LruValue + 'static> LruCache<K, T> {
                 })
                 .await
                 .unwrap();
+                println!("2 LookupResult::Miss");
                 if let Ok(Ok(_)) = ret.as_ref() {
                     guard.success = true;
                 }
@@ -901,22 +925,26 @@ mod tests {
 
     #[test]
     fn test_cache_basic() {
-        let cache = Arc::new(LruCache::<(u64, u64), Block>::new(2, 256));
+        //let cache = Arc::new(LruCache::<(u64, u64), Block>::new(2, 256));
+        let cache = Arc::new(LruCache::<(u64, u64), Block>::new(0, 2));
         let seed = 10244021u64;
         let mut rng = SmallRng::seed_from_u64(seed);
-        for _ in 0..100000 {
+
+        for _ in 0..3 {
             let block_offset = rng.next_u64() % 1024;
             let sst = rng.next_u64() % 1024;
             let mut hasher = DefaultHasher::new();
             sst.hash(&mut hasher);
             block_offset.hash(&mut hasher);
             let h = hasher.finish();
+            
             if let Some(block) = cache.lookup(h, &(sst, block_offset)) {
                 assert_eq!(block.value().offset, block_offset);
                 drop(block);
                 continue;
             }
-            cache.insert(
+            println!("begin insert.");
+           cache.insert(
                 (sst, block_offset),
                 h,
                 1,
@@ -925,11 +953,12 @@ mod tests {
                     sst,
                 },
             );
+            println!("end end end.");
         }
-        assert_eq!(256, cache.get_memory_usage());
+        //assert_eq!(256, cache.get_memory_usage());
     }
 
-    fn validate_lru_list(cache: &mut LruCacheShard<String, String>, keys: Vec<&str>) {
+    /*fn  validate_lru_list(cache: &mut LruCacheShard<String, String>, keys: Vec<&str>) {
         unsafe {
             let mut lru: *mut LruHandle<String, String> = cache.lru.as_mut();
             for k in keys {
@@ -943,6 +972,27 @@ mod tests {
                 );
             }
         }
+    }*/
+
+    fn  validate_lru_list(cache: &mut LruCacheShard<String, String>, keys: Vec<&str>) {
+        unsafe {
+            let mut lru: *mut LruHandle<String, String> = cache.lru.as_mut();
+            for k in keys {
+                lru = (*lru).next;
+                assert!(
+                    (*lru).is_same_key(&k.to_string()),
+                    "compare failed: {} vs {}, get value: {:?}",
+                    (*lru).get_key(),
+                    k,
+                    (*lru).get_value()
+                );
+            }
+            let mut f=|key:&String, value:&String|{println!("key={:?} value={:?}", key ,value);};
+            //cache.for_all(& mut |key, value|{println!("key={:?} value={:?}", key ,value);});
+            println!("for all **************");
+            cache.for_all(& mut f);
+            println!("for all ************** end");
+        }
     }
 
     fn create_cache(capacity: usize) -> LruCacheShard<String, String> {
@@ -954,6 +1004,7 @@ mod tests {
             let h = cache.lookup(0, &key.to_string());
             let exist = !h.is_null();
             if exist {
+                println!("exist h={:?}", (*h).kv);
                 assert!((*h).is_same_key(&key.to_string()));
                 cache.release(h);
             }
@@ -989,7 +1040,10 @@ mod tests {
         }
         validate_lru_list(&mut cache, vec!["d", "e", "x", "y", "z"]);
         assert!(!lookup(&mut cache, "b"));
+        validate_lru_list(&mut cache, vec!["d", "e", "x", "y", "z"]);
+        println!("*****************************");
         assert!(lookup(&mut cache, "e"));
+        println!("*****************************");
         validate_lru_list(&mut cache, vec!["d", "x", "y", "z", "e"]);
         assert!(lookup(&mut cache, "z"));
         validate_lru_list(&mut cache, vec!["d", "x", "y", "e", "z"]);
@@ -1015,15 +1069,18 @@ mod tests {
         assert_eq!(cache.usage.load(Ordering::Relaxed), 3);
         insert(&mut cache, "k1", "aa");
         assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
+        //已经达到最大容量，淘汰k1,长度还是4
         insert(&mut cache, "k2", "aa");
         assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
         let mut free_list = vec![];
         validate_lru_list(&mut cache, vec!["k1", "k2"]);
         unsafe {
+            println!("********************");
             let h1 = cache.lookup(0, &"k1".to_string());
             assert!(!h1.is_null());
             let h2 = cache.lookup(0, &"k2".to_string());
             assert!(!h2.is_null());
+            println!("********************");
 
             let h3 = cache.insert("k3".to_string(), 0, 2, "bb".to_string(), &mut free_list);
             assert_eq!(cache.usage.load(Ordering::Relaxed), 6);
@@ -1040,6 +1097,7 @@ mod tests {
             cache.release(h2);
 
             validate_lru_list(&mut cache, vec!["k3", "k2"]);
+            assert_eq!(cache.usage.load(Ordering::Relaxed), 4);
         }
     }
 
@@ -1178,10 +1236,12 @@ mod tests {
         let ret2 = cache.lookup_for_request(0, "b".to_string());
         match ret2 {
             LookupResult::WaitPendingRequest(mut recv) => {
+                println!("LookupResult::WaitPendingRequest");
                 assert!(matches!(recv.try_recv(), Err(TryRecvError::Empty)));
                 cache.insert("b".to_string(), 0, 1, "v2".to_string());
                 let v = recv.try_recv().unwrap();
                 assert_eq!(v.value(), "v2");
+                println!("LookupResult::WaitPendingRequest");
             }
             _ => panic!(),
         }
@@ -1213,23 +1273,27 @@ mod tests {
         drop(h);
         assert_eq!(cache.get_memory_usage(), 2);
         assert!(listener.released.lock().is_empty());
+        println!("0 get_lru_usage={:?}", cache.get_lru_usage());
 
         // test evict
         let h = cache.insert("k3".to_string(), 0, 1, "v3".to_string());
         drop(h);
         assert_eq!(cache.get_memory_usage(), 2);
         assert!(listener.released.lock().remove("k1").is_some());
+        println!("1 get_lru_usage={:?}", cache.get_lru_usage());
 
         // test erase
         cache.erase(0, &"k2".to_string());
         assert_eq!(cache.get_memory_usage(), 1);
         assert!(listener.released.lock().remove("k2").is_some());
+        println!("2 get_lru_usage={:?}", cache.get_lru_usage());
 
         // test refill
         let h = cache.insert("k4".to_string(), 0, 1, "v4".to_string());
         drop(h);
         assert_eq!(cache.get_memory_usage(), 2);
         assert!(listener.released.lock().is_empty());
+        println!("3 get_lru_usage={:?}", cache.get_lru_usage());
 
         // test release after full
         // 1. full-fill cache but not release
@@ -1239,6 +1303,7 @@ mod tests {
         let h2 = cache.insert("k6".to_string(), 0, 1, "v6".to_string());
         assert_eq!(cache.get_memory_usage(), 2);
         assert!(listener.released.lock().remove("k4").is_some());
+        println!("4 get_lru_usage={:?}", cache.get_lru_usage());
 
         // 2. insert one more entry after cache is full, cache will be oversized
         let h3 = cache.insert("k7".to_string(), 0, 1, "v7".to_string());
@@ -1272,9 +1337,12 @@ mod tests {
         type Output = ();
 
         fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            
             if self.polled.load(Ordering::Acquire) {
+                println!("self.polled");
                 return Poll::Ready(());
             }
+            println!("poll.");
             self.inner.poll_unpin(cx).map(|_| ())
         }
     }
@@ -1303,9 +1371,13 @@ mod tests {
         };
         {
             let handle = tokio::spawn(wrapper);
+            //false一直等待
             while !polled.load(Ordering::Acquire) {
+                println!("polled.load.");
                 tokio::task::yield_now().await;
             }
+            println!("tokio::spawntokio::spawntokio::spawn");
+            //执行
             handle.await.unwrap();
         }
         assert!(cache.shards[0].lock().write_request.is_empty());

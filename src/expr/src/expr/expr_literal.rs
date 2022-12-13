@@ -26,7 +26,9 @@ use crate::{bail, ensure, ExprError, Result};
 
 #[derive(Debug)]
 pub struct LiteralExpression {
+    //数据类型
     return_type: DataType,
+    //值
     literal: Datum,
 }
 
@@ -35,9 +37,12 @@ impl Expression for LiteralExpression {
         self.return_type.clone()
     }
 
+    //生成return_type数组，value等于literal,元素个数为input行数
     fn eval(&self, input: &DataChunk) -> Result<ArrayRef> {
+        //构建return_type类型数组，容量为input.capacity
         let mut array_builder = self.return_type.create_array_builder(input.capacity());
         let capacity = input.capacity();
+        println!("capacity={:?} self.literal={:?}", capacity, self.literal);
         let builder = &mut array_builder;
         let literal = &self.literal;
 
@@ -77,6 +82,7 @@ fn append_literal_to_arr<'a, A1>(
 where
     A1: ArrayBuilder,
 {
+    //v增加cardinality次
     for _ in 0..cardinality {
         a.append(v)
     }

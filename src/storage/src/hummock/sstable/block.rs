@@ -258,6 +258,7 @@ impl BlockBuilder {
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
+            //比较key
             debug_assert_eq!(
                 VersionedComparator::compare_key(&self.last_key[..], key),
                 Ordering::Less
@@ -268,8 +269,10 @@ impl BlockBuilder {
             self.restart_points.push(self.buf.len() as u32);
             key
         } else {
+            println!("self.last_key={:?} key={:?}",self.last_key, key);
             bytes_diff(&self.last_key, key)
         };
+        println!("self.last_key={:?} key={:?}",self.last_key, key);
 
         let prefix = KeyPrefix {
             overlap: key.len() - diff_key.len(),
@@ -321,9 +324,12 @@ impl BlockBuilder {
     /// Panic if there is compression error.
     pub fn build(&mut self) -> &[u8] {
         assert!(self.entry_count > 0);
+        //存储了restart_points full_key 位置
         for restart_point in &self.restart_points {
             self.buf.put_u32_le(*restart_point);
         }
+
+        //restart_points.len
         self.buf.put_u32_le(self.restart_points.len() as u32);
         match self.compression_algorithm {
             CompressionAlgorithm::None => (),
@@ -357,8 +363,11 @@ impl BlockBuilder {
                 self.buf = writer.into_inner();
             }
         };
+        //1个字节存储压缩方式
         self.compression_algorithm.encode(&mut self.buf);
+        //8个字节checksum
         let checksum = xxhash64_checksum(&self.buf);
+        //checksum
         self.buf.put_u64_le(checksum);
         self.buf.as_ref()
     }

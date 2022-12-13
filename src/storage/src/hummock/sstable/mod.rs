@@ -197,6 +197,7 @@ impl SstableMeta {
         }
         put_length_prefixed_slice(buf, &self.bloom_filter);
         buf.put_u32_le(self.estimated_size as u32);
+        //记录数
         buf.put_u32_le(self.key_count as u32);
         put_length_prefixed_slice(buf, &self.smallest_key);
         put_length_prefixed_slice(buf, &self.largest_key);

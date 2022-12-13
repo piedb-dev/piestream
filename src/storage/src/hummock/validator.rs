@@ -29,6 +29,7 @@ use crate::monitor::StoreLocalStatistic;
 /// Validate SSTs in terms of Ordered, Locally unique and Globally unique.
 ///
 /// See `src/storage/src/hummock/state_store.rs`
+/// 验证ssts文件正确性
 pub async fn validate_ssts(task: ValidationTask, sstable_store: SstableStoreRef) {
     let mut visited_keys = HashMap::new();
     let mut unused = StoreLocalStatistic::default();

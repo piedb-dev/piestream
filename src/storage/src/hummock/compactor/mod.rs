@@ -97,15 +97,18 @@ impl<F: SstableWriterFactory> TableBuilderFactory for RemoteBuilderFactory<F> {
         let timer = Instant::now();
         let table_id = self.sstable_id_manager.get_new_sst_id().await?;
         let cost = (timer.elapsed().as_secs_f64() * 1000000.0).round() as u64;
+        //记录调用rpc获取table_id时间开销
         self.remote_rpc_cost.fetch_add(cost, Ordering::Relaxed);
         let writer_options = SstableWriterOptions {
             capacity_hint: Some(self.options.capacity + self.options.block_capacity),
             tracker: Some(tracker),
             policy: self.policy,
         };
+        //创建写sst对象
         let writer = self
             .sstable_writer_factory
             .create_sst_writer(table_id, writer_options)?;
+        //创建SstableBuilder对象
         let builder = SstableBuilder::new(
             table_id,
             writer,
@@ -525,8 +528,10 @@ impl Compactor {
         F: TableBuilderFactory,
     {
         if !task_config.key_range.left.is_empty() {
+            //设置到left位置
             iter.seek(&task_config.key_range.left).await?;
         } else {
+            //设置到迭代器初始位置
             iter.rewind().await?;
         }
 
@@ -535,15 +540,19 @@ impl Compactor {
         let mut local_stats = StoreLocalStatistic::default();
 
         while iter.is_valid() {
+            //获取到key
             let iter_key = iter.key();
 
+            //是否新key
             let is_new_user_key =
                 last_key.is_empty() || !VersionedComparator::same_user_key(iter_key, &last_key);
 
             let mut drop = false;
+            //获取到epoch
             let epoch = get_epoch(iter_key);
             let value = iter.value();
             if is_new_user_key {
+                //iter_key大于等于task_config.key_range.right，则超过文件范围，break
                 if !task_config.key_range.right.is_empty()
                     && VersionedComparator::compare_key(iter_key, &task_config.key_range.right)
                         != std::cmp::Ordering::Less
@@ -552,8 +561,10 @@ impl Compactor {
                 }
 
                 last_key.clear();
+                //设置last_key
                 last_key.extend_from_slice(iter_key);
                 watermark_can_see_last_key = false;
+
                 if value.is_delete() {
                     local_stats.skip_delete_key_count += 1;
                 }
@@ -566,16 +577,20 @@ impl Compactor {
             // in our design, frontend avoid to access keys which had be deleted, so we dont
             // need to consider the epoch when the compaction_filter match (it
             // means that mv had drop)
+            //gc_delete_keys是目标为最后一个级别，可以清理掉delete类型数据
+            //重复key,并且epoch<task_config.watermark
             if (epoch <= task_config.watermark && task_config.gc_delete_keys && value.is_delete())
                 || (epoch < task_config.watermark && watermark_can_see_last_key)
             {
                 drop = true;
             }
 
+            //ttl等等
             if !drop && compaction_filter.should_delete(iter_key) {
                 drop = true;
             }
 
+            //第一个epoch <= task_config.watermark，设置watermark_can_see_last_key=true,后面在小直接抛弃
             if epoch <= task_config.watermark {
                 watermark_can_see_last_key = true;
             }
@@ -586,6 +601,7 @@ impl Compactor {
             }
 
             // Don't allow two SSTs to share same user key
+            //不允许两个 SST文件 共享相同的user key
             sst_builder
                 .add_full_key(iter_key, value, is_new_user_key)
                 .await?;
@@ -639,6 +655,7 @@ impl Compactor {
             self.context.stats.compact_sst_duration.start_timer()
         };
 
+        //小文件存储在内存一次提交BatchSstableWriterFactory，大文件多次提交StreamingSstableWriterFactory
         let split_table_outputs = if self.options.capacity as u64
             > self.context.options.min_sst_size_for_streaming_upload
         {

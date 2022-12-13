@@ -73,6 +73,7 @@ pub fn repeat_tf(expr: BoxedExpression, n: usize) -> BoxedTableFunction {
     #[derive(Debug)]
     struct Mock {
         expr: BoxedExpression,
+        //Datachunk列数
         n: usize,
     }
 
@@ -83,16 +84,19 @@ pub fn repeat_tf(expr: BoxedExpression, n: usize) -> BoxedTableFunction {
 
         fn eval(&self, input: &DataChunk) -> Result<Vec<ArrayRef>> {
             let array = self.expr.eval(input)?;
+            println!("n={:?}, array={:?}", self.n, array);
 
             let mut res = vec![];
+            //array长度个builder对象
             for datum_ref in array.iter() {
+               
                 let mut builder = self.return_type().create_array_builder(self.n);
                 for _ in 0..self.n {
                     builder.append_datum_ref(datum_ref);
                 }
                 res.push(Arc::new(builder.finish()));
             }
-
+            println!("res={:?}", res);
             Ok(res)
         }
     }

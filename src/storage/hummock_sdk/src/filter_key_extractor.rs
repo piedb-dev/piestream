@@ -174,12 +174,14 @@ impl SchemaFilterKeyExtractor {
             .iter()
             .map(|col_order| col_order.index as usize)
             .collect();
+        println!("pk_indices={:?}", pk_indices);
 
         let data_types = pk_indices
             .iter()
             .map(|column_idx| &table_catalog.columns[*column_idx])
             .map(|col| ColumnDesc::from(col.column_desc.as_ref().unwrap()).data_type)
             .collect();
+        println!("data_types={:?}", data_types);
 
         let order_types: Vec<OrderType> = table_catalog
             .pk

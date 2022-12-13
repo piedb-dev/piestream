@@ -118,6 +118,7 @@ where
         let mut core = self.core.write();
         std::mem::swap(&mut buffer, &mut core.active_buffer);
         std::mem::swap(&mut buffer, &mut core.frozen_buffer);
+        //返回frozen_buffer数据
         buffer
     }
 }

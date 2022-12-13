@@ -84,15 +84,19 @@ impl ExprRewriter for BooleanConstantFolding {
             .into_iter()
             .map(|expr| self.rewrite_expr(expr))
             .collect();
+        println!("inputs={:?}", inputs);
         let bool_constant_values: Vec<Option<bool>> =
             inputs.iter().map(try_get_bool_constant).collect();
+        println!("bool_constant_values={:?}", bool_constant_values);
         let contains_bool_constant = bool_constant_values.iter().any(|x| x.is_some());
         // Take elements from inputs, and reorder them to make sure lhs is a constant value
         let prepare_binary_function_inputs = |mut inputs: Vec<ExprImpl>| -> (ExprImpl, ExprImpl) {
             // Make sure that binary functions have exactly 2 inputs
             assert_eq!(inputs.len(), 2);
+            //pop是从队尾获取数据
             let rhs = inputs.pop().unwrap();
             let lhs = inputs.pop().unwrap();
+            //常量数据放前面
             if bool_constant_values[0].is_some() {
                 (lhs, rhs)
             } else {
@@ -158,6 +162,7 @@ impl ExprRewriter for BooleanConstantFolding {
             // binary functions
             Type::And if contains_bool_constant => {
                 let (constant_lhs, rhs) = prepare_binary_function_inputs(inputs);
+                println!("constant_lhs={:?}, rhs={:?}", constant_lhs, rhs);
                 return boolean_constant_fold_and(constant_lhs, rhs);
             }
             Type::Or if contains_bool_constant => {
