@@ -29,7 +29,6 @@ pub struct SysRowSeqScanExecutor {
     schema: Schema,
     column_ids: Vec<ColumnId>,
     identity: String,
-
     sys_catalog_reader: SysCatalogReaderRef,
 }
 
