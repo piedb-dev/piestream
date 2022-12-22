@@ -33,7 +33,6 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
 
     async fn new(properties: RabbitMQProperties) -> anyhow::Result<RabbitMQSplitEnumerator> {
        
-        println!("********** into rabbitmq SplitEnumerator={:?}", properties);
         let queue_name = &properties.queue_name;
         let service_url = &properties.service_url;
         //ensure!(splits.len() == 1, "only support single split");
@@ -53,7 +52,6 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
             queue_name: self.queue_name.clone(),
             start_offset: None,
         });
-        println!("into list_splits={:?}", splits);
         Ok(splits)
     }
 }

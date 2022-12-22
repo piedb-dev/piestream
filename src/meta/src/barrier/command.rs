@@ -240,7 +240,6 @@ where
                         )
                     })
                     .collect();
-                println!("source_state={:?}", source_state);
                 let actor_splits = source_state
                     .iter()
                     .filter(|(_, splits)| !splits.is_empty())
