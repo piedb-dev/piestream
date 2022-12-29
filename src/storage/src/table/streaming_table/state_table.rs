@@ -591,8 +591,10 @@ impl<S: StateStore> StateTable<S> {
                 // state table.
                 RowOp::Insert(row) => {
                     if ENABLE_SANITY_CHECK && !self.disable_sanity_check {
+                        println!("storage::table::streaming_table::state_table.rs batch_write_rows if");
                         self.do_insert_sanity_check(&pk, &row, epoch).await?;
                     }
+                    println!("storage::table::streaming_table::state_table.rs batch_write_rows put");
                     write_batch.put(pk, StorageValue::new_put(row));
                 }
                 RowOp::Delete(row) => {
@@ -625,7 +627,7 @@ impl<S: StateStore> StateTable<S> {
             .keyspace
             .get(key, false, self.get_read_option(epoch))
             .await?;
-
+        println!("storage::table::streaming_table::state_table.rs do_insert_sanity_check");
         if let Some(stored_value) = stored_value {
             let (vnode, key) = deserialize_pk_with_vnode(key, &self.pk_serde).unwrap();
             let in_storage = self.row_deserializer.deserialize(stored_value).unwrap();

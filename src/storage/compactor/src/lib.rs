@@ -39,7 +39,7 @@ pub struct CompactorOpts {
     #[clap(long)]
     pub port: Option<u16>,
 
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value = "hummock+minio://hummockadmin:hummockadmin@127.0.0.1:9308/hummock001")]
     pub state_store: String,
 
     #[clap(long, default_value = "127.0.0.1:1260")]

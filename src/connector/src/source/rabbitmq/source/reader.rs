@@ -97,12 +97,13 @@ impl SplitReader for RabbitMQSplitReader {
         let mut channel = session.open_channel(1).ok().expect("Can't open channel");
 
         let (sender, receiver) = tokio::sync::mpsc::channel(1024);
+        println!("sender = {:?}, receiver = {:?}",&sender,&receiver);
+
         let  my_consumer = MyConsumer { 
                 deliveries_number: 0, 
                 queue_name:properties.queue_name, 
                 sender:sender
             };
-
         //let _consumer = channel.basic_consume(my_consumer, queue_name, "".to_string(), false, false, false, false, Table::new()).context("failed to create rabbitmq consumer")?;
         let _consumer =match channel.basic_consume(my_consumer, queue_name.clone(), "".to_string(), false, false, false, false, Table::new()){
             Ok(consumer) => consumer,
