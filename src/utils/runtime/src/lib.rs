@@ -23,6 +23,8 @@ use tracing_subscriber::filter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::prelude::*;
 use time::UtcOffset;
+use tracing_subscriber::fmt::time::OffsetTime;
+
 /// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
 /// logs are needed, add them here.
 fn configure_piestream_targets_fmt(targets: filter::Targets) -> filter::Targets {
