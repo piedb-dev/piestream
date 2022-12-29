@@ -15,7 +15,9 @@
 pub mod enumerator;
 pub mod source;
 pub mod split;
-
+use amqp::{Basic, Session, Channel, protocol};
+use amqp::ConsumeBuilder;
+use tokio::{runtime::Runtime, time};
 pub use enumerator::*;
 use serde::Deserialize;
 pub use split::*;
@@ -41,4 +43,62 @@ pub struct RabbitMQProperties {
 
     // #[serde(rename = "consumer.tag", alias = "rabbitmq.consumer.tag")]
     // pub consumer_tag: String,
+}
+impl RabbitMQProperties {
+
+    async fn check_queue_name(&self,queue_name: String,amqp_url: String) -> anyhow::Result<Vec<i32>> {
+        let mut session = match Session::open_url(&amqp_url) {
+            Ok(session) => session,
+            Err(e) => {
+                return Err(anyhow::Error::from(e));
+            }
+        };
+        let mut channel = session.open_channel(1).unwrap();
+        let consume_builder = ConsumeBuilder::new(consumer_function, queue_name);
+        match consume_builder.basic_consume(&mut channel) {
+            Ok(_consumer) => {
+                return Ok(vec![1]);
+            },
+            Err(e) =>{ 
+                return Err(anyhow::Error::from(e));
+            }
+        }
+    }
+
+    async fn check_url_api(&self,queue_name: String,amqp_url: String) -> anyhow::Result<Vec<i32>> {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let res = time::timeout(time::Duration::from_secs(2), async {
+                self.open_url_api(queue_name,amqp_url).await;
+                time::sleep(time::Duration::from_secs(6)).await;
+                33
+            });
+            match res.await {
+                Err(_) => {
+                    return Ok(vec![1]);
+                }
+                Ok(data) => {
+                    return Ok(vec![1]);
+                }
+            };
+        })
+    }
+    async fn open_url_api(&self,queue_name: String,amqp_url: String) -> () {
+        // Session::open_url(&amqp_url);
+        return ();
+    }
+
+}
+
+struct MyConsumer {
+    deliveries_number: u64
+}
+impl amqp::Consumer for MyConsumer {
+    fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, _headers: protocol::basic::BasicProperties, _body: Vec<u8>){
+        self.deliveries_number += 1;
+        channel.basic_ack(deliver.delivery_tag, false).unwrap();
+    }
+}
+fn consumer_function(channel: &mut Channel, deliver: protocol::basic::Deliver, _headers: protocol::basic::BasicProperties, _body: Vec<u8>){
+    channel.basic_ack(deliver.delivery_tag, false).unwrap();
 }
