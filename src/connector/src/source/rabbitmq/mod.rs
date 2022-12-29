@@ -53,13 +53,16 @@ impl RabbitMQProperties {
                 return Err(anyhow::Error::from(e));
             }
         };
-        let mut channel = session.open_channel(1).unwrap();
+        let mut channel = session.open_channel(2).unwrap();
+        
         let consume_builder = ConsumeBuilder::new(consumer_function, queue_name);
         match consume_builder.basic_consume(&mut channel) {
             Ok(_consumer) => {
+                channel.close(200, "Bye").unwrap();
                 return Ok(vec![1]);
             },
             Err(e) =>{ 
+                channel.close(200, "Bye").unwrap();
                 return Err(anyhow::Error::from(e));
             }
         }
