@@ -77,13 +77,13 @@ impl RabbitMQProperties {
                 Err(_) => {
                     return Ok(vec![1]);
                 }
-                Ok(data) => {
+                Ok(_data) => {
                     return Ok(vec![1]);
                 }
             };
         })
     }
-    async fn open_url_api(&self,queue_name: String,amqp_url: String) -> () {
+    async fn open_url_api(&self,_queue_name: String,_amqp_url: String) -> () {
         // Session::open_url(&amqp_url);
         return ();
     }
