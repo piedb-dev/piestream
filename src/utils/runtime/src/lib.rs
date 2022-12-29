@@ -22,7 +22,7 @@ use tracing::Level;
 use tracing_subscriber::filter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::prelude::*;
-
+use time::UtcOffset;
 /// Configure log targets for all `piestream` crates. When new crates are added and TRACE level
 /// logs are needed, add them here.
 fn configure_piestream_targets_fmt(targets: filter::Targets) -> filter::Targets {
@@ -89,7 +89,14 @@ pub fn set_panic_abort() {
 pub fn init_piestream_logger(settings: LoggerSettings) {
     let fmt_layer = {
         // Configure log output to stdout
+        let offset = UtcOffset::from_hms(8, 0, 0).expect("should get PST offset");
+        let time_format = time::format_description::parse(
+        "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+    )
+        .expect("format string should be valid");
+        let timer = OffsetTime::new(offset, time_format);
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_timer(timer)
             .compact()
             .with_ansi(settings.colorful);
 

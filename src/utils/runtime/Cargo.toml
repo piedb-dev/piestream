@@ -20,6 +20,7 @@ tokio = { version = "0.2.7", package = "madsim-tokio", features = [
     "signal",
     "fs"
 ] }
+time = "0.3.7"
 tokio-stream = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "parking_lot"] }

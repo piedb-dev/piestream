@@ -4828,6 +4828,7 @@ dependencies = [
  "madsim-tokio",
  "parking_lot 0.12.1",
  "pprof",
+ "time 0.3.13",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
