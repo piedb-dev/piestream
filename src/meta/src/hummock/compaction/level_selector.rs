@@ -595,6 +595,7 @@ pub mod tests {
             .level0_trigger_file_number(8)
             .compaction_filter_mask(compaction_filter_flag.into())
             .build();
+        println!("hummock::compaction::level_selector.rs =============== {:?}",&config);
         let selector = DynamicLevelSelector::new(
             Arc::new(config.clone()),
             Arc::new(RangeOverlapStrategy::default()),

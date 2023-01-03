@@ -99,6 +99,7 @@ impl<S: MetaStore> CompactionGroupManager<S> {
             .get("independent_compaction_group")
             .map(|s| s == "1")
             == Some(true);
+        println!("hummock::compaction_group::manager.rs ============== {:?}",&table_properties);
         let table_option = TableOption::build_table_option(table_properties);
         let mut pairs = vec![];
         // materialized_view or materialized_source

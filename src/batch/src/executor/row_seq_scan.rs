@@ -142,12 +142,13 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         let table_id = TableId {
             table_id: table_desc.table_id,
         };
+        println!("batch::executor::row_sql_scan.rs ======= table_desc = {:?}",&table_desc);
+
         let column_descs = table_desc
             .columns
             .iter()
             .map(ColumnDesc::from)
             .collect_vec();
-        println!("batch::executor::row_sql_scan.rs ======= column_descs = {:?}",&column_descs);
 
         let column_ids = seq_scan_node
             .column_ids
@@ -156,7 +157,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             .map(ColumnId::from)
             .collect();
             
-        println!("batch::executor::row_sql_scan.rs ======= column_ids = {:?}",&column_ids);
+        // println!("batch::executor::row_sql_scan.rs ======= column_ids = {:?}",&column_ids);
 
         let pk_types = table_desc
             .pk
@@ -173,7 +174,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             .collect();
 
         let pk_indices = table_desc.pk.iter().map(|k| k.index as usize).collect_vec();
-        println!("batch::executor::row_sql_scan.rs ======= pk_indices = {:?}",&pk_indices);
+        // println!("batch::executor::row_sql_scan.rs ======= pk_indices = {:?}",&pk_indices);
         let dist_key_indices = table_desc
             .dist_key_indices
             .iter()
@@ -218,6 +219,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             );
 
             if seq_scan_node.scan_ranges.is_empty() {
+                println!("batch::executor::row_seq_scan.rs =======================");
                 let iter = table
                     .batch_iter(HummockReadEpoch::Committed(source.epoch))
                     .await?;
@@ -235,7 +237,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 let scan_type = async {
                     let pk_types = pk_types.clone();
                     let mut table = table.clone();
-                    // println!("batch::executor::row_seq_scan.rs scan_range ======== {:?}",&scan_range);
+                    println!("batch::executor::row_seq_scan.rs scan_range ======== ");
 
                     let (pk_prefix_value, next_col_bounds) =
                         get_scan_bound(scan_range.clone(), pk_types.into_iter());

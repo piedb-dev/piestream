@@ -128,9 +128,9 @@ impl TableCatalog {
     /// Get a [`TableDesc`] of the table.
     pub fn table_desc(&self) -> TableDesc {
         use piestream_common::catalog::TableOption;
-
+        // ===========================
         let table_options = TableOption::build_table_option(&self.properties);
-
+        println!("========== table_options");
         TableDesc {
             table_id: self.id,
             pk: self.pk.iter().map(FieldOrder::to_order_pair).collect(),

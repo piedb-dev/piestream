@@ -188,6 +188,7 @@ where
     }
 
     async fn read_message(&mut self) -> PsqlResult<FeMessage> {
+        println!("read_message ================ ");
         match self.state {
             PgProtocolState::Startup => self.stream.read_startup().await,
             PgProtocolState::Regular => self.stream.read().await,

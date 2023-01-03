@@ -762,6 +762,7 @@ pub fn estimate_memory_use_for_compaction(task: &CompactTask) -> u64 {
 }
 
 fn build_multi_compaction_filter(compact_task: &CompactTask) -> MultiCompactionFilter {
+    println!("============================== build_multi_compaction_filter");
     use piestream_common::catalog::TableOption;
     let mut multi_filter = MultiCompactionFilter::default();
     let compaction_filter_flag =
