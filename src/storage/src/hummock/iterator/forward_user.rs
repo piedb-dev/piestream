@@ -105,7 +105,7 @@ impl<I: HummockIterator<Direction = Forward>> UserIterator<I> {
                 match self.iterator.value() {
                     HummockValue::Put(val) => {
                         self.last_val.clear();
-                        self.last_val.extend_from_slice(val);
+                        self.last_val.extend_from_slice(val.as_slice());
 
                         // handle range scan
                         match &self.key_range.1 {

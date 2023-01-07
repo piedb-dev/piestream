@@ -155,9 +155,10 @@ impl SstableStreamIterator {
         self.block_iter.as_ref().expect("no block iter").key()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         let raw_value = self.block_iter.as_ref().expect("no block iter").value();
-        HummockValue::from_slice(raw_value).expect("decode error")
+        HummockValue::decode(&mut &raw_value[..]).unwrap()
+        //HummockValue::from_slice(raw_value).expect("decode error")
     }
 
     fn is_valid(&self) -> bool {
@@ -299,7 +300,7 @@ impl HummockIterator for ConcatSstableIterator {
         self.sstable_iter.as_ref().expect("no table iter").key()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         self.sstable_iter.as_ref().expect("no table iter").value()
     }
 

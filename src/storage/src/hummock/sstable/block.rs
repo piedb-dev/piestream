@@ -393,22 +393,22 @@ mod tests {
         bi.seek_to_first();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k1", 1)[..], bi.key());
-        assert_eq!(b"v01", bi.value());
+        assert_eq!(b"v01", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k2", 2)[..], bi.key());
-        assert_eq!(b"v02", bi.value());
+        assert_eq!(b"v02", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k3", 3)[..], bi.key());
-        assert_eq!(b"v03", bi.value());
+        assert_eq!(b"v03", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k4", 4)[..], bi.key());
-        assert_eq!(b"v04", bi.value());
+        assert_eq!(b"v04", bi.value().as_slice());
 
         bi.next();
         assert!(!bi.is_valid());
@@ -438,22 +438,22 @@ mod tests {
         bi.seek_to_first();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k1", 1)[..], bi.key());
-        assert_eq!(b"v01", bi.value());
+        assert_eq!(b"v01", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k2", 2)[..], bi.key());
-        assert_eq!(b"v02", bi.value());
+        assert_eq!(b"v02", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k3", 3)[..], bi.key());
-        assert_eq!(b"v03", bi.value());
+        assert_eq!(b"v03", bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k4", 4)[..], bi.key());
-        assert_eq!(b"v04", bi.value());
+        assert_eq!(b"v04", bi.value().as_slice());
 
         bi.next();
         assert!(!bi.is_valid());

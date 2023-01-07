@@ -312,7 +312,7 @@ mod test {
                 2 => format!("overlapped_old_{}", count).as_bytes().to_vec(),
                 _ => unreachable!(),
             };
-            assert_eq!(iter.value(), HummockValue::put(expected_value.as_slice()));
+            assert_eq!(iter.value().as_slice(), HummockValue::put(expected_value.as_slice()));
             count += 1;
             iter.next().await.unwrap();
         }

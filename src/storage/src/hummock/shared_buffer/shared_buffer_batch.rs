@@ -270,8 +270,8 @@ impl<D: HummockIteratorDirection> HummockIterator for SharedBufferBatchIterator<
         &self.current_item().0
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
-        self.current_item().1.as_slice()
+    fn value(&self) -> HummockValue<Vec<u8>> {
+        self.current_item().1.to_vec()
     }
 
     fn is_valid(&self) -> bool {
@@ -411,7 +411,7 @@ mod tests {
         iter.rewind().await.unwrap();
         let mut output = vec![];
         while iter.is_valid() {
-            output.push((iter.key().to_owned(), iter.value().to_bytes()));
+            output.push((iter.key().to_owned(), iter.value().as_slice().to_bytes()));
             iter.next().await.unwrap();
         }
         assert_eq!(output, shared_buffer_items);
@@ -423,7 +423,7 @@ mod tests {
         while backward_iter.is_valid() {
             output.push((
                 backward_iter.key().to_owned(),
-                backward_iter.value().to_bytes(),
+                backward_iter.value().as_slice().to_bytes(),
             ));
             backward_iter.next().await.unwrap();
         }
@@ -463,7 +463,7 @@ mod tests {
         for item in &shared_buffer_items {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());
@@ -483,7 +483,7 @@ mod tests {
         for item in &shared_buffer_items[1..] {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());
@@ -496,7 +496,7 @@ mod tests {
         for item in &shared_buffer_items[1..] {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());
@@ -509,7 +509,7 @@ mod tests {
         let item = shared_buffer_items.last().unwrap();
         assert!(iter.is_valid());
         assert_eq!(iter.key(), item.0.as_slice());
-        assert_eq!(iter.value(), item.1.as_slice());
+        assert_eq!(iter.value().as_slice(), item.1.as_slice());
         iter.next().await.unwrap();
         assert!(!iter.is_valid());
 
@@ -528,7 +528,7 @@ mod tests {
         for item in shared_buffer_items.iter().rev() {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());
@@ -541,7 +541,7 @@ mod tests {
         for item in shared_buffer_items[0..=1].iter().rev() {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());
@@ -554,7 +554,7 @@ mod tests {
         assert!(iter.is_valid());
         let item = shared_buffer_items.first().unwrap();
         assert_eq!(iter.key(), item.0.as_slice());
-        assert_eq!(iter.value(), item.1.as_slice());
+        assert_eq!(iter.value().as_slice(), item.1.as_slice());
         iter.next().await.unwrap();
         assert!(!iter.is_valid());
 
@@ -566,7 +566,7 @@ mod tests {
         for item in shared_buffer_items[0..=1].iter().rev() {
             assert!(iter.is_valid());
             assert_eq!(iter.key(), item.0.as_slice());
-            assert_eq!(iter.value(), item.1.as_slice());
+            assert_eq!(iter.value().as_slice(), item.1.as_slice());
             iter.next().await.unwrap();
         }
         assert!(!iter.is_valid());

@@ -179,7 +179,7 @@ impl<I: HummockIterator<Direction = Backward>> BackwardUserIterator<I> {
                 match self.iterator.value() {
                     HummockValue::Put(val) => {
                         self.last_val.clear();
-                        self.last_val.extend_from_slice(val);
+                        self.last_val.extend_from_slice(val.as_slice());
                         self.last_delete = false;
                     }
                     HummockValue::Delete => {

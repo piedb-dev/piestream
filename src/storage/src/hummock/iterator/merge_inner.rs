@@ -302,7 +302,7 @@ where
         self.heap.peek().expect("no inner iter").iter.key()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         self.heap.peek().expect("no inner iter").iter.value()
     }
 

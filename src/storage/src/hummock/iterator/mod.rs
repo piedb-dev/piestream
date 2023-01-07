@@ -97,7 +97,7 @@ pub trait HummockIterator: Send + Sync + 'static {
     /// This function will panic if the iterator is invalid, or the value cannot be decoded into
     /// [`HummockValue`].
     // TODO: Add lifetime
-    fn value(&self) -> HummockValue<&[u8]>;
+    fn value(&self) -> HummockValue<Vec<u8>>;
 
     /// Indicates whether the iterator can be used.
     ///
@@ -147,7 +147,7 @@ impl<D: HummockIteratorDirection> HummockIterator for PhantomHummockIterator<D> 
         unreachable!()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         unreachable!()
     }
 
@@ -225,7 +225,7 @@ impl<
         }
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         match self {
             First(iter) => iter.value(),
             Second(iter) => iter.value(),
@@ -290,7 +290,7 @@ impl<I: HummockIterator> HummockIterator for Box<I> {
         (*self).deref().key()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         (*self).deref().value()
     }
 

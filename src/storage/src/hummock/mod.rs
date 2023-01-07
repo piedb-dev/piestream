@@ -298,7 +298,7 @@ pub async fn get_from_sstable_info(
     // Iterator gets us the key, we tell if it's the key we want
     // or key next to it.
     let value = match key::user_key(iter.key()) == ukey {
-        true => Some(iter.value().to_bytes()),
+        true => Some(iter.value().as_slice().to_bytes()),
         false => None,
     };
     iter.collect_local_statistic(local_stats);

@@ -64,9 +64,19 @@ impl BlockIterator {
         &self.key[..]
     }
 
-    pub fn value(&self) -> &[u8] {
+    /*pub fn value(&self) -> &[u8] {
         assert!(self.is_valid());
         &self.block.data()[self.value_range.clone()]
+    }*/
+
+    pub fn value(&self) -> Vec<u8> {
+    //pub fn value(&self) -> Box<Vec<u8>> {
+        assert!(self.is_valid());
+        //&self.block.data()[self.value_range.clone()]
+        //Box::new(vec![0_u8])
+        let mut v=vec![];
+        v.extend_from_slice(&self.block.data()[self.value_range.clone()]);
+        v
     }
 
     pub fn is_valid(&self) -> bool {
@@ -237,7 +247,7 @@ mod tests {
         it.seek_to_first();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value());
+        assert_eq!(b"v01", it.value().as_slice());
     }
 
     #[test]
@@ -246,7 +256,7 @@ mod tests {
         it.seek_to_last();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value());
+        assert_eq!(b"v05", it.value().as_slice());
     }
 
     #[test]
@@ -255,7 +265,7 @@ mod tests {
         it.seek(&full_key(b"k00", 0)[..]);
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value());
+        assert_eq!(b"v01", it.value().as_slice());
 
         let mut it = build_iterator_for_test();
 
@@ -273,7 +283,7 @@ mod tests {
         it.seek_le(&full_key(b"k06", 6)[..]);
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value());
+        assert_eq!(b"v05", it.value().as_slice());
     }
 
     #[test]
@@ -293,22 +303,22 @@ mod tests {
         it.seek_to_first();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value());
+        assert_eq!(b"v01", it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k02", 2)[..], it.key());
-        assert_eq!(b"v02", it.value());
+        assert_eq!(b"v02", it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k04", 4)[..], it.key());
-        assert_eq!(b"v04", it.value());
+        assert_eq!(b"v04", it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value());
+        assert_eq!(b"v05", it.value().as_slice());
 
         it.next();
         assert!(!it.is_valid());
@@ -321,22 +331,22 @@ mod tests {
         it.seek_to_last();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value());
+        assert_eq!(b"v05", it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k04", 4)[..], it.key());
-        assert_eq!(b"v04", it.value());
+        assert_eq!(b"v04", it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k02", 2)[..], it.key());
-        assert_eq!(b"v02", it.value());
+        assert_eq!(b"v02", it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value());
+        assert_eq!(b"v01", it.value().as_slice());
 
         it.prev();
         assert!(!it.is_valid());

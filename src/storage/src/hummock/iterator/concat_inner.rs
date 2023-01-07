@@ -117,7 +117,7 @@ impl<TI: SstableIteratorType> HummockIterator for ConcatIteratorInner<TI> {
         self.sstable_iter.as_ref().expect("no table iter").key()
     }
 
-    fn value(&self) -> HummockValue<&[u8]> {
+    fn value(&self) -> HummockValue<Vec<u8>> {
         self.sstable_iter.as_ref().expect("no table iter").value()
     }
 
