@@ -12,30 +12,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 use std::cmp::Ordering;
 use std::io::{Read, Write};
-use std::ops::Range;
+use std::sync::Arc;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use piestream_hummock_sdk::VersionedComparator;
 use {lz4, zstd};
 
-use super::utils::{bytes_diff, xxhash64_verify, CompressionAlgorithm};
+use piestream_common::array::{DataChunk, Row, RowDeserializer};
+
+use piestream_common::types::{value_to_type, index_to_len, DataType};
+use super::utils::{xxhash64_verify, CompressionAlgorithm};
 use crate::hummock::sstable::utils::xxhash64_checksum;
 use crate::hummock::{HummockError, HummockResult};
+use crate::hummock::value::HummockValue;
 
+pub const DEFAULT_DATA_TYPE_BIT_SIZE: u32 = 8 * std::mem::size_of::<u32>() as u32;
 pub const DEFAULT_BLOCK_SIZE: usize = 4 * 1024;
 pub const DEFAULT_RESTART_INTERVAL: usize = 16;
 pub const DEFAULT_ENTRY_SIZE: usize = 24; // table_id(u64) + primary_key(u64) + epoch(u64)
 
+struct Compression{}
+impl Compression{
+    fn get_decompression_algorithm(data_type_value: u8)->u8{
+        data_type_value as u8
+    }
+
+    pub fn decompression(buf: &[u8], data_type_value: u8)->Vec<u8>{
+        let algorithm=Compression::get_decompression_algorithm(data_type_value);
+        match algorithm{
+            1=> buf.to_vec(),
+            _=> buf.to_vec(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Block {
-    /// Uncompressed entries data, with restart encoded restart points info.
     data: Bytes,
-    /// Uncompressed entried data length.
     data_len: usize,
-    /// Restart points.
-    restart_points: Vec<u32>,
+    pub entry_count: u16,
+    pub vaild_entry_count: u16,
+    pub column_count: u16,
+    pub variable_column_count: u16,
+    pub key_len: u16,
+    pub data_type_values: Arc<Vec<(u8,usize)>>,
+    pub offsets: Arc<Vec<u8>>,
+    pub lens: Arc<Vec<u8>>,
+    pub vec_text: Arc<Vec<Vec<u8>>>,
+    pub states: Arc<Vec<u8>>,
+    pub keys: Arc<Vec<u8>>,
 }
 
 impl Block {
@@ -43,7 +71,6 @@ impl Block {
         // Verify checksum.
         let xxhash64_checksum = (&buf[buf.len() - 8..]).get_u64_le();
         xxhash64_verify(&buf[..buf.len() - 8], xxhash64_checksum)?;
-
         // Decompress.
         let compression = CompressionAlgorithm::decode(&mut &buf[buf.len() - 9..buf.len() - 8])?;
         let compressed_data = &buf[..buf.len() - 9];
@@ -70,25 +97,121 @@ impl Block {
                 Bytes::from(decoded)
             }
         };
-
         Ok(Self::decode_from_raw(buf))
     }
 
-    pub fn decode_from_raw(buf: Bytes) -> Self {
-        // Decode restart points.
-        let n_restarts = (&buf[buf.len() - 4..]).get_u32_le();
-        let data_len = buf.len() - 4 - n_restarts as usize * 4;
-        let mut restart_points = Vec::with_capacity(n_restarts as usize);
-        let mut restart_points_buf = &buf[data_len..buf.len() - 4];
-        for _ in 0..n_restarts {
-            restart_points.push(restart_points_buf.get_u32_le());
+    pub fn decode_from_raw(data: Bytes) -> Self {
+        let buf=data.clone();
+        let mut offset=0;
+        let entry_count=(&buf[buf.len()-offset-4..]).get_u16_le();
+        offset+=4;
+        let vaild_entry_count=(&buf[buf.len()-offset-4..]).get_u16_le();
+        offset+=4;
+        let column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
+        offset+=2;
+        /*let variable_column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
+        offset+=2;*/
+
+        let mut variable_column_count=0;
+        let column_count_usize=column_count as usize;
+        let mut data_type_values= vec![(0_u8,0_usize); column_count_usize];
+        let mut ptr=&buf[buf.len()-offset-column_count_usize..];
+        for _ in  0..column_count{
+            let v=ptr.get_u8();
+            if let None=value_to_type(v){
+                variable_column_count+=1;
+            }
+            data_type_values.push((ptr.get_u8(),index_to_len(v)));
+        }
+        offset+=column_count_usize;
+        let key_len=(&buf[buf.len()-offset-2..]).get_u16_le();
+        offset+=2;
+        let keys_compress_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let states_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let offset_len=(&buf[buf.len()-offset-4..]).get_u32_le();
+        offset+=4;
+        let text_len=(&buf[buf.len()-offset-4..]).get_u32_le();
+        offset+=4;
+        //offset of per column
+        let mut offsets=buf[buf.len()-offset-offset_len as usize..buf.len()-offset].as_ref();
+        offset+= offset_len as usize;
+
+        assert_eq!(offsets.len(), ((column_count+variable_column_count)*4) as usize);
+        //len of per column
+        let mut lens=&buf[buf.len()-offset-text_len as usize..buf.len()-offset];
+        //offset+= text_len as usize;
+        assert_eq!(offsets.len(), lens.len());
+
+        let mut next_start=0;
+        //column text
+        let mut vec_text=vec![vec![]; (column_count+variable_column_count) as usize];
+        let variable_column_type=vec![8_u8, 13, 14];
+        let mut vec_variable_column_idx=vec![0; variable_column_count as usize];
+        for i in 0..(column_count+variable_column_count){
+            let a=offsets.get_u32_le() as usize;
+            let b=lens.get_u32_le() as usize ;
+            
+            if i==0{
+                next_start=a;
+            }
+
+            let mut data_type_value=0_u8;
+            if i<column_count{
+                data_type_value=data_type_values[i as usize].0 as u8;
+                if variable_column_type.contains(&data_type_value){
+                    //save variable column index
+                    vec_variable_column_idx.push(i);
+                    //offset is u32
+                    data_type_value+=2_u8;
+                }
+            }else{
+                    //variable column text
+                    data_type_value+=8_u8;
+            }
+            //variable column content
+            let buffer=Compression::decompression(&buf[a..a+b], data_type_value);
+            vec_text[i as usize].extend_from_slice(buffer.as_slice());
         }
 
-        Block {
-            data: buf,
-            data_len,
-            restart_points,
+        let mut states=vec![];
+        let buffer=Compression::decompression(&buf[(next_start-states_len)..next_start], 2_u8);
+        assert_eq!((next_start-states_len), keys_compress_len);
+        states.extend_from_slice(buffer.as_slice());
+        
+        let mut keys=vec![];
+        let buffer=Compression::decompression(&buf[0..keys_compress_len], 8_u8);
+        keys.extend_from_slice(buffer.as_slice());
+
+        Block{
+            data_len:data.len(),
+            data:data,
+            entry_count: entry_count,
+            vaild_entry_count: vaild_entry_count,
+            column_count: column_count,
+            variable_column_count: variable_column_count,
+            key_len:key_len ,
+            data_type_values: Arc::new(data_type_values),
+            offsets: Arc::new(offsets.to_vec()),
+            lens: Arc::new(lens.to_vec()),
+            vec_text:Arc::new(vec_text),
+            states: Arc::new(states),
+            keys: Arc::new(keys),
         }
+    }
+    
+    pub fn entry_count(&self) -> usize{
+        self.entry_count as usize
+    }
+   
+    pub fn capacity(&self) -> usize {
+        let mut column_len=0;
+        for i in 0..self.vec_text.len(){
+            column_len+=self.vec_text[i].capacity();
+        }
+        self.data_type_values.capacity() + self.offsets.capacity() +self.lens.capacity() + column_len + self.states.capacity() + self.keys.capacity() +
+             2 + 2 + 2 + 2 + 2
     }
 
     /// Entries data len.
@@ -98,35 +221,6 @@ impl Block {
         self.data_len
     }
 
-    pub fn capacity(&self) -> usize {
-        self.data.len() + self.restart_points.capacity() * std::mem::size_of::<u32>()
-    }
-
-    /// Gets restart point by index.
-    pub fn restart_point(&self, index: usize) -> u32 {
-        self.restart_points[index]
-    }
-
-    /// Gets restart point len.
-    pub fn restart_point_len(&self) -> usize {
-        self.restart_points.len()
-    }
-
-    /// Searches the index of the restart point that the given `offset` belongs to.
-    pub fn search_restart_point(&self, offset: usize) -> usize {
-        // Find the largest restart point that equals or less than the given offset.
-        self.restart_points
-            .partition_point(|&position| position <= offset as u32)
-            .saturating_sub(1) // Prevent from underflowing when given is smaller than the first.
-    }
-
-    /// Searches the index of the restart point by partition point.
-    pub fn search_restart_partition_point<P>(&self, pred: P) -> usize
-    where
-        P: FnMut(&u32) -> bool,
-    {
-        self.restart_points.partition_point(pred)
-    }
 
     pub fn data(&self) -> &[u8] {
         &self.data[..self.data_len]
@@ -137,60 +231,6 @@ impl Block {
     }
 }
 
-/// [`KeyPrefix`] contains info for prefix compression.
-#[derive(Debug)]
-pub struct KeyPrefix {
-    overlap: usize,
-    diff: usize,
-    value: usize,
-    /// Used for calculating range, won't be encoded.
-    offset: usize,
-}
-
-impl KeyPrefix {
-    pub fn encode(&self, buf: &mut impl BufMut) {
-        buf.put_u16(self.overlap as u16);
-        buf.put_u16(self.diff as u16);
-        buf.put_u32(self.value as u32);
-    }
-
-    pub fn decode(buf: &mut impl Buf, offset: usize) -> Self {
-        let overlap = buf.get_u16() as usize;
-        let diff = buf.get_u16() as usize;
-        let value = buf.get_u32() as usize;
-        Self {
-            overlap,
-            diff,
-            value,
-            offset,
-        }
-    }
-
-    /// Encoded length.
-    fn len(&self) -> usize {
-        2 + 2 + 4
-    }
-
-    /// Gets overlap len.
-    pub fn overlap_len(&self) -> usize {
-        self.overlap
-    }
-
-    /// Gets diff key range.
-    pub fn diff_key_range(&self) -> Range<usize> {
-        self.offset + self.len()..self.offset + self.len() + self.diff
-    }
-
-    /// Gets value range.
-    pub fn value_range(&self) -> Range<usize> {
-        self.offset + self.len() + self.diff..self.offset + self.len() + self.diff + self.value
-    }
-
-    /// Gets entry len.
-    pub fn entry_len(&self) -> usize {
-        self.len() + self.diff + self.value
-    }
-}
 
 pub struct BlockBuilderOptions {
     /// Reserved bytes size when creating buffer to avoid frequent allocating.
@@ -215,46 +255,75 @@ impl Default for BlockBuilderOptions {
 pub struct BlockBuilder {
     /// Write buffer.
     buf: BytesMut,
-    /// Entry interval between restart points.
-    restart_count: usize,
-    /// Restart points.
-    restart_points: Vec<u32>,
     /// Last key.
     last_key: Vec<u8>,
+    /// Count of put entries in current block.
+    put_entry_count: usize,
     /// Count of entries in current block.
     entry_count: usize,
+    //column number
+    column_num: usize,
+    //column number
+    variable_columns: Vec<usize>,
+    // need mem size
+    current_mem_size: usize,  
+    uncompressed_block_size: usize,
     /// Compression algorithm.
     compression_algorithm: CompressionAlgorithm,
+    //table desc
+    //table_column_datatype: Vec<DataType>,
+    //row_deserializer: Option<Arc<RowDeserializer>>,
+    row_deserializer: Option<RowDeserializer>,
+    data_type_bit_size: u32,
+    hummock_value_list: Vec<u32>,
+    //put_record_idxs: Vec<u16>,
+    keys: Vec<Vec<u8>>,
+    rows: Vec<Row>,
+
 }
 
 impl BlockBuilder {
     pub fn new(options: BlockBuilderOptions) -> Self {
         Self {
             // add more space to avoid re-allocate space.
-            buf: BytesMut::with_capacity(options.capacity + 256),
-            restart_count: options.restart_interval,
-            restart_points: Vec::with_capacity(
-                options.capacity / DEFAULT_ENTRY_SIZE / options.restart_interval + 1,
-            ),
+            buf: BytesMut::with_capacity(options.capacity+256),
             last_key: vec![],
+            put_entry_count: 0,
             entry_count: 0,
+            column_num: 0,
+            variable_columns: Vec::new() ,
+            current_mem_size: 0,
+            uncompressed_block_size: 0,
             compression_algorithm: options.compression_algorithm,
+            row_deserializer: None,
+            data_type_bit_size: DEFAULT_DATA_TYPE_BIT_SIZE,
+            hummock_value_list: Vec::new(),
+            //put_record_idxs: Vec::new(),
+            keys: Vec::new(),
+            rows: Vec::new(),
+
+            //table_column_datatype:Vec::new(),
         }
     }
 
-    /// Appends a kv pair to the block.
-    ///
-    /// NOTE: Key must be added in ASCEND order.
-    ///
-    /// # Format
-    ///
-    /// ```plain
-    /// entry (kv pair): | overlap len (2B) | diff len (2B) | value len(4B) | diff key | value |
-    /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panic if key is not added in ASCEND order.
+    pub fn set_row_deserializer(&mut self, table_column_datatype: Vec<DataType>){
+        //self.row_deserializer=Some(Arc::new(RowDeserializer::new(table_column_datatype)));
+        self.row_deserializer=Some(RowDeserializer::new(table_column_datatype));
+        let data_types=self.row_deserializer.as_ref().unwrap().data_types();
+        self.column_num=data_types.len();
+        for idx in 0..self.column_num{
+            //fixed len columns
+            if data_types[idx].data_type_len()==0{
+                self.variable_columns.push(idx);
+            }
+               
+        }
+    }
+
+    pub fn get_put_record_count(&self)->usize{
+        self.rows.len()
+    }
+
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -263,68 +332,158 @@ impl BlockBuilder {
                 Ordering::Less
             );
         }
-        // Update restart point if needed and calculate diff key.
-        let diff_key = if self.entry_count % self.restart_count == 0 {
-            self.restart_points.push(self.buf.len() as u32);
-            key
-        } else {
-            bytes_diff(&self.last_key, key)
+        let hummock_value = HummockValue::from_slice(value).unwrap();
+        let (is_put, text) = match hummock_value {
+            HummockValue::Put(val) => (true, val),
+            HummockValue::Delete => (false, &[] as &[u8]),
         };
+       println!("hummock_value={:?}", hummock_value);
+        let idx=self.entry_count % self.data_type_bit_size as usize;
+        if idx==0{
+            self.hummock_value_list.push(0_u32);
+        }
 
-        let prefix = KeyPrefix {
-            overlap: key.len() - diff_key.len(),
-            diff: diff_key.len(),
-            value: value.len(),
-            offset: self.buf.len(),
-        };
+        let mut key_vec=key.to_vec();
+        if is_put {
+            let row = self.row_deserializer.as_ref().unwrap().deserialize(text).unwrap();
+            self.rows.push(row.clone());
+            let v=self.hummock_value_list.last_mut().unwrap();
+            *v|=1<<idx;
+            //self.put_record_idxs.push(self.put_entry_count as u16);
+            //self.put_entry_count+=1;
+            key_vec.push(1 as u8);
+            key_vec.append(&mut (self.put_entry_count as u16).to_le_bytes().to_vec());
+            self.current_mem_size+=key_vec.len()+value.len()+self.variable_columns.len()*4;
+            for i in 0..row.size(){
+                let len=match row.0[i] {
+                    //fixed data type will fill default value
+                    None=>{
+                        self.row_deserializer.as_ref().unwrap().data_types()[i].data_type_len()
+                    },
+                    _=>{0}
+                };
+                self.current_mem_size+=len;
+            }
+        }else{
+            key_vec.push(0 as u8);
+            key_vec.append(&mut u16::MAX.to_le_bytes().to_vec());
+            //self.put_record_idxs.push(u16::MAX);
+            self.current_mem_size+=key_vec.len()+value.len();
+        }
 
-        prefix.encode(&mut self.buf);
-        self.buf.put_slice(diff_key);
-        self.buf.put_slice(value);
-
+        //self.keys.push(key.to_vec());
+        self.keys.push(key_vec);
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
+        //self.current_mem_size+=(key.len()+value.len()+1+2+2+4);
         self.entry_count += 1;
     }
 
-    pub fn get_last_key(&self) -> &[u8] {
-        &self.last_key
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.buf.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.buf.clear();
-        self.restart_points.clear();
-        self.last_key.clear();
-        self.entry_count = 0;
-    }
-
-    /// Calculate block size without compression.
-    pub fn uncompressed_block_size(&mut self) -> usize {
-        self.buf.len() + (self.restart_points.len() + 1) * std::mem::size_of::<u32>()
-    }
-
-    /// Finishes building block.
-    ///
-    /// # Format
-    ///
-    /// ```plain
-    /// compressed: | entries | restart point 0 (4B) | ... | restart point N-1 (4B) | N (4B) |
-    /// uncompressed: | compression method (1B) | crc32sum (4B) |
-    /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panic if there is compression error.
+    
     pub fn build(&mut self) -> &[u8] {
-        assert!(self.entry_count > 0);
-        for restart_point in &self.restart_points {
-            self.buf.put_u32_le(*restart_point);
+        
+        let data_chunk=DataChunk::from_rows(&self.rows, self.row_deserializer.as_ref().unwrap().data_types());
+        //column_value_state_list saves the field value state 
+        let (column_value_state_list, columns, variable_offsets)=data_chunk.serialize_columns();
+
+        let data_types=self.row_deserializer.as_ref().unwrap().data_types();
+        assert_eq!(columns.len(), data_types.len());
+        assert_eq!(data_types.len(), column_value_state_list.len());
+
+        let size=(self.put_entry_count + (self.data_type_bit_size as usize -1)) / self.data_type_bit_size as usize;
+        let mut state_list =vec![vec![]; column_value_state_list.len()];
+        for (pos, column_state_list) in column_value_state_list.iter().enumerate(){
+            assert_eq!(self.put_entry_count, column_state_list.len());
+            for (idx,element) in column_state_list.iter().enumerate(){
+                if idx % self.data_type_bit_size as usize==0{
+                    state_list[pos].push(0_u32);
+                }
+                if *element==1 {
+                    let v=state_list[pos].last_mut().unwrap();
+                    *v|=1<<idx;
+                }
+            }
+            assert_eq!(state_list[pos].len(), size);
         }
-        self.buf.put_u32_le(self.restart_points.len() as u32);
+       
+        //saved keys info
+        for idx in 0.. self.keys.len() {
+            self.buf.extend_from_slice(&self.keys[idx]);
+        }
+        let keys_compress_len=self.buf.len();
+
+        //saved value state (whether None)
+        for idx in 0..state_list.len() {
+            for v in &state_list[idx]{
+                self.buf.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        let states_len=self.buf.len()-keys_compress_len;
+
+        let mut start_offset=self.buf.len();
+        //let mut vec=vec![(0,0); columns.len()];
+        let mut offsets=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
+        let mut lens=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
+        //let data_types=self.row_deserializer.as_ref().unwrap().data_types();
+        //assert_eq!(columns.len(), data_types.len());
+
+        let mut variable_column_num=0;
+        for idx in 0..columns.len(){
+            //fixed len columns
+            if data_types[idx].data_type_len()>0{
+                self.buf.extend_from_slice(&columns[idx]);
+                assert_eq!(columns[idx].len(), self.put_entry_count);
+                assert_eq!(columns[idx].len()%data_types[idx].data_type_len(), 0);
+            }else{
+                assert_eq!(variable_offsets[idx].len(), self.put_entry_count);
+                //offset
+                self.buf.extend_from_slice(&variable_offsets[idx]);
+                variable_column_num+=1;
+            }
+            //vec.push((start_offset, self.buf.len()-start_offset));
+            offsets.extend_from_slice(&(start_offset as u32).to_le_bytes());
+            lens.extend_from_slice(&((self.buf.len()-start_offset) as u32).to_le_bytes());
+            start_offset=self.buf.len();
+        }
+
+        assert_eq!(self.variable_columns.len(), variable_column_num);
+        for (_, &idx) in self.variable_columns.iter().enumerate() {
+            //fixed len columns
+            if data_types[idx].data_type_len()==0{
+                self.buf.extend_from_slice(&columns[idx]);
+            }
+            //vec.push((start_offset, self.buf.len()-start_offset));
+            offsets.extend_from_slice(&(start_offset as u32).to_le_bytes());
+            lens.extend_from_slice(&((self.buf.len()-start_offset) as u32).to_le_bytes());
+            start_offset=self.buf.len();
+        }
+
+        self.buf.extend_from_slice(&lens);
+        self.buf.extend_from_slice(&offsets);
+        self.buf.put_u32_le(lens.len() as u32);
+        self.buf.put_u32_le(offsets.len() as u32);
+        //value state len 
+        self.buf.put_u32_le(states_len as u32);
+        //compress keys len 
+        self.buf.put_u32_le(keys_compress_len as u32);
+        //key length
+        self.buf.put_u16_le((self.last_key.len() as u16 +3) as u16);
+       
+        //column type
+        for data_type in data_types {
+            self.buf.put_u8(data_type.type_to_index());
+        }
+        //variable column count
+        //self.buf.put_u16_le(self.variable_columns.len() as u16);
+        //column count
+        self.buf.put_u16_le(data_types.len() as u16);
+        //row count of not delete
+        self.buf.put_u16_le(self.put_entry_count as u16);
+        //total row count
+        self.buf.put_u16_le(self.entry_count as u16);
+        
+        self.uncompressed_block_size=self.buf.len();
+        //compression block
         match self.compression_algorithm {
             CompressionAlgorithm::None => (),
             CompressionAlgorithm::Lz4 => {
@@ -361,12 +520,40 @@ impl BlockBuilder {
         let checksum = xxhash64_checksum(&self.buf);
         self.buf.put_u64_le(checksum);
         self.buf.as_ref()
+        
     }
+
+    pub fn get_last_key(&self) -> &[u8] {
+        &self.last_key
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.buf.clear();
+        //self.restart_points.clear();
+        self.last_key.clear();
+        self.hummock_value_list.clear();
+        self.keys.clear();
+        self.rows.clear();
+        self.variable_columns.clear();
+        self.put_entry_count=0;
+        self.entry_count = 0;
+    
+    }
+
+    /// Calculate block size without compression.
+    pub fn uncompressed_block_size(&mut self) -> usize {
+        self.uncompressed_block_size
+    }
+
 
     /// Approximate block len (uncompressed).
     pub fn approximate_len(&self) -> usize {
-        // block + restart_points + restart_points.len + compression_algorithm + checksum
-        self.buf.len() + 4 * self.restart_points.len() + 4 + 1 + 8
+        let data_types=self.row_deserializer.as_ref().unwrap().data_types();
+        self.current_mem_size+data_types.len()+self.hummock_value_list.capacity()+(self.column_num+self.variable_columns.len())*(4+4)+8+4+4+2+4+4+2+2+4*4
     }
 }
 
@@ -385,8 +572,8 @@ mod tests {
         builder.add(&full_key(b"k2", 2), b"v02");
         builder.add(&full_key(b"k3", 3), b"v03");
         builder.add(&full_key(b"k4", 4), b"v04");
-        let capacity = builder.uncompressed_block_size();
         let buf = builder.build().to_vec();
+        let capacity = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capacity).unwrap());
         let mut bi = BlockIterator::new(BlockHolder::from_owned_block(block));
 
@@ -430,8 +617,9 @@ mod tests {
         builder.add(&full_key(b"k2", 2), b"v02");
         builder.add(&full_key(b"k3", 3), b"v03");
         builder.add(&full_key(b"k4", 4), b"v04");
-        let capcitiy = builder.uncompressed_block_size();
+       
         let buf = builder.build().to_vec();
+        let capcitiy = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capcitiy).unwrap());
         let mut bi = BlockIterator::new(BlockHolder::from_owned_block(block));
 

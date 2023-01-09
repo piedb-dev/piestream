@@ -17,7 +17,7 @@ use std::sync::Arc;
 use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::filter_key_extractor::FilterKeyExtractorManagerRef;
 use piestream_hummock_sdk::{HummockEpoch, LocalSstableInfo};
-use piestream_rpc_client::HummockMetaClient;
+use piestream_rpc_client::{MetaClient, HummockMetaClient};
 
 use crate::hummock::compactor::{compact, CompactionExecutor, Context};
 use crate::hummock::shared_buffer::OrderSortedUncommittedData;
@@ -40,6 +40,7 @@ impl SharedBufferUploader {
     pub fn new(
         options: Arc<StorageConfig>,
         sstable_store: SstableStoreRef,
+        meta_client: Arc<MetaClient>,
         hummock_meta_client: Arc<dyn HummockMetaClient>,
         stats: Arc<StateStoreMetrics>,
         sstable_id_manager: SstableIdManagerRef,
@@ -56,6 +57,7 @@ impl SharedBufferUploader {
         let memory_limiter = MemoryLimiter::unlimit();
         let compactor_context = Arc::new(Context {
             options: options.clone(),
+            meta_client: meta_client.clone(),
             hummock_meta_client: hummock_meta_client.clone(),
             sstable_store: sstable_store.clone(),
             stats: stats.clone(),

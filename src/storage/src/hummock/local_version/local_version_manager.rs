@@ -29,7 +29,7 @@ use piestream_hummock_sdk::{CompactionGroupId, HummockReadEpoch};
 use piestream_pb::hummock::pin_version_response;
 use piestream_pb::hummock::pin_version_response::Payload;
 #[cfg(any(test, feature = "test"))]
-use piestream_rpc_client::HummockMetaClient;
+use piestream_rpc_client::{MetaClient, HummockMetaClient};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -113,6 +113,7 @@ impl LocalVersionManager {
         options: Arc<StorageConfig>,
         pinned_version: PinnedVersion,
         sstable_store: SstableStoreRef,
+        meta_client: Arc<MetaClient>,
         hummock_meta_client: Arc<dyn HummockMetaClient>,
         event_sender: UnboundedSender<HummockEvent>,
     ) -> LocalVersionManagerRef {
@@ -128,6 +129,7 @@ impl LocalVersionManager {
             Arc::new(SharedBufferUploader::new(
                 options,
                 sstable_store,
+                meta_client,
                 hummock_meta_client,
                 Arc::new(StateStoreMetrics::unused()),
                 sstable_id_manager,

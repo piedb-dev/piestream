@@ -30,6 +30,7 @@ mod scalar_impl;
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::str::FromStr;
+use std::mem::size_of;
 
 pub use native_type::*;
 use piestream_pb::data::data_type::IntervalType::*;
@@ -39,6 +40,7 @@ pub mod chrono_wrapper;
 pub mod decimal;
 pub mod interval;
 pub mod struct_type;
+
 
 mod ordered_float;
 
@@ -81,6 +83,7 @@ pub type OrderedF64 = ordered_float::OrderedFloat<f64>;
 #[strum_discriminants(derive(strum_macros::EnumIter, Hash, Ord, PartialOrd))]
 #[strum_discriminants(name(DataTypeName))]
 #[strum_discriminants(vis(pub))]
+
 pub enum DataType {
     #[display("boolean")]
     Boolean,
@@ -168,6 +171,46 @@ pub fn unnested_list_type(datatype: DataType) -> DataType {
     match datatype {
         DataType::List { datatype } => unnested_list_type(*datatype),
         _ => datatype,
+    }
+}
+
+pub fn value_to_type(value:u8) -> Option<DataType> {
+    let data_type=match value {
+        0 => DataType::Boolean,
+        1 => DataType::Int16,
+        2 => DataType::Int32,
+        3 => DataType::Int64,
+        4 => DataType::Float32,
+        5 => DataType::Float64,
+        6 => DataType::Decimal,
+        7 => DataType::Date,
+        8 => DataType::Varchar,
+        9 => DataType::Time,
+        10 => DataType::Timestamp,
+        11 => DataType::Timestampz,
+        12 => DataType::Interval,
+        13 => return None,
+        14 => return None,
+        _=>{panic!("invalid vallue of data type.")}
+    };
+    Some(data_type)
+}
+
+pub fn index_to_len(index:u8) -> usize{
+    match index {
+        0 => size_of::<bool>(),
+        1 => size_of::<i16>(),
+        2 => size_of::<i32>(),
+        3 => size_of::<i64>(),
+        4 => size_of::<OrderedF32>(),
+        5 => size_of::<OrderedF64>(),
+        6 => 16,
+        7 => size_of::<NaiveDateWrapper>(),
+        9 => size_of::<NaiveTimeWrapper>(),
+        10 => size_of::<NaiveDateTimeWrapper>(),
+        11 => size_of::<i64>(),
+        12 => size_of::<(i32, i32, i64)>(),
+        _=>{0}
     }
 }
 
@@ -282,6 +325,48 @@ impl DataType {
         )
     }
 
+    pub fn type_to_index(&self) -> u8{
+        match self {
+            DataType::Boolean => 0,
+            DataType::Int16 => 1,
+            DataType::Int32 => 2,
+            DataType::Int64 => 3,
+            DataType::Float32 => 4,
+            DataType::Float64 => 5,
+            DataType::Decimal => 6,
+            DataType::Date => 7,
+            DataType::Varchar => 8,
+            DataType::Time => 9,
+            DataType::Timestamp => 10,
+            DataType::Timestampz => 11,
+            DataType::Interval => 12,
+            DataType::Struct{..} => 13,
+            DataType::List{..} => 14,
+        }
+    }
+
+    /*pub fn value_to_type(&self, value:u8) -> Option<DataType> {
+        let data_type=match value {
+            0 => DataType::Boolean,
+            1 => DataType::Int16,
+            2 => DataType::Int32,
+            3 => DataType::Int64,
+            4 => DataType::Float32,
+            5 => DataType::Float64,
+            6 => DataType::Decimal,
+            7 => DataType::Date,
+            8 => DataType::Varchar,
+            9 => DataType::Time,
+            10 => DataType::Timestamp,
+            11 => DataType::Timestampz,
+            12 => DataType::Interval,
+            13 => return None,
+            14 => return None,
+            _=>{panic!("invalid vallue of data type.")}
+        };
+        Some(data_type)
+    }*/
+
     pub fn is_scalar(&self) -> bool {
         DataTypeName::from(self).is_scalar()
     }
@@ -299,6 +384,25 @@ impl DataType {
             | Interval => false,
             Struct(t) => t.fields.iter().all(|dt| dt.mem_cmp_eq_value_enc()),
             List { datatype } => datatype.mem_cmp_eq_value_enc(),
+        }
+    }
+
+    pub fn data_type_len(&self) -> usize {
+        match self {
+            DataType::Boolean => size_of::<bool>(),
+            DataType::Int16 => size_of::<i16>(),
+            DataType::Int32 => size_of::<i32>(),
+            DataType::Int64 => size_of::<i64>(),
+            DataType::Float32 => size_of::<OrderedF32>(),
+            DataType::Float64 => size_of::<OrderedF64>(),
+            DataType::Date => size_of::<NaiveDateWrapper>(),
+            DataType::Time => size_of::<NaiveTimeWrapper>(),
+            DataType::Timestamp => size_of::<NaiveDateTimeWrapper>(),
+            DataType::Timestampz => size_of::<i64>(),
+            // IntervalUnit is serialized as (i32, i32, i64)
+            DataType::Interval => size_of::<(i32, i32, i64)>(),
+            DataType::Decimal => 16,
+            _=>{0}
         }
     }
 
@@ -821,7 +925,6 @@ impl ScalarImpl {
         match null_tag {
             1 => {}
             0 => {
-                use std::mem::size_of;
                 let len = match data_type {
                     DataType::Int16 => size_of::<i16>(),
                     DataType::Int32 => size_of::<i32>(),

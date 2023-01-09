@@ -124,6 +124,7 @@ pub struct BlockMeta {
     pub offset: u32,
     pub len: u32,
     pub uncompressed_size: u32,
+    pub table_id: u32,
 }
 
 impl BlockMeta {
@@ -136,6 +137,7 @@ impl BlockMeta {
         buf.put_u32_le(self.offset);
         buf.put_u32_le(self.len);
         buf.put_u32_le(self.uncompressed_size);
+        buf.put_u32_le(self.table_id);
         put_length_prefixed_slice(buf, &self.smallest_key);
     }
 
@@ -143,18 +145,20 @@ impl BlockMeta {
         let offset = buf.get_u32_le();
         let len = buf.get_u32_le();
         let uncompressed_size = buf.get_u32_le();
+        let table_id = buf.get_u32_le();
         let smallest_key = get_length_prefixed_slice(buf);
         Self {
             smallest_key,
             offset,
             len,
             uncompressed_size,
+            table_id,
         }
     }
 
     #[inline]
     pub fn encoded_size(&self) -> usize {
-        16 /* offset + len + key len + uncompressed size */ + self.smallest_key.len()
+        16+4 /* offset + len + key len + uncompressed size */ + self.smallest_key.len()
     }
 }
 
@@ -292,12 +296,14 @@ mod tests {
                     offset: 0,
                     len: 100,
                     uncompressed_size: 0,
+                    table_id: 0,
                 },
                 BlockMeta {
                     smallest_key: b"5-some-key".to_vec(),
                     offset: 100,
                     len: 100,
                     uncompressed_size: 0,
+                    table_id: 0,
                 },
             ],
             bloom_filter: b"0123456789".to_vec(),

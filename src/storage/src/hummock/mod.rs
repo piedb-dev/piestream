@@ -20,7 +20,7 @@ use bytes::Bytes;
 use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::{HummockEpoch, *};
 use piestream_pb::hummock::{pin_version_response, SstableInfo};
-use piestream_rpc_client::HummockMetaClient;
+use piestream_rpc_client::{MetaClient, HummockMetaClient};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tracing::log::error;
 
@@ -136,12 +136,14 @@ impl HummockStorage {
     pub async fn for_test(
         options: Arc<StorageConfig>,
         sstable_store: SstableStoreRef,
+        meta_client: Arc<MetaClient>,
         hummock_meta_client: Arc<dyn HummockMetaClient>,
         notification_client: impl NotificationClient,
     ) -> HummockResult<Self> {
         Self::new(
             options,
             sstable_store,
+            meta_client,
             hummock_meta_client,
             notification_client,
             Arc::new(StateStoreMetrics::unused()),
@@ -156,6 +158,7 @@ impl HummockStorage {
     pub async fn new(
         options: Arc<StorageConfig>,
         sstable_store: SstableStoreRef,
+        meta_client: Arc<MetaClient>,
         hummock_meta_client: Arc<dyn HummockMetaClient>,
         notification_client: impl NotificationClient,
         // TODO: separate `HummockStats` from `StateStoreMetrics`.
@@ -198,6 +201,7 @@ impl HummockStorage {
         let shared_buffer_uploader = Arc::new(SharedBufferUploader::new(
             options.clone(),
             sstable_store.clone(),
+            meta_client.clone(),
             hummock_meta_client.clone(),
             stats.clone(),
             sstable_id_manager.clone(),

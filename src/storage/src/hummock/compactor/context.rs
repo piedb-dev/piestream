@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::filter_key_extractor::FilterKeyExtractorManagerRef;
-use piestream_rpc_client::HummockMetaClient;
+use piestream_rpc_client::{MetaClient, HummockMetaClient};
 
 use super::task_progress::TaskProgressManagerRef;
 use crate::hummock::compactor::{CompactionExecutor, CompactorSstableStoreRef};
@@ -31,6 +31,9 @@ pub struct Context {
     pub options: Arc<StorageConfig>,
 
     /// The meta client.
+    pub meta_client: Arc<MetaClient>,
+
+    /// The meta hummock client.
     pub hummock_meta_client: Arc<dyn HummockMetaClient>,
 
     /// Sstable store that manages the sstables.

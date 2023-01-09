@@ -15,14 +15,11 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::BytesMut;
 use piestream_hummock_sdk::VersionedComparator;
-use piestream_common::types::{DataType};
 
-use super::DEFAULT_DATA_TYPE_BIT_SIZE;
+use super::KeyPrefix;
 use crate::hummock::BlockHolder;
-use crate::hummock::value::VALUE_DELETE;
-
 
 /// [`BlockIterator`] is used to read kv pairs in a block.
 pub struct BlockIterator {
@@ -38,7 +35,6 @@ pub struct BlockIterator {
     value_range: Range<usize>,
     /// Current entry len.
     entry_len: usize,
-    index: usize,
 }
 
 impl BlockIterator {
@@ -50,161 +46,68 @@ impl BlockIterator {
             key: BytesMut::default(),
             value_range: 0..0,
             entry_len: 0,
-            index: 0,
         }
     }
 
     pub fn next(&mut self) {
         assert!(self.is_valid());
-        self.index+=1;
-        //self.next_inner();
+        self.next_inner();
     }
 
     pub fn prev(&mut self) {
         assert!(self.is_valid());
-        self.index-=1;
-        //self.prev_inner();
+        self.prev_inner();
     }
 
     pub fn key(&self) -> &[u8] {
         assert!(self.is_valid());
-        let start=self.index*self.block.key_len as usize;
-        let end=(((self.index+1)*self.block.key_len as usize)-3) as usize ;
-        &self.block.keys[start..end]
-        //&self.key[..]
+        &self.key[..]
     }
 
-    //pub fn value(&self) -> &[u8] {
-    pub fn value(&self) -> Box<Vec<u8>> {
+    /*pub fn value(&self) -> &[u8] {
         assert!(self.is_valid());
-        
-        let start=self.index*self.block.key_len as usize;
-        let end=start+self.block.key_len as usize-3 ;
-        
-        let mut buf=&self.block.keys[start..end];
-        
-        //let mut buf=Bytes::from(&self.block.keys[start..end]);
-        let state=buf.get_u8();
-        if state==VALUE_DELETE{
-            return Box::new(Vec::new());
-        }
+        &self.block.data()[self.value_range.clone()]
+    }*/
 
-        /*let mut data_types=vec![0; self.block.column_count as usize];
-        for idx in (0..self.block.column_count){
-
-        }*/
-
-        let put_entry_count=buf.get_u16_le() as usize;
-        assert!(put_entry_count<self.block.vaild_entry_count as usize);
-        //let len=(DEFAULT_DATA_TYPE_BIT_SIZE/8) as usize;
-        let mut bytes=&self.block.states[..];
-
-        let mut value =Vec::new();
-        let  mut variable_column_count=0_usize;
-        for idx in 0..self.block.column_count as usize {
-            let offset=self.get_offset(idx*put_entry_count, DEFAULT_DATA_TYPE_BIT_SIZE as usize);
-            let pos=(idx*put_entry_count) % DEFAULT_DATA_TYPE_BIT_SIZE as usize;
-            bytes.advance(offset);
-            let v=(bytes.get_u32_le()>>pos) & 0x1;
-            let mut column=&self.block.vec_text[idx][..];
-            //is Some
-            if v>0 {
-                value.put_u8(1u8);
-                //variable column
-                if self.block.data_type_values[idx].1==0{
-                    let index=self.get_offset(idx*put_entry_count, 4);
-                    column.advance(index);
-                    let offset=column.get_u32_le() as usize;
-                    let mut next_offset=0;
-                    if (put_entry_count+1) < self.block.vaild_entry_count as usize{
-                        next_offset+=column.get_u32_le() as usize;
-                    }else{
-                        next_offset+=column.len();
-                    }
-                    let  variable_column=&self.block.vec_text[variable_column_count+self.block.column_count as usize][..];
-                    let text=&variable_column[offset..next_offset];
-                    value.extend_from_slice(text);
-                    variable_column_count+=1;
-                }else{
-                    //fixed column
-                    let offset=self.get_offset(idx*put_entry_count, self.block.data_type_values[idx].1);
-                    column.advance(offset);
-                    let text=&column[offset..offset+self.block.data_type_values[idx].1];
-                    value.extend_from_slice(text);
-                }
-            }else{
-                //is None
-                value.put_u8(0u8);
-            }
-        }
-        Box::new(value)
-    }
-
-    fn get_offset(&self, index: usize, len: usize)->usize{
-        (index + len  -1)/len
+    pub fn value(&self) -> Vec<u8> {
+    //pub fn value(&self) -> Box<Vec<u8>> {
+        assert!(self.is_valid());
+        //&self.block.data()[self.value_range.clone()]
+        //Box::new(vec![0_u8])
+        let mut v=vec![];
+        v.extend_from_slice(&self.block.data()[self.value_range.clone()]);
+        v
     }
 
     pub fn is_valid(&self) -> bool {
-        //self.offset < self.block.len()
-        self.index<self.block.entry_count()
+        self.offset < self.block.len()
     }
 
     pub fn seek_to_first(&mut self) {
-        self.index=0;
+        self.seek_restart_point_by_index(0);
     }
 
     pub fn seek_to_last(&mut self) {
-        self.index=self.block.entry_count()-1;
-        //self.seek_restart_point_by_index(self.block.restart_point_len() - 1);
-        //self.next_until_prev_offset(self.block.len());
+        self.seek_restart_point_by_index(self.block.restart_point_len() - 1);
+        self.next_until_prev_offset(self.block.len());
     }
 
     pub fn seek(&mut self, key: &[u8]) {
-        let mut left = 0;
-        let mut right = self.block.entry_count() - 1;
-        while left <= right {
-            let middle = (left + right)/2;
-            let start=middle*self.block.key_len as usize;
-            let end=start+self.block.key_len as usize -3 ;
-            self.index=middle;
-            let ordering=VersionedComparator::compare_key(&self.block.keys[start..end], key);
-            if ordering==Ordering::Equal{
-                break;
-            }else if ordering==Ordering::Less{
-                left = middle + 1;
-            }else{
-                right = middle - 1;
-            }
-        }
-
-        /*for idx in 0..self.block.entry_count(){
-            let start=idx*self.block.key_len as usize;
-            let end=start+self.block.key_len as usize -3 ;
-            self.index=idx;
-            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Less{
-                continue;
-            }else{
-                break;
-            }
-        }*/
+        self.seek_restart_point_by_key(key);
+        self.next_until_key(key);
     }
 
     pub fn seek_le(&mut self, key: &[u8]) {
-        self.seek(key);
-        while self.index>0 {
-            let start=self.index*self.block.key_len as usize;
-            let end=start+self.block.key_len as usize -3 ;
-            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
-                self.index-=1;
-                continue;
-            }else{
-                break;
-            }
+        self.seek_restart_point_by_key(key);
+        self.next_until_key(key);
+        if !self.is_valid() {
+            self.seek_to_last();
         }
+        self.prev_until_key(key);
     }
 }
 
-/*impl BlockIterator {
+impl BlockIterator {
     /// Invalidates current state after reaching a invalid state.
     fn invalidate(&mut self) {
         self.offset = self.block.len();
@@ -315,7 +218,7 @@ impl BlockIterator {
         self.entry_len = prefix.entry_len();
         self.restart_point_index = index;
     }
-}*/
+}
 
 #[cfg(test)]
 mod tests {
@@ -327,13 +230,12 @@ mod tests {
     fn build_iterator_for_test() -> BlockIterator {
         let options = BlockBuilderOptions::default();
         let mut builder = BlockBuilder::new(options);
-        builder.set_row_deserializer(vec![DataType::Varchar]);
         builder.add(&full_key(b"k01", 1), b"v01");
         builder.add(&full_key(b"k02", 2), b"v02");
         builder.add(&full_key(b"k04", 4), b"v04");
         builder.add(&full_key(b"k05", 5), b"v05");
-        let buf = builder.build().to_vec();
         let capacity = builder.uncompressed_block_size();
+        let buf = builder.build().to_vec();
         BlockIterator::new(BlockHolder::from_owned_block(Box::new(
             Block::decode(buf.into(), capacity).unwrap(),
         )))
@@ -342,7 +244,6 @@ mod tests {
     #[test]
     fn test_seek_first() {
         let mut it = build_iterator_for_test();
-        println!("********************1");
         it.seek_to_first();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());

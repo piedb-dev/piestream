@@ -95,6 +95,7 @@ mod tests {
                 len: 1000,
                 offset: i * 1000,
                 uncompressed_size: 0, // dummy value
+                table_id:0,
             });
             blocks.push(data.slice((i * 1000) as usize..((i + 1) * 1000) as usize));
         }

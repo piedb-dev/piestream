@@ -162,11 +162,13 @@ impl StateStoreImpl {
                 let compaction_group_client = Arc::new(CompactionGroupClientImpl::Meta(Arc::new(
                     MetaCompactionGroupClient::new(hummock_meta_client.clone()),
                 )));
+          
                 let notification_client =
                     RpcNotificationClient::new(hummock_meta_client.get_inner().clone());
                 let inner = HummockStorage::new(
                     config.clone(),
                     sstable_store,
+                    Arc::new(hummock_meta_client.get_inner().clone()),
                     hummock_meta_client.clone(),
                     notification_client,
                     state_store_stats.clone(),

@@ -26,6 +26,7 @@ use crate::types::{
 pub mod error;
 use error::ValueEncodingError;
 use piestream_pb::data::data_type::TypeName;
+use crate::array::ArrayImpl;
 
 pub type Result<T> = std::result::Result<T, ValueEncodingError>;
 
@@ -61,6 +62,60 @@ pub fn serialize_datum_ref(datum_ref: &DatumRef<'_>, mut buf: impl BufMut) {
     }
 }
 
+/// Serialize a datum into bytes (Not order guarantee, used in value encoding).
+pub fn serialize_datum_separate_ref(datum_ref: &DatumRef<'_>, 
+    array_type: &ArrayImpl, 
+    mut buf_data_stat: impl BufMut, 
+    buf_len:  u32,
+    mut buf: impl BufMut,
+    mut variable_offset: impl BufMut,) {
+    //Store variable length data type offset
+    match array_type{
+        ArrayImpl::Utf8(_) |
+        ArrayImpl::Struct(_) |
+        ArrayImpl::List(_)=>{
+            variable_offset.put_u32_le(buf_len);
+        }
+        _=>{}
+    }
+
+    if let Some(d) = datum_ref {
+        buf_data_stat.put_u8(1);
+        serialize_value(*d, &mut buf)
+    } else {
+        buf_data_stat.put_u8(0);
+        serialize_fixed_len_default_value(array_type, buf)
+    }
+
+    
+}
+
+fn serialize_fixed_len_default_value( array_type: &ArrayImpl, mut buf: impl BufMut){
+    match array_type{
+        ArrayImpl::Bool(_)=>{ buf.put_u8(0_u8)},
+        ArrayImpl::Int16(_)=>{buf.put_i16_le(0_i16)},
+        ArrayImpl::Int32(_)=>{buf.put_i32_le(0_i32)},
+        ArrayImpl::Int64(_)=>{buf.put_i64_le(0_i64)},
+        ArrayImpl::Float32(_)=>{buf.put_f32_le(0.0_f32)},
+        ArrayImpl::Float64(_)=>{buf.put_f64_le(0.0_f64)},
+        ArrayImpl::Decimal(_)=>{
+            serialize_decimal(&Decimal::default(), buf)
+        },
+        ArrayImpl::Interval(_)=>{
+            serialize_interval(&IntervalUnit::default(), buf)
+        },
+        ArrayImpl::NaiveDate(_)=>{
+            serialize_naivedate(0, buf)
+        },
+        ArrayImpl::NaiveDateTime(_)=>{
+            serialize_naivedatetime(0, 0, buf)
+        },
+        ArrayImpl::NaiveTime(_)=>{
+            serialize_naivetime(0,0, buf)
+        },
+        _=>{}
+    }
+}
 /// Deserialize bytes into a datum (Not order guarantee, used in value encoding).
 pub fn deserialize_datum(mut data: impl Buf, ty: &DataType) -> Result<Datum> {
     let null_tag = data.get_u8();
@@ -97,6 +152,7 @@ fn serialize_value(value: ScalarRefImpl<'_>, mut buf: impl BufMut) {
         }
     }
 }
+
 
 fn serialize_struct_or_list(bytes: Vec<u8>, mut buf: impl BufMut) {
     buf.put_u32_le(bytes.len() as u32);

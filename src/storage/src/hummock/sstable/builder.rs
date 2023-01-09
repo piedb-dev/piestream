@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
-
 use bytes::BytesMut;
+use std::collections::btree_map::{Entry};
+use std::collections::{BTreeMap,HashMap,BTreeSet};
+
 use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::filter_key_extractor::{
     FilterKeyExtractorImpl, FullKeyFilterKeyExtractor,
 };
 use piestream_hummock_sdk::key::{get_table_id, user_key};
 use piestream_pb::hummock::SstableInfo;
+use piestream_common::catalog::ColumnDesc;
 
 use super::bloom::Bloom;
 use super::utils::CompressionAlgorithm;
@@ -32,6 +34,9 @@ use super::{
 use crate::hummock::value::HummockValue;
 use crate::hummock::HummockResult;
 
+pub type TableColumnDescHash = HashMap<u32, (String, Vec<ColumnDesc>)>;
+
+pub const DEFAULT_BLOCK_ROW: usize = 512;
 pub const DEFAULT_SSTABLE_SIZE: usize = 4 * 1024 * 1024;
 pub const DEFAULT_BLOOM_FALSE_POSITIVE: f64 = 0.1;
 #[derive(Clone, Debug)]
@@ -86,17 +91,21 @@ pub struct SstableBuilder<W: SstableWriter> {
     options: SstableBuilderOptions,
     /// Data writer.
     writer: W,
+    table_column_hash: Arc<TableColumnDescHash>,
     /// Current block builder.
     block_builder: BlockBuilder,
     /// Block metadata vec.
     block_metas: Vec<BlockMeta>,
     /// `table_id` of added keys.
     table_ids: BTreeSet<u32>,
+    table_ids_key_map: BTreeMap<u32, (Vec<u8>, Vec<u8>)>,
     last_table_id: u32,
     /// Hashes of user keys.
     user_key_hashes: Vec<u32>,
     last_full_key: Vec<u8>,
     key_count: usize,
+    need_to_build_size: usize,
+    current_block_key_count: usize,
     sstable_id: u64,
     raw_value: BytesMut,
     filter_key_extractor: Arc<FilterKeyExtractorImpl>,
@@ -106,10 +115,16 @@ pub struct SstableBuilder<W: SstableWriter> {
     total_value_size: usize,
     stale_key_count: u64,
     total_key_count: u64,
+    
+    
 }
 
 impl<W: SstableWriter> SstableBuilder<W> {
-    pub fn for_test(sstable_id: u64, writer: W, options: SstableBuilderOptions) -> Self {
+    pub fn for_test(
+        sstable_id: u64, 
+        writer: W, 
+        options: SstableBuilderOptions,
+        table_column_hash: Option<Arc<TableColumnDescHash>>,) -> Self {
         Self::new(
             sstable_id,
             writer,
@@ -117,6 +132,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
             Arc::new(FilterKeyExtractorImpl::FullKey(
                 FullKeyFilterKeyExtractor::default(),
             )),
+            table_column_hash.unwrap().clone(),
         )
     }
 
@@ -125,22 +141,28 @@ impl<W: SstableWriter> SstableBuilder<W> {
         writer: W,
         options: SstableBuilderOptions,
         filter_key_extractor: Arc<FilterKeyExtractorImpl>,
+        table_column_hash: Arc<TableColumnDescHash>,
     ) -> Self {
         Self {
             options: options.clone(),
             writer,
+            table_column_hash: table_column_hash.clone(),
             block_builder: BlockBuilder::new(BlockBuilderOptions {
-                capacity: options.block_capacity,
+                capacity: options.block_capacity*2,
                 restart_interval: options.restart_interval,
                 compression_algorithm: options.compression_algorithm,
-            }),
+            }
+            ),
             block_metas: Vec::with_capacity(options.capacity / options.block_capacity + 1),
             table_ids: BTreeSet::new(),
+            table_ids_key_map: BTreeMap::new(),
             user_key_hashes: Vec::with_capacity(options.capacity / DEFAULT_ENTRY_SIZE + 1),
             last_table_id: 0,
             raw_value: BytesMut::new(),
             last_full_key: vec![],
             key_count: 0,
+            need_to_build_size: ((options.block_capacity as f32)*1.5).round() as usize,
+            current_block_key_count: 0,
             sstable_id,
             filter_key_extractor,
             last_bloom_filter_key_length: 0,
@@ -151,66 +173,109 @@ impl<W: SstableWriter> SstableBuilder<W> {
         }
     }
 
-    /// Add kv pair to sstable.
-    pub async fn add(
-        &mut self,
-        full_key: &[u8],
-        value: HummockValue<&[u8]>,
-        is_new_user_key: bool,
-    ) -> HummockResult<()> {
-        // Rotate block builder if the previous one has been built.
-        if self.block_builder.is_empty() {
-            self.block_metas.push(BlockMeta {
-                offset: self.writer.data_len() as u32,
-                len: 0,
-                smallest_key: full_key.to_vec(),
-                uncompressed_size: 0,
-            })
-        }
-
-        // TODO: refine me
-        value.encode(&mut self.raw_value);
-        if is_new_user_key {
-            let mut extract_key = user_key(full_key);
-            if let Some(table_id) = get_table_id(full_key) {
-                if self.last_table_id != table_id {
-                    self.table_ids.insert(table_id);
-                    self.last_table_id = table_id;
-                }
-            }
-            extract_key = self.filter_key_extractor.extract(extract_key);
-
-            // add bloom_filter check
-            // 1. not empty_key
-            // 2. extract_key key is not duplicate
-            if !extract_key.is_empty()
-                && (extract_key != &self.last_full_key[0..self.last_bloom_filter_key_length])
-            {
-                // avoid duplicate add to bloom filter
-                self.user_key_hashes
-                    .push(farmhash::fingerprint32(extract_key));
-                self.last_bloom_filter_key_length = extract_key.len();
-            }
-        } else {
-            self.stale_key_count += 1;
-        }
-        self.total_key_count += 1;
-
-        self.block_builder.add(full_key, self.raw_value.as_ref());
-        self.total_key_size += full_key.len();
-        self.total_value_size += self.raw_value.len();
-        self.raw_value.clear();
-
-        self.last_full_key.clear();
-        self.last_full_key.extend_from_slice(full_key);
-
-        if self.block_builder.approximate_len() >= self.options.block_capacity {
-            self.build_block().await?;
-        }
-        self.key_count += 1;
-
-        Ok(())
+    
+   /// Add kv pair to sstable.
+   pub async fn add(
+    &mut self,
+    full_key: &[u8],
+    value: HummockValue<&[u8]>,
+    is_new_user_key: bool,
+) -> HummockResult<()> {
+    // Rotate block builder if the previous one has been built.
+    if self.block_builder.is_empty() {
+        self.block_metas.push(BlockMeta {
+            offset: self.writer.data_len() as u32,
+            len: 0,
+            smallest_key: full_key.to_vec(),
+            uncompressed_size: 0,
+            table_id: 0,
+        })
     }
+
+    // TODO: refine me
+    value.encode(&mut self.raw_value);
+    if is_new_user_key {
+        let mut extract_key = user_key(full_key);
+        if let Some(table_id) = get_table_id(full_key) {
+            if self.last_table_id != table_id {
+                self.table_ids.insert(table_id);
+                 //a block only saves one table data
+                if self.last_table_id!=0{
+                    self.build_block().await?;
+                }
+                self.last_table_id = table_id;
+                
+                //get the current table column data type
+                let current_table_info=match self.table_column_hash.get(&table_id){
+                    Some(table_desc)=>{
+                        let table_data_type_list=table_desc.1
+                                .iter()
+                                .map(|column_desc| column_desc.data_type.clone())
+                                .collect();
+                        tracing::trace!(
+                                    "Start building the data block of table_id: {:?} table_name {:?} ", 
+                                    table_id, table_desc.0);
+                        table_data_type_list
+                    }
+                    None=>{
+                        panic!("Failed to not found description of the table={:?}.", table_id);}
+                };
+                self.block_builder.set_row_deserializer(current_table_info);
+
+                //set table last full key
+                match self.table_ids_key_map.entry(self.last_table_id){
+                    Entry::Occupied( mut value)=>{
+                        let block_last_full_key=&mut value.get_mut().1;
+                        block_last_full_key.extend(self.last_full_key.iter())
+                    }
+                    Entry::Vacant(_)=>{
+                        panic!("Failed to not found table_id={:?} mapping when building block ends.", self.last_table_id)
+                    }
+                };
+                 //set table first full key
+                self.table_ids_key_map.insert(table_id, (full_key.to_vec(), Vec::new()));
+                self.current_block_key_count=0;
+            }
+        }
+        extract_key = self.filter_key_extractor.extract(extract_key);
+
+        // add bloom_filter check
+        // 1. not empty_key
+        // 2. extract_key key is not duplicate
+        if !extract_key.is_empty()
+            && (extract_key != &self.last_full_key[0..self.last_bloom_filter_key_length])
+        {
+            // avoid duplicate add to bloom filter
+            self.user_key_hashes
+                .push(farmhash::fingerprint32(extract_key));
+            self.last_bloom_filter_key_length = extract_key.len();
+        }
+    } else {
+        self.stale_key_count += 1;
+    }
+    self.total_key_count += 1;
+
+    self.block_builder.add(full_key, self.raw_value.as_ref());
+    self.current_block_key_count += 1;
+    self.total_key_size += full_key.len();
+    self.total_value_size += self.raw_value.len();
+    self.raw_value.clear();
+
+    self.last_full_key.clear();
+    self.last_full_key.extend_from_slice(full_key);
+
+    //the same key is stored in a block
+    if is_new_user_key 
+        && (self.current_block_key_count>=DEFAULT_BLOCK_ROW  || 
+        self.block_builder.approximate_len() >= self.options.block_capacity) {
+        self.build_block().await?;
+    }else if self.block_builder.approximate_len() >= self.need_to_build_size{
+        self.build_block().await?;
+    }
+    self.key_count += 1;
+
+    Ok(())
+}
 
     /// Finish building sst.
     ///
@@ -301,6 +366,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
         let block = self.block_builder.build();
         self.writer.write_block(block, block_meta).await?;
         block_meta.len = self.writer.data_len() as u32 - block_meta.offset;
+        block_meta.table_id=self.last_table_id;
         self.block_builder.clear();
         Ok(())
     }
@@ -339,7 +405,7 @@ pub(super) mod tests {
             compression_algorithm: CompressionAlgorithm::None,
         };
 
-        let b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt);
+        let b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, None);
 
         b.finish().await.unwrap();
     }
@@ -347,7 +413,7 @@ pub(super) mod tests {
     #[tokio::test]
     async fn test_basic() {
         let opt = default_builder_opt_for_test();
-        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt);
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, None);
 
         for i in 0..TEST_KEYS_COUNT {
             b.add(&test_key_of(i), HummockValue::put(&test_value_of(i)), true)

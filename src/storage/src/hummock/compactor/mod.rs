@@ -50,7 +50,7 @@ use piestream_pb::hummock::{
     CompactTask, CompactTaskProgress, KeyRange as KeyRange_vec, LevelType, SstableInfo,
     SubscribeCompactTasksResponse,
 };
-use piestream_rpc_client::HummockMetaClient;
+use piestream_rpc_client::{MetaClient, HummockMetaClient};
 pub use shared_buffer_compact::compact;
 pub use sstable_store::{
     CompactorMemoryCollector, CompactorSstableStore, CompactorSstableStoreRef,
@@ -72,7 +72,9 @@ use crate::hummock::{
     SstableIdManagerRef, SstableWriterFactory, StreamingSstableWriterFactory,
 };
 use crate::monitor::{StateStoreMetrics, StoreLocalStatistic};
+use crate::hummock::sstable::builder::TableColumnDescHash;
 
+//type TableColumnDescHash = HashMap<u32, (String, Vec<ColumnDesc>)>;
 pub struct RemoteBuilderFactory<F: SstableWriterFactory> {
     sstable_id_manager: SstableIdManagerRef,
     limiter: Arc<MemoryLimiter>,
@@ -81,6 +83,7 @@ pub struct RemoteBuilderFactory<F: SstableWriterFactory> {
     remote_rpc_cost: Arc<AtomicU64>,
     filter_key_extractor: Arc<FilterKeyExtractorImpl>,
     sstable_writer_factory: F,
+    table_column_hash: Arc<TableColumnDescHash>,
 }
 
 #[async_trait::async_trait]
@@ -111,6 +114,7 @@ impl<F: SstableWriterFactory> TableBuilderFactory for RemoteBuilderFactory<F> {
             writer,
             self.options.clone(),
             self.filter_key_extractor.clone(),
+            self.table_column_hash.clone(),
         );
         Ok(builder)
     }
@@ -454,6 +458,7 @@ impl Compactor {
                                         shutdown.lock().unwrap().remove(&task_id);
                                     }
                                     Task::VacuumTask(vacuum_task) => {
+                                        //从 sstable_store,hummock_meta_client删除vacuum_task.sst列表
                                         Vacuum::vacuum(
                                             vacuum_task,
                                             context.context.sstable_store.clone(),
@@ -462,6 +467,7 @@ impl Compactor {
                                         .await;
                                     }
                                     Task::FullScanTask(full_scan_task) => {
+                                        //遍历需要删除sst列表
                                         Vacuum::full_scan(
                                             full_scan_task,
                                             context.context.sstable_store.clone(),
@@ -470,6 +476,7 @@ impl Compactor {
                                         .await;
                                     }
                                     Task::ValidationTask(validation_task) => {
+                                        //检测是否有效
                                         validate_ssts(
                                             validation_task,
                                             context.context.sstable_store.clone(),
@@ -718,6 +725,7 @@ impl Compactor {
         get_id_time: Arc<AtomicU64>,
         task_progress: Option<Arc<TaskProgress>>,
     ) -> HummockResult<Vec<SplitTableOutput>> {
+        let table_column_hash=load_table_schemas(&self.context.meta_client).await?;
         let builder_factory = RemoteBuilderFactory {
             sstable_id_manager: self.context.sstable_id_manager.clone(),
             limiter: self.context.read_memory_limiter.clone(),
@@ -726,6 +734,7 @@ impl Compactor {
             remote_rpc_cost: get_id_time,
             filter_key_extractor,
             sstable_writer_factory: writer_factory,
+            table_column_hash: Arc::new(table_column_hash),
         };
 
         let mut sst_builder = CapacitySplitTableBuilder::new(
@@ -743,6 +752,25 @@ impl Compactor {
         .await?;
         sst_builder.finish().await
     }
+}
+
+ /// Determine all database tables and adds their information into a hash table with the table-ID as
+    /// key.
+async fn load_table_schemas(meta_client: &MetaClient) -> HummockResult<TableColumnDescHash> {
+    let mut column_table = HashMap::new();
+
+    match meta_client.risectl_list_state_tables().await{
+         Ok(mvs) => mvs.iter().for_each(|tbl| {
+                    column_table.insert(tbl.id, 
+                        (tbl.name.clone(), 
+                        tbl.columns.iter().map(|column|column.column_desc.as_ref().unwrap().into()).collect())
+                    );
+                }),
+         Err(err)=>{
+            panic!("Failed to get table schema via meta client rpc. {:#?}", err);
+         }
+    };
+    Ok(column_table)
 }
 
 pub fn estimate_memory_use_for_compaction(task: &CompactTask) -> u64 {
