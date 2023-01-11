@@ -21,7 +21,7 @@ use piestream_common::types::{DataType};
 
 use super::DEFAULT_DATA_TYPE_BIT_SIZE;
 use crate::hummock::BlockHolder;
-use crate::hummock::value::VALUE_DELETE;
+use crate::hummock::value::{HummockValue,VALUE_PUT, VALUE_DELETE};
 
 
 /// [`BlockIterator`] is used to read kv pairs in a block.
@@ -62,7 +62,11 @@ impl BlockIterator {
 
     pub fn prev(&mut self) {
         assert!(self.is_valid());
-        self.index-=1;
+        if self.index>0{
+            self.index-=1;
+        }else{
+            self.index=self.block.entry_count();
+        }
         //self.prev_inner();
     }
 
@@ -77,42 +81,53 @@ impl BlockIterator {
     //pub fn value(&self) -> &[u8] {
     pub fn value(&self) -> Box<Vec<u8>> {
         assert!(self.is_valid());
-        
-        let start=self.index*self.block.key_len as usize;
-        let end=start+self.block.key_len as usize-3 ;
+     
+        let start=(self.index+1)*self.block.key_len as usize-3;
+        let end=start+3 ;
         
         let mut buf=&self.block.keys[start..end];
-        
         //let mut buf=Bytes::from(&self.block.keys[start..end]);
-        let state=buf.get_u8();
-        if state==VALUE_DELETE{
-            return Box::new(Vec::new());
+        let row_state=buf.get_u8();
+        if row_state==VALUE_DELETE{
+            return Box::new(vec![VALUE_DELETE]);
         }
-
-        /*let mut data_types=vec![0; self.block.column_count as usize];
-        for idx in (0..self.block.column_count){
-
-        }*/
 
         let put_entry_count=buf.get_u16_le() as usize;
         assert!(put_entry_count<self.block.vaild_entry_count as usize);
-        //let len=(DEFAULT_DATA_TYPE_BIT_SIZE/8) as usize;
-        let mut bytes=&self.block.states[..];
-
+    
         let mut value =Vec::new();
+        value.put_u8(VALUE_PUT);
+        let col_state_bytes_number=(put_entry_count / DEFAULT_DATA_TYPE_BIT_SIZE as usize) * 4;
+
         let  mut variable_column_count=0_usize;
         for idx in 0..self.block.column_count as usize {
-            let offset=self.get_offset(idx*put_entry_count, DEFAULT_DATA_TYPE_BIT_SIZE as usize);
-            let pos=(idx*put_entry_count) % DEFAULT_DATA_TYPE_BIT_SIZE as usize;
-            bytes.advance(offset);
-            let v=(bytes.get_u32_le()>>pos) & 0x1;
+   
+            let state_offset=idx * col_state_bytes_number + self.index / DEFAULT_DATA_TYPE_BIT_SIZE as usize ;
+            let mut col_state=&self.block.states[..];
+            col_state.advance(state_offset );
+            //get current column value state
+            let v=(col_state.get_u32_le()>>(self.index % DEFAULT_DATA_TYPE_BIT_SIZE as usize)) & 0x1;
             let mut column=&self.block.vec_text[idx][..];
             //is Some
             if v>0 {
                 value.put_u8(1u8);
                 //variable column
                 if self.block.data_type_values[idx].1==0{
-                    let index=self.get_offset(idx*put_entry_count, 4);
+                    column.advance(self.index * 4  );
+                    let  variable_column=&self.block.vec_text[variable_column_count+self.block.column_count as usize][..];
+                    let offset=column.get_u32_le() as usize;
+                    let mut next_offset=0;
+                    if (put_entry_count+1) < self.block.vaild_entry_count as usize{
+                        next_offset+=column.get_u32_le() as usize;
+                    }else{
+                        next_offset=variable_column.len();
+                        assert!(offset<=next_offset);
+                    }
+                    let text=&variable_column[offset..next_offset];
+                    value.extend_from_slice(text);
+                    variable_column_count+=1;
+                    
+                    /*let index=self.get_offset(idx*put_entry_count, 4);
                     column.advance(index);
                     let offset=column.get_u32_le() as usize;
                     let mut next_offset=0;
@@ -124,10 +139,10 @@ impl BlockIterator {
                     let  variable_column=&self.block.vec_text[variable_column_count+self.block.column_count as usize][..];
                     let text=&variable_column[offset..next_offset];
                     value.extend_from_slice(text);
-                    variable_column_count+=1;
+                    variable_column_count+=1;*/
                 }else{
                     //fixed column
-                    let offset=self.get_offset(idx*put_entry_count, self.block.data_type_values[idx].1);
+                    let offset=self.index * self.block.data_type_values[idx].1 ;
                     column.advance(offset);
                     let text=&column[offset..offset+self.block.data_type_values[idx].1];
                     value.extend_from_slice(text);
@@ -138,10 +153,6 @@ impl BlockIterator {
             }
         }
         Box::new(value)
-    }
-
-    fn get_offset(&self, index: usize, len: usize)->usize{
-        (index + len  -1)/len
     }
 
     pub fn is_valid(&self) -> bool {
@@ -155,20 +166,23 @@ impl BlockIterator {
 
     pub fn seek_to_last(&mut self) {
         self.index=self.block.entry_count()-1;
+        //println!("self.index={:?}", self.index);
         //self.seek_restart_point_by_index(self.block.restart_point_len() - 1);
         //self.next_until_prev_offset(self.block.len());
     }
 
     pub fn seek(&mut self, key: &[u8]) {
-        let mut left = 0;
-        let mut right = self.block.entry_count() - 1;
-        while left <= right {
+        let mut left = 0_i32;
+        let mut right = (self.block.entry_count() - 1) as i32;
+        let mut is_hit=false;
+        while left>=0 && right>=0 && left <= right {
             let middle = (left + right)/2;
-            let start=middle*self.block.key_len as usize;
+            let start=middle as usize *self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
-            self.index=middle;
+            self.index=middle as usize;
             let ordering=VersionedComparator::compare_key(&self.block.keys[start..end], key);
             if ordering==Ordering::Equal{
+                is_hit=true;
                 break;
             }else if ordering==Ordering::Less{
                 left = middle + 1;
@@ -177,6 +191,10 @@ impl BlockIterator {
             }
         }
 
+        //search key greater all key of block 
+        if is_hit==false &&  self.index+1==self.block.entry_count() {
+            self.index=self.block.entry_count();
+        }
         /*for idx in 0..self.block.entry_count(){
             let start=idx*self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
@@ -191,7 +209,24 @@ impl BlockIterator {
 
     pub fn seek_le(&mut self, key: &[u8]) {
         self.seek(key);
-        while self.index>0 {
+        if !self.is_valid(){
+            self.seek_to_last();
+        }
+        while self.is_valid(){ 
+            let start=self.index*self.block.key_len as usize;
+            let end=start+self.block.key_len as usize -3 ;
+            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
+                if self.index==0 {
+                    self.index=self.block.entry_count();
+                }else{
+                    self.index-=1;
+                }
+            }else{
+                break;
+            }
+        }
+        
+        /*while self.index>0 {
             let start=self.index*self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
             if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
@@ -200,7 +235,7 @@ impl BlockIterator {
             }else{
                 break;
             }
-        }
+        }*/
     }
 }
 
@@ -324,14 +359,23 @@ mod tests {
     use super::*;
     use crate::hummock::{Block, BlockBuilder, BlockBuilderOptions};
 
+    fn get_hummock_value( value: &[u8])->Bytes{
+        let mut v=vec![1_u8];
+        v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
+        v.extend_from_slice(value);
+        let  mut raw_value=BytesMut::new();
+        HummockValue::put(&v[..]).encode(&mut raw_value);
+        raw_value.freeze()
+    }
+
     fn build_iterator_for_test() -> BlockIterator {
         let options = BlockBuilderOptions::default();
         let mut builder = BlockBuilder::new(options);
         builder.set_row_deserializer(vec![DataType::Varchar]);
-        builder.add(&full_key(b"k01", 1), b"v01");
-        builder.add(&full_key(b"k02", 2), b"v02");
-        builder.add(&full_key(b"k04", 4), b"v04");
-        builder.add(&full_key(b"k05", 5), b"v05");
+        builder.add(&full_key(b"k01", 1), &get_hummock_value(b"v01")[..]);
+        builder.add(&full_key(b"k02", 2), &get_hummock_value(b"v02")[..]);
+        builder.add(&full_key(b"k04", 4), &get_hummock_value(b"v04")[..]);
+        builder.add(&full_key(b"k05", 5), &get_hummock_value(b"v05")[..]);
         let buf = builder.build().to_vec();
         let capacity = builder.uncompressed_block_size();
         BlockIterator::new(BlockHolder::from_owned_block(Box::new(
@@ -342,11 +386,10 @@ mod tests {
     #[test]
     fn test_seek_first() {
         let mut it = build_iterator_for_test();
-        println!("********************1");
         it.seek_to_first();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v01"), it.value().as_slice());
     }
 
     #[test]
@@ -355,7 +398,7 @@ mod tests {
         it.seek_to_last();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v05"), it.value().as_slice());
     }
 
     #[test]
@@ -364,8 +407,9 @@ mod tests {
         it.seek(&full_key(b"k00", 0)[..]);
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v01"), it.value().as_slice());
 
+  
         let mut it = build_iterator_for_test();
 
         it.seek_le(&full_key(b"k00", 0)[..]);
@@ -382,7 +426,7 @@ mod tests {
         it.seek_le(&full_key(b"k06", 6)[..]);
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v05"), it.value().as_slice());
     }
 
     #[test]
@@ -402,22 +446,22 @@ mod tests {
         it.seek_to_first();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v01"), it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k02", 2)[..], it.key());
-        assert_eq!(b"v02", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v02"), it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k04", 4)[..], it.key());
-        assert_eq!(b"v04", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v04"), it.value().as_slice());
 
         it.next();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v05"), it.value().as_slice());
 
         it.next();
         assert!(!it.is_valid());
@@ -430,22 +474,22 @@ mod tests {
         it.seek_to_last();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k05", 5)[..], it.key());
-        assert_eq!(b"v05", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v05"), it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k04", 4)[..], it.key());
-        assert_eq!(b"v04", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v04"), it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k02", 2)[..], it.key());
-        assert_eq!(b"v02", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v02"), it.value().as_slice());
 
         it.prev();
         assert!(it.is_valid());
         assert_eq!(&full_key(b"k01", 1)[..], it.key());
-        assert_eq!(b"v01", it.value().as_slice());
+        assert_eq!(get_hummock_value(b"v01"), it.value().as_slice());
 
         it.prev();
         assert!(!it.is_valid());

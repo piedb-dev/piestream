@@ -16,13 +16,13 @@
 
 use std::cmp::{self};
 use std::hash::Hasher;
-use std::ptr;
+//use std::ptr;
 
 use serde::Deserialize;
 
 use super::{HummockError, HummockResult};
 
-unsafe fn u64(ptr: *const u8) -> u64 {
+/*unsafe fn u64(ptr: *const u8) -> u64 {
     ptr::read_unaligned(ptr as *const u64)
 }
 
@@ -52,7 +52,7 @@ pub fn bytes_diff<'a, 'b>(base: &'a [u8], target: &'b [u8]) -> &'b [u8] {
         }
         target.get_unchecked(end..)
     }
-}
+}*/
 
 /// Calculates the ``XxHash`` of the given data.
 pub fn xxhash64_checksum(data: &[u8]) -> u64 {

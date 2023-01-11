@@ -230,6 +230,7 @@ fn deserialize_str(mut data: impl Buf) -> Result<String> {
     let len = data.get_u32_le();
     let mut bytes = vec![0; len as usize];
     data.copy_to_slice(&mut bytes);
+    //println!("len={:?} deserialize_str={:?}", len, &bytes);
     String::from_utf8(bytes).map_err(ValueEncodingError::InvalidUtf8)
 }
 

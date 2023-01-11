@@ -491,7 +491,51 @@ impl DataChunk {
             }
         }
     }
-    pub fn serialize_columns(&self) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    pub fn serialize_columns(&self, 
+        buffers: &mut Vec<Vec<u8>>, 
+        buffers_stat: &mut Vec<Vec<u8>>, 
+        variable_offsets: &mut Vec<Vec<u8>>) {
+        match &self.vis2 {
+            Vis::Bitmap(vis) => {
+                let rows_num = vis.len();
+                //let mut buffers = vec![vec![]; self.columns.len()];
+                //let mut buffers_stat = vec![vec![]; self.columns.len()];
+                //let mut variable_offsets = vec![vec![]; self.columns.len()];
+                for (idx, c) in self.columns.iter().enumerate()  {
+                    let c = c.array_ref();
+                    assert_eq!(c.len(), rows_num);
+                    for i in 0..c.len(){
+                        // SAFETY(value_at_unchecked): the idx is always in bound.
+                        unsafe {
+                            if vis.is_set_unchecked(i) {
+                                serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
+                                &mut buffers_stat[idx], buffers[idx].len() as u32, &mut buffers[idx], &mut variable_offsets[idx]);
+                            }
+                        }
+                    }
+                }
+                //(buffers_stat, buffers, variable_offsets)
+            }
+            Vis::Compact(rows_num) => {
+                //let mut buffers = vec![vec![]; self.columns.len()];
+                //let mut buffers_stat = vec![vec![]; self.columns.len()];
+                //let mut variable_offsets = vec![vec![]; self.columns.len()];
+                for (idx, c) in self.columns.iter().enumerate()  {
+                    let c = c.array_ref();
+                    assert_eq!(c.len(), *rows_num);
+                    for i in 0..c.len(){
+                        // SAFETY(value_at_unchecked): the idx is always in bound.
+                        unsafe {
+                            serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
+                                &mut buffers_stat[idx],  buffers[idx].len() as u32,&mut buffers[idx], &mut variable_offsets[idx]);
+                        }
+                    }
+                }
+                //(buffers_stat, buffers, variable_offsets)
+            }
+        }
+    }
+    /*pub fn serialize_columns(&self) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<Vec<u8>>) {
         match &self.vis2 {
             Vis::Bitmap(vis) => {
                 let rows_num = vis.len();
@@ -531,7 +575,7 @@ impl DataChunk {
                 (buffers_stat, buffers, variable_offsets)
             }
         }
-    }
+    }*/
 }
 
 impl fmt::Debug for DataChunk {

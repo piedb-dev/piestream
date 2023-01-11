@@ -27,7 +27,7 @@ use piestream_common::types::{value_to_type, index_to_len, DataType};
 use super::utils::{xxhash64_verify, CompressionAlgorithm};
 use crate::hummock::sstable::utils::xxhash64_checksum;
 use crate::hummock::{HummockError, HummockResult};
-use crate::hummock::value::HummockValue;
+use crate::hummock::value::{VALUE_PUT,VALUE_DELETE};
 
 pub const DEFAULT_DATA_TYPE_BIT_SIZE: u32 = 8 * std::mem::size_of::<u32>() as u32;
 pub const DEFAULT_BLOCK_SIZE: usize = 4 * 1024;
@@ -103,10 +103,10 @@ impl Block {
     pub fn decode_from_raw(data: Bytes) -> Self {
         let buf=data.clone();
         let mut offset=0;
-        let entry_count=(&buf[buf.len()-offset-4..]).get_u16_le();
-        offset+=4;
-        let vaild_entry_count=(&buf[buf.len()-offset-4..]).get_u16_le();
-        offset+=4;
+        let entry_count=(&buf[buf.len()-offset-2..]).get_u16_le();
+        offset+=2;
+        let vaild_entry_count=(&buf[buf.len()-offset-2..]).get_u16_le();
+        offset+=2;
         let column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
         offset+=2;
         /*let variable_column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
@@ -114,7 +114,8 @@ impl Block {
 
         let mut variable_column_count=0;
         let column_count_usize=column_count as usize;
-        let mut data_type_values= vec![(0_u8,0_usize); column_count_usize];
+        //let mut data_type_values= vec![(0_u8,0_usize); column_count_usize];
+        let mut data_type_values= Vec::with_capacity(column_count_usize);
         let mut ptr=&buf[buf.len()-offset-column_count_usize..];
         for _ in  0..column_count{
             let v=ptr.get_u8();
@@ -122,7 +123,9 @@ impl Block {
                 variable_column_count+=1;
             }
             data_type_values.push((ptr.get_u8(),index_to_len(v)));
+            //data_type_values[i as usize]=(ptr.get_u8(),index_to_len(v));
         }
+        //println!("data_type_values={:?}", data_type_values);
         offset+=column_count_usize;
         let key_len=(&buf[buf.len()-offset-2..]).get_u16_le();
         offset+=2;
@@ -147,7 +150,7 @@ impl Block {
         let mut next_start=0;
         //column text
         let mut vec_text=vec![vec![]; (column_count+variable_column_count) as usize];
-        let variable_column_type=vec![8_u8, 13, 14];
+        //let variable_column_type=vec![8_u8, 13, 14];
         let mut vec_variable_column_idx=vec![0; variable_column_count as usize];
         for i in 0..(column_count+variable_column_count){
             let a=offsets.get_u32_le() as usize;
@@ -160,7 +163,7 @@ impl Block {
             let mut data_type_value=0_u8;
             if i<column_count{
                 data_type_value=data_type_values[i as usize].0 as u8;
-                if variable_column_type.contains(&data_type_value){
+                if let None=value_to_type(data_type_value){
                     //save variable column index
                     vec_variable_column_idx.push(i);
                     //offset is u32
@@ -332,12 +335,16 @@ impl BlockBuilder {
                 Ordering::Less
             );
         }
-        let hummock_value = HummockValue::from_slice(value).unwrap();
-        let (is_put, text) = match hummock_value {
-            HummockValue::Put(val) => (true, val),
-            HummockValue::Delete => (false, &[] as &[u8]),
+        //println!("hummock_value={:?} raw_key_len={}", value, key.len());
+        let value_len=value.len();
+        let buffer=&mut &value[..];
+        let is_put=match buffer.get_u8() {
+            VALUE_PUT => true,
+            _=>false
         };
-       println!("hummock_value={:?}", hummock_value);
+        //let is_put= self.is_put(&mut &value[..]);
+       
+        //println!("is_put={:?} hummock_value={:?}", is_put, buffer);
         let idx=self.entry_count % self.data_type_bit_size as usize;
         if idx==0{
             self.hummock_value_list.push(0_u32);
@@ -345,30 +352,35 @@ impl BlockBuilder {
 
         let mut key_vec=key.to_vec();
         if is_put {
-            let row = self.row_deserializer.as_ref().unwrap().deserialize(text).unwrap();
+            let row = self.row_deserializer.as_ref().unwrap().deserialize(buffer).unwrap();
+            //println!("row={:?}", row);
             self.rows.push(row.clone());
             let v=self.hummock_value_list.last_mut().unwrap();
             *v|=1<<idx;
+            //println!("v={:?}", v);
             //self.put_record_idxs.push(self.put_entry_count as u16);
             //self.put_entry_count+=1;
-            key_vec.push(1 as u8);
+            key_vec.push(VALUE_PUT as u8);
             key_vec.append(&mut (self.put_entry_count as u16).to_le_bytes().to_vec());
-            self.current_mem_size+=key_vec.len()+value.len()+self.variable_columns.len()*4;
+            self.put_entry_count+=1;
+            self.current_mem_size+=key_vec.len()+value_len+self.variable_columns.len()*4;
             for i in 0..row.size(){
                 let len=match row.0[i] {
-                    //fixed data type will fill default value
+                    //fill default value to fixed data type 
                     None=>{
                         self.row_deserializer.as_ref().unwrap().data_types()[i].data_type_len()
                     },
+                    //not none 
                     _=>{0}
                 };
                 self.current_mem_size+=len;
+                //println!("len={:?} self.current_mem_size={:?}", len, self.current_mem_size);
             }
         }else{
-            key_vec.push(0 as u8);
+            key_vec.push(VALUE_DELETE as u8);
             key_vec.append(&mut u16::MAX.to_le_bytes().to_vec());
             //self.put_record_idxs.push(u16::MAX);
-            self.current_mem_size+=key_vec.len()+value.len();
+            self.current_mem_size+=key_vec.len()+value_len;
         }
 
         //self.keys.push(key.to_vec());
@@ -381,18 +393,29 @@ impl BlockBuilder {
 
     
     pub fn build(&mut self) -> &[u8] {
-        
-        let data_chunk=DataChunk::from_rows(&self.rows, self.row_deserializer.as_ref().unwrap().data_types());
-        //column_value_state_list saves the field value state 
-        let (column_value_state_list, columns, variable_offsets)=data_chunk.serialize_columns();
-
+        //println!("into build ********************************************");
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
-        assert_eq!(columns.len(), data_types.len());
-        assert_eq!(data_types.len(), column_value_state_list.len());
+        let data_chunk=DataChunk::from_rows(&self.rows, data_types);
+        //column_value_state_list saves the field value state 
+        //println!("data_chunk={:?}", data_chunk);
+        let mut buffers = vec![vec![]; data_types.len()];
+        let mut column_value_state_list = vec![vec![]; data_types.len()];
+        let mut variable_offsets = vec![vec![]; data_types.len()];
+        data_chunk.serialize_columns(&mut buffers, &mut column_value_state_list, &mut variable_offsets);
+        //let (column_value_state_list, columns, variable_offsets)=data_chunk.serialize_columns();
+
+        let columns=&buffers;
+        //println!("column_value_state_list={:?}", column_value_state_list);
+        //println!("columns={:?}", columns);
+        //println!("variable_offsets={:?}", variable_offsets);
+      
+        //assert_eq!(columns.len(), data_types.len());
+        //assert_eq!(data_types.len(), column_value_state_list.len());
 
         let size=(self.put_entry_count + (self.data_type_bit_size as usize -1)) / self.data_type_bit_size as usize;
         let mut state_list =vec![vec![]; column_value_state_list.len()];
         for (pos, column_state_list) in column_value_state_list.iter().enumerate(){
+
             assert_eq!(self.put_entry_count, column_state_list.len());
             for (idx,element) in column_state_list.iter().enumerate(){
                 if idx % self.data_type_bit_size as usize==0{
@@ -408,9 +431,11 @@ impl BlockBuilder {
        
         //saved keys info
         for idx in 0.. self.keys.len() {
+            //println!("keys.len={:?}", &self.keys[idx].len());
             self.buf.extend_from_slice(&self.keys[idx]);
         }
         let keys_compress_len=self.buf.len();
+        //println!("keys_compress_len={:?}", keys_compress_len);
 
         //saved value state (whether None)
         for idx in 0..state_list.len() {
@@ -419,11 +444,14 @@ impl BlockBuilder {
             }
         }
         let states_len=self.buf.len()-keys_compress_len;
+        //println!("states_len={:?} buf.len={:?}", keys_compress_len, self.buf.len());
 
         let mut start_offset=self.buf.len();
         //let mut vec=vec![(0,0); columns.len()];
-        let mut offsets=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
-        let mut lens=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
+        //let mut offsets=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
+        //let mut lens=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
+        let mut offsets=Vec::with_capacity(4*(columns.len()+self.variable_columns.len()) as usize);
+        let mut lens=Vec::with_capacity(4*(columns.len()+self.variable_columns.len()) as usize);
         //let data_types=self.row_deserializer.as_ref().unwrap().data_types();
         //assert_eq!(columns.len(), data_types.len());
 
@@ -435,12 +463,13 @@ impl BlockBuilder {
                 assert_eq!(columns[idx].len(), self.put_entry_count);
                 assert_eq!(columns[idx].len()%data_types[idx].data_type_len(), 0);
             }else{
-                assert_eq!(variable_offsets[idx].len(), self.put_entry_count);
+                assert_eq!(variable_offsets[idx].len(), self.put_entry_count*4);
                 //offset
                 self.buf.extend_from_slice(&variable_offsets[idx]);
                 variable_column_num+=1;
             }
             //vec.push((start_offset, self.buf.len()-start_offset));
+            //println!("start_offset={:?}, buf.len={:?}", start_offset, self.buf.len());
             offsets.extend_from_slice(&(start_offset as u32).to_le_bytes());
             lens.extend_from_slice(&((self.buf.len()-start_offset) as u32).to_le_bytes());
             start_offset=self.buf.len();
@@ -458,6 +487,8 @@ impl BlockBuilder {
             start_offset=self.buf.len();
         }
 
+        //println!("lens.len={:?}", lens.len());
+        //println!("offsets.len={:?}", offsets.len());
         self.buf.extend_from_slice(&lens);
         self.buf.extend_from_slice(&offsets);
         self.buf.put_u32_le(lens.len() as u32);
