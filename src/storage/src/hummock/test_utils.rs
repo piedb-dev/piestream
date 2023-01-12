@@ -111,7 +111,7 @@ pub const TEST_KEYS_COUNT: usize = 10000;
 pub fn default_builder_opt_for_test() -> SstableBuilderOptions {
     SstableBuilderOptions {
         capacity: 256 * (1 << 20), // 256MB
-        block_capacity: 4096,      // 4KB
+        block_capacity: 100*4096,      // 4KB
         restart_interval: DEFAULT_RESTART_INTERVAL,
         bloom_false_positive: 0.1,
         compression_algorithm: CompressionAlgorithm::None,

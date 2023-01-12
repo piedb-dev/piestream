@@ -21,6 +21,8 @@ use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::filter_key_extractor::{
     FilterKeyExtractorImpl, FullKeyFilterKeyExtractor,
 };
+
+use piestream_hummock_sdk::key::key_with_epoch;
 use piestream_hummock_sdk::key::{get_table_id, user_key};
 use piestream_pb::hummock::SstableInfo;
 use piestream_common::catalog::ColumnDesc;
@@ -36,7 +38,7 @@ use crate::hummock::HummockResult;
 
 pub type TableColumnDescHash = HashMap<u32, (String, Vec<ColumnDesc>)>;
 
-pub const DEFAULT_BLOCK_ROW: usize = 512;
+pub const DEFAULT_BLOCK_ROW: usize = 1024;
 pub const DEFAULT_SSTABLE_SIZE: usize = 4 * 1024 * 1024;
 pub const DEFAULT_BLOOM_FALSE_POSITIVE: f64 = 0.1;
 #[derive(Clone, Debug)]
@@ -161,7 +163,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
             raw_value: BytesMut::new(),
             last_full_key: vec![],
             key_count: 0,
-            need_to_build_size: ((options.block_capacity as f32)*1.5).round() as usize,
+            need_to_build_size: ((options.block_capacity as f32)*1.2).round() as usize,
             current_block_key_count: 0,
             sstable_id,
             filter_key_extractor,
@@ -226,14 +228,15 @@ impl<W: SstableWriter> SstableBuilder<W> {
                 match self.table_ids_key_map.entry(self.last_table_id){
                     Entry::Occupied( mut value)=>{
                         let block_last_full_key=&mut value.get_mut().1;
+                        block_last_full_key.clear();
                         block_last_full_key.extend(self.last_full_key.iter())
                     }
                     Entry::Vacant(_)=>{
-                        panic!("Failed to not found table_id={:?} mapping when building block ends.", self.last_table_id)
+                        //set table first full key
+                        self.table_ids_key_map.insert(table_id, (full_key.to_vec(), Vec::new()));
+                        //panic!("Failed to not found table_id={:?} mapping when building block ends.", self.last_table_id)
                     }
                 };
-                 //set table first full key
-                self.table_ids_key_map.insert(table_id, (full_key.to_vec(), Vec::new()));
                 self.current_block_key_count=0;
             }
         }
@@ -266,10 +269,12 @@ impl<W: SstableWriter> SstableBuilder<W> {
 
     //the same key is stored in a block
     if is_new_user_key 
-        && (self.current_block_key_count>=DEFAULT_BLOCK_ROW  || 
+        && (self.current_block_key_count%DEFAULT_BLOCK_ROW==0  || 
         self.block_builder.approximate_len() >= self.options.block_capacity) {
+        //println!("current_block_key_count={:?} approximate_len={:?}", self.current_block_key_count, self.block_builder.approximate_len());
         self.build_block().await?;
     }else if self.block_builder.approximate_len() >= self.need_to_build_size{
+        //println!("2222222222222");
         self.build_block().await?;
     }
     self.key_count += 1;
@@ -362,9 +367,12 @@ impl<W: SstableWriter> SstableBuilder<W> {
         }
 
         let mut block_meta = self.block_metas.last_mut().unwrap();
-        block_meta.uncompressed_size = self.block_builder.uncompressed_block_size() as u32;
-        let block = self.block_builder.build();
+        //block_meta.uncompressed_size = self.block_builder.uncompressed_block_size() as u32;
+        let (uncompressed_size, block) = self.block_builder.build();
+        block_meta.uncompressed_size = uncompressed_size;
         self.writer.write_block(block, block_meta).await?;
+        //let block_build=&self.block_builder;
+        //block_meta.uncompressed_size = block_build.uncompressed_block_size() as u32;
         block_meta.len = self.writer.data_len() as u32 - block_meta.offset;
         block_meta.table_id=self.last_table_id;
         self.block_builder.clear();
@@ -399,7 +407,7 @@ pub(super) mod tests {
     async fn test_empty() {
         let opt = SstableBuilderOptions {
             capacity: 0,
-            block_capacity: 4096,
+            block_capacity: 100*4096,
             restart_interval: 16,
             bloom_false_positive: 0.1,
             compression_algorithm: CompressionAlgorithm::None,
@@ -410,10 +418,71 @@ pub(super) mod tests {
         b.finish().await.unwrap();
     }
 
+    fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
+        use piestream_common::types::DataType;
+
+        let columns = vec![
+            //ColumnDesc::new_atomic(DataType::Int32, "age", 1),
+            ColumnDesc::new_atomic(DataType::Varchar, "name", 0),
+        ];
+        let mut mapping: HashMap<u32, (String, Vec<ColumnDesc>)> = HashMap::new();
+        mapping.insert(1, ("school".to_string(), columns));
+        println!("mapping={:?}", mapping);
+        Some(Arc::new(mapping))
+    }
+
+    /// The key (with epoch 0) of an index in the test table
+    pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
+        let mut user_key=vec![];
+        user_key.push('t' as u8);
+        user_key.extend_from_slice(&1_u32.to_be_bytes());
+        let  key = format!("{:05}", idx).as_bytes().to_vec();
+        let key_with_epoch=key_with_epoch(key, 233);
+        user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
+        //println!("user_key={:?}", user_key);
+        user_key
+    }
+
+    pub fn new_test_value_of(idx: usize) -> Vec<u8> {
+        let  value = &b"666666"[..];
+        let mut v=vec![];
+        v.push(1_u8);
+        v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
+        v.extend_from_slice(&value);
+        v
+    }
+
+    #[tokio::test]
+    async fn new_test_basic() {
+        let opt = default_builder_opt_for_test();
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, get_table_column_hash());
+
+        for i in 0..TEST_KEYS_COUNT {
+            b.add(&test_table_and_key_of(i), HummockValue::put(&new_test_value_of(i)), true)
+                .await
+                .unwrap();
+        }
+
+        let output = b.finish().await.unwrap();
+        let info = output.sst_info;
+        //println!("info={:?}", info);
+
+        assert_eq!(test_table_and_key_of(0), info.key_range.as_ref().unwrap().left);
+        assert_eq!(
+            test_table_and_key_of(TEST_KEYS_COUNT - 1),
+            info.key_range.as_ref().unwrap().right
+        );
+        let (data, meta) = output.writer_output;
+        assert_eq!(info.file_size, meta.estimated_size as u64);
+        let offset = info.meta_offset as usize;
+        let meta2 = SstableMeta::decode(&mut &data[offset..]).unwrap();
+        assert_eq!(meta2, meta);
+    }
+
     #[tokio::test]
     async fn test_basic() {
         let opt = default_builder_opt_for_test();
-        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, None);
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, get_table_column_hash());
 
         for i in 0..TEST_KEYS_COUNT {
             b.add(&test_key_of(i), HummockValue::put(&test_value_of(i)), true)

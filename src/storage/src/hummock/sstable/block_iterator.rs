@@ -380,7 +380,7 @@ mod tests {
         builder.add(&full_key(b"k02", 2), &get_hummock_value(b"v02")[..]);
         builder.add(&full_key(b"k04", 4), &get_hummock_value(b"v04")[..]);
         builder.add(&full_key(b"k05", 5), &get_hummock_value(b"v05")[..]);
-        let buf = builder.build().to_vec();
+        let buf = builder.build().1.to_vec();
         let capacity = builder.uncompressed_block_size();
         BlockIterator::new(BlockHolder::from_owned_block(Box::new(
             Block::decode(buf.into(), capacity).unwrap(),
@@ -453,7 +453,7 @@ mod tests {
         builder.add(&full_key(b"k35", 35), &get_hummock_new_value(35, b"v35")[..]);
         builder.add(&full_key(b"k36", 36), &get_hummock_new_value(36, b"v36")[..]);
         //builder.add(&full_key(b"k11", 11), &get_hummock_new_value(11, b"v11")[..]);
-        let buf = builder.build().to_vec();
+        let buf = builder.build().1.to_vec();
         let capacity = builder.uncompressed_block_size();
         BlockIterator::new(BlockHolder::from_owned_block(Box::new(
             Block::decode(buf.into(), capacity).unwrap(),

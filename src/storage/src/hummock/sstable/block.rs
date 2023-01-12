@@ -314,6 +314,8 @@ impl BlockBuilder {
     }
 
     pub fn set_row_deserializer(&mut self, table_column_datatype: Vec<DataType>){
+        //println!("table_column_datatype={:?}", table_column_datatype);
+        self.variable_columns.clear();
         //self.row_deserializer=Some(Arc::new(RowDeserializer::new(table_column_datatype)));
         self.row_deserializer=Some(RowDeserializer::new(table_column_datatype));
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
@@ -335,6 +337,7 @@ impl BlockBuilder {
                 }
             };
         }
+        //println!("set_row_deserializer self.variable_columns.len()={:?}", self.variable_columns.len());
     }
 
     pub fn get_put_record_count(&self)->usize{
@@ -342,6 +345,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
+        //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
             debug_assert_eq!(
@@ -406,8 +410,7 @@ impl BlockBuilder {
     }
 
     
-    pub fn build(&mut self) -> &[u8] {
-        //println!("into build ********************************************");
+    pub fn build(&mut self) -> (u32, &[u8]) {
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
         let data_chunk=DataChunk::from_rows(&self.rows, data_types);
         //column_value_state_list saves the field value state 
@@ -564,7 +567,7 @@ impl BlockBuilder {
         self.compression_algorithm.encode(&mut self.buf);
         let checksum = xxhash64_checksum(&self.buf);
         self.buf.put_u64_le(checksum);
-        self.buf.as_ref()
+        (self.uncompressed_block_size as u32, self.buf.as_ref())
         
     }
 
@@ -579,13 +582,15 @@ impl BlockBuilder {
     pub fn clear(&mut self) {
         self.buf.clear();
         //self.restart_points.clear();
+    
         self.last_key.clear();
         self.hummock_value_list.clear();
         self.keys.clear();
         self.rows.clear();
-        self.variable_columns.clear();
+        //self.variable_columns.clear();
         self.put_entry_count=0;
         self.entry_count = 0;
+        self.current_mem_size=0;
     
     }
 
@@ -617,7 +622,7 @@ mod tests {
         builder.add(&full_key(b"k2", 2), b"v02");
         builder.add(&full_key(b"k3", 3), b"v03");
         builder.add(&full_key(b"k4", 4), b"v04");
-        let buf = builder.build().to_vec();
+        let buf = builder.build().1.to_vec();
         let capacity = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capacity).unwrap());
         let mut bi = BlockIterator::new(BlockHolder::from_owned_block(block));
@@ -663,7 +668,7 @@ mod tests {
         builder.add(&full_key(b"k3", 3), b"v03");
         builder.add(&full_key(b"k4", 4), b"v04");
        
-        let buf = builder.build().to_vec();
+        let buf = builder.build().1.to_vec();
         let capcitiy = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capcitiy).unwrap());
         let mut bi = BlockIterator::new(BlockHolder::from_owned_block(block));
