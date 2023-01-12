@@ -52,13 +52,16 @@ pub async fn mysql_server(addr: String,session_mgr: Arc<SessionManagerImpl>) -> 
     let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("Server Listening at {}", &addr);
     loop {
+        tracing::info!("Server Listening loop");
         let session_mgr = session_mgr.clone();
         let (socket, _) = listener.accept().await.unwrap();
         let api = MySQLApi::new(session_mgr).await.unwrap();
         tokio::spawn(async move {
             let result = AsyncMysqlIntermediary::run_on(api,socket).await;
             match result {
-                Ok(_) => {}
+                Ok(_) => {
+                    tracing::info!("Server Listening loop OK");
+                }
                 Err(e) => {
                     tracing::warn!("fail to process incoming connection with e {}", e);
                 }

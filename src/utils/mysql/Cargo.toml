@@ -1,0 +1,8 @@
+[package]
+name = "mysql"
+version = "2.0.4"
+edition = "2023"
+
+[dependencies]
+async-trait = "0.1"
+

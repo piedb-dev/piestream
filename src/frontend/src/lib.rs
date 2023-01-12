@@ -125,6 +125,25 @@ pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     })
 }
 
+// pub fn start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+//     Box::pin(async move {
+//         let host = "127.0.0.1:5505".to_string();
+//         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+//         pg_serve(host, session_mgr).await.unwrap();
+
+//         })
+// }
+
+// pub fn mysql_start(opts: FrontendOpts) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+//     let host = "127.0.0.1:5506".to_string();
+//     Box::pin(async move {
+//         let session_mgr = Arc::new(SessionManagerImpl::new(&opts).await.unwrap());
+//         pg_serve(host, session_mgr).await.unwrap();
+
+//         })
+// }
+
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct FrontendConfig {
     // For connection

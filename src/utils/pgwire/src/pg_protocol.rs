@@ -570,6 +570,7 @@ where
     // If flush fail, it logs internally and don't report to user.
     // This approach is equal to the past.
     async fn flush_for_error(&mut self) {
+        println!("pgwire::pg_protocol.rs ====== flush_for_error ========");
         self.flush().await.unwrap_or_else(|e| {
             tracing::error!("flush error: {}", e);
         });
@@ -587,7 +588,9 @@ where
     }
 
     async fn flush(&mut self) -> io::Result<()> {
+        println!("pgwire::pg_protocol.rs ====== flush ========");
         self.stream.write_all(&self.write_buf).await?;
+        println!("pgwire::pg_extended.rs =========== write_buf = {:?}",&self.write_buf);
         self.write_buf.clear();
         self.stream.flush().await?;
         Ok(())
