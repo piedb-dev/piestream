@@ -16,7 +16,8 @@
 use std::cmp::Ordering;
 use std::io::{Read, Write};
 use std::sync::Arc;
-
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use piestream_hummock_sdk::VersionedComparator;
 use {lz4, zstd};
@@ -122,7 +123,7 @@ impl Block {
             if let None=value_to_type(v){
                 variable_column_count+=1;
             }
-            data_type_values.push((ptr.get_u8(),index_to_len(v)));
+            data_type_values.push((v, index_to_len(v)));
             //data_type_values[i as usize]=(ptr.get_u8(),index_to_len(v));
         }
         //println!("data_type_values={:?}", data_type_values);
@@ -141,6 +142,7 @@ impl Block {
         let mut offsets=buf[buf.len()-offset-offset_len as usize..buf.len()-offset].as_ref();
         offset+= offset_len as usize;
 
+        //println!("column_count={:?} variable_column_count={:?}", column_count, variable_column_count);
         assert_eq!(offsets.len(), ((column_count+variable_column_count)*4) as usize);
         //len of per column
         let mut lens=&buf[buf.len()-offset-text_len as usize..buf.len()-offset];
@@ -268,6 +270,7 @@ pub struct BlockBuilder {
     column_num: usize,
     //column number
     variable_columns: Vec<usize>,
+    map_data_type: HashMap<u32, Vec<u32>>,
     // need mem size
     current_mem_size: usize,  
     uncompressed_block_size: usize,
@@ -295,6 +298,7 @@ impl BlockBuilder {
             entry_count: 0,
             column_num: 0,
             variable_columns: Vec::new() ,
+            map_data_type: HashMap::new(),
             current_mem_size: 0,
             uncompressed_block_size: 0,
             compression_algorithm: options.compression_algorithm,
@@ -318,8 +322,18 @@ impl BlockBuilder {
             //fixed len columns
             if data_types[idx].data_type_len()==0{
                 self.variable_columns.push(idx);
-            }
-               
+            };
+
+            match self.map_data_type
+                .entry(data_types[idx].type_to_fixed_index() as u32)
+            {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().push(idx as u32);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(vec![idx as u32]);
+                }
+            };
         }
     }
 
@@ -415,7 +429,6 @@ impl BlockBuilder {
         let size=(self.put_entry_count + (self.data_type_bit_size as usize -1)) / self.data_type_bit_size as usize;
         let mut state_list =vec![vec![]; column_value_state_list.len()];
         for (pos, column_state_list) in column_value_state_list.iter().enumerate(){
-
             assert_eq!(self.put_entry_count, column_state_list.len());
             for (idx,element) in column_state_list.iter().enumerate(){
                 if idx % self.data_type_bit_size as usize==0{
@@ -423,7 +436,7 @@ impl BlockBuilder {
                 }
                 if *element==1 {
                     let v=state_list[pos].last_mut().unwrap();
-                    *v|=1<<idx;
+                    *v|=1<<(idx%self.data_type_bit_size as usize);
                 }
             }
             assert_eq!(state_list[pos].len(), size);
@@ -460,8 +473,8 @@ impl BlockBuilder {
             //fixed len columns
             if data_types[idx].data_type_len()>0{
                 self.buf.extend_from_slice(&columns[idx]);
-                assert_eq!(columns[idx].len(), self.put_entry_count);
-                assert_eq!(columns[idx].len()%data_types[idx].data_type_len(), 0);
+                assert_eq!(columns[idx].len(), self.put_entry_count*data_types[idx].data_type_len());
+                //assert_eq!(columns[idx].len()%data_types[idx].data_type_len(), 0);
             }else{
                 assert_eq!(variable_offsets[idx].len(), self.put_entry_count*4);
                 //offset
@@ -502,6 +515,7 @@ impl BlockBuilder {
        
         //column type
         for data_type in data_types {
+            //println!("data_type.type_to_index={:?}", data_type.type_to_index());
             self.buf.put_u8(data_type.type_to_index());
         }
         //variable column count
