@@ -62,6 +62,8 @@ pub async fn compactor_serve(
     tracing::info!("Assigned compactor id {}", meta_client.worker_id());
     meta_client.activate(&client_addr).await.unwrap();
 
+    
+
     // Boot compactor
     let registry = prometheus::Registry::new();
     monitor_process(&registry).unwrap();
@@ -116,6 +118,7 @@ pub async fn compactor_serve(
     ));
     let context = Arc::new(Context {
         options: storage_config,
+        meta_client: Arc::new(meta_client.clone()),
         hummock_meta_client: hummock_meta_client.clone(),
         sstable_store: sstable_store.clone(),
         stats: state_store_stats,

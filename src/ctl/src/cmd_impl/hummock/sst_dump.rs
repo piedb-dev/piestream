@@ -163,7 +163,8 @@ fn print_kv_pairs(
         let user_key = user_key(full_key);
 
         let full_val = block_iter.value();
-        let humm_val = HummockValue::from_slice(block_iter.value())?;
+        //let humm_val = HummockValue::decode(&block_iter.value()[..])?;
+        let humm_val = HummockValue::from_slice(&full_val[..])?;
         let (is_put, user_val) = match humm_val {
             HummockValue::Put(uval) => (true, uval),
             HummockValue::Delete => (false, &[] as &[u8]),

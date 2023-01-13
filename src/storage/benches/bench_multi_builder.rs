@@ -73,7 +73,7 @@ impl<F: SstableWriterFactory> TableBuilderFactory for LocalTableBuilderFactory<F
             .writer_factory
             .create_sst_writer(id, writer_options)
             .unwrap();
-        let builder = SstableBuilder::for_test(id, writer, self.options.clone());
+        let builder = SstableBuilder::for_test(id, writer, self.options.clone(), None);
 
         Ok(builder)
     }

@@ -90,7 +90,7 @@ async fn build_table(
             policy: CachePolicy::Fill,
         },
     );
-    let mut builder = SstableBuilder::for_test(sstable_id, writer, opt);
+    let mut builder = SstableBuilder::for_test(sstable_id, writer, opt, None);
     let value = b"1234567890123456789";
     let mut full_key = test_key_of(0, epoch);
     let user_len = full_key.len() - 8;

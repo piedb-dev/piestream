@@ -136,6 +136,7 @@ pub async fn compute_node_serve(
                 storage_config.compactor_memory_limit_mb as u64 * 1024 * 1024 / 2;
             let context = Arc::new(Context {
                 options: storage_config,
+                meta_client: Arc::new(meta_client.clone()),
                 hummock_meta_client: hummock_meta_client.clone(),
                 sstable_store: storage.sstable_store(),
                 stats: state_store_metrics.clone(),
