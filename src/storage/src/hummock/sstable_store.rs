@@ -214,6 +214,7 @@ impl SstableStore {
         policy: CachePolicy,
         stats: &mut StoreLocalStatistic,
     ) -> HummockResult<BlockHolder> {
+        println!("block_index={:?}", block_index);
         stats.cache_data_block_total += 1;
         let tiered_cache = self.tiered_cache.clone();
         let fetch_block = || {
@@ -224,10 +225,12 @@ impl SstableStore {
                 .get(block_index as usize)
                 .ok_or_else(HummockError::invalid_block)
                 .unwrap(); // FIXME: don't unwrap here.
+            
             let block_loc = BlockLocation {
                 offset: block_meta.offset as usize,
                 size: block_meta.len as usize,
             };
+            println!("block_loc={:?}", &block_loc);
             let data_path = self.get_sst_data_path(sst.id);
             let store = self.store.clone();
             let sst_id = sst.id;

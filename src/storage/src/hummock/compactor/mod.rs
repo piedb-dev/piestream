@@ -531,6 +531,7 @@ impl Compactor {
     where
         F: TableBuilderFactory,
     {
+        println!("******************compact_and_build_sst*************");
         if !task_config.key_range.left.is_empty() {
             iter.seek(&task_config.key_range.left).await?;
         } else {

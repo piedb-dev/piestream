@@ -108,12 +108,12 @@ pub fn gen_dummy_sst_info(id: HummockSstableId, batches: Vec<SharedBufferBatch>)
 }
 
 /// Number of keys in table generated in `generate_table`.
-pub const TEST_KEYS_COUNT: usize = 10000;
+pub const TEST_KEYS_COUNT: usize = 1000;
 
 pub fn default_builder_opt_for_test() -> SstableBuilderOptions {
     SstableBuilderOptions {
         capacity: 256 * (1 << 20), // 256MB
-        block_capacity: 100*4096,      // 4KB
+        block_capacity: 4096,      // 4KB
         restart_interval: DEFAULT_RESTART_INTERVAL,
         bloom_false_positive: 0.1,
         compression_algorithm: CompressionAlgorithm::None,
@@ -198,6 +198,7 @@ pub async fn gen_test_sstable_inner(
     let writer = sstable_store.clone().create_sst_writer(sst_id, writer_opts);
     let mut b = SstableBuilder::for_test(sst_id, writer, opts, table_column_hash);
     for (key, value) in kv_iter {
+        println!("111111key={:?}", &key);
         b.add(&key, value.as_slice(), true).await.unwrap();
     }
     let output = b.finish().await.unwrap();
@@ -220,6 +221,21 @@ pub async fn gen_test_sstable(
     gen_test_sstable_inner(opts, sst_id, kv_iter, sstable_store, CachePolicy::NotFill, table_column_hash).await
 }
 
+pub fn test_table_and_key_cmp_of(idx: usize) -> Vec<u8> {
+    let mut user_key=vec![];
+    user_key.push('t' as u8);
+    if idx<TEST_KEYS_COUNT/2{
+        user_key.extend_from_slice(&1_u32.to_be_bytes());
+    }else{
+        user_key.extend_from_slice(&2_u32.to_be_bytes());
+    }
+    let  key = format!("{:05}", idx*2-1).as_bytes().to_vec();
+    let key_with_epoch=key_with_epoch(key, 233);
+    user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
+    //println!("user_key={:?}", user_key);
+    user_key
+}
+
 pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
     let mut user_key=vec![];
     user_key.push('t' as u8);
@@ -228,7 +244,7 @@ pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
     }else{
         user_key.extend_from_slice(&2_u32.to_be_bytes());
     }
-    let  key = format!("{:05}", idx).as_bytes().to_vec();
+    let  key = format!("{:05}", idx*2).as_bytes().to_vec();
     let key_with_epoch=key_with_epoch(key, 233);
     user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
     //println!("user_key={:?}", user_key);

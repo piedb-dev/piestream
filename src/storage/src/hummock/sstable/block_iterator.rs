@@ -190,9 +190,10 @@ impl BlockIterator {
             let middle = (left + right)/2;
             let start=middle as usize *self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
-            self.index=middle as usize;
             is_into=true;
-            //println!("key1={:?} key2={:?}", &self.block.keys[start..end], key);
+            self.index=middle as usize;
+            //println!("start={:?} end={:?}", start, end);
+            //println!("middle={:?}, key1={:?} key2={:?}", middle, &self.block.keys[start..end], key);
             let ordering=VersionedComparator::compare_key(&self.block.keys[start..end], key);
             if ordering==Ordering::Equal{
                 is_hit=true;
@@ -203,14 +204,17 @@ impl BlockIterator {
             }else{
                 right = middle - 1;
                 compare_type=Ordering::Greater;
+                
             }
         }
 
         //search key greater all key of block 
         if is_hit==false && is_into {
-            if compare_type==Ordering::Less && self.index+1==self.block.entry_count() {
+            if compare_type==Ordering::Less {
+                self.index+=1;
+                /*if self.index+1==self.block.entry_count() {
                 println!("is_hit==false &&  self.index+1==self.block.entry_count");
-                self.index=self.block.entry_count();
+                self.index=self.block.entry_count();*/
             }
         }
         /*for idx in 0..self.block.entry_count(){
@@ -223,6 +227,7 @@ impl BlockIterator {
                 break;
             }
         }*/
+        println!("self.index={:?}", self.index);
     }
 
     pub fn seek_le(&mut self, key: &[u8]) {

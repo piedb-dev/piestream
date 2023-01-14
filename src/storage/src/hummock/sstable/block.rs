@@ -71,6 +71,7 @@ impl Block {
     pub fn decode(buf: Bytes, uncompressed_capacity: usize) -> HummockResult<Self> {
         // Verify checksum.
         let xxhash64_checksum = (&buf[buf.len() - 8..]).get_u64_le();
+        println!("decode xxhash64_checksum={:?}", xxhash64_checksum);
         xxhash64_verify(&buf[..buf.len() - 8], xxhash64_checksum)?;
         // Decompress.
         let compression = CompressionAlgorithm::decode(&mut &buf[buf.len() - 9..buf.len() - 8])?;
@@ -345,7 +346,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
-        println!("*****************add value={:?}*******************", &value);
+        //println!("*****************add value={:?}*******************", &value);
         //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -568,6 +569,7 @@ impl BlockBuilder {
         };
         self.compression_algorithm.encode(&mut self.buf);
         let checksum = xxhash64_checksum(&self.buf);
+        println!("checksum={:?}", checksum);
         self.buf.put_u64_le(checksum);
         (self.uncompressed_block_size as u32, self.buf.as_ref())
         
@@ -578,7 +580,7 @@ impl BlockBuilder {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
+        self.keys.is_empty()
     }
 
     pub fn clear(&mut self) {
