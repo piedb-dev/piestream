@@ -139,7 +139,7 @@ impl Block {
         let text_len=(&buf[buf.len()-offset-4..]).get_u32_le();
         offset+=4;
         //offset of per column
-        let mut offsets=buf[buf.len()-offset-offset_len as usize..buf.len()-offset].as_ref();
+        let mut offsets=&buf[buf.len()-offset-offset_len as usize..buf.len()-offset];
         offset+= offset_len as usize;
 
         //println!("column_count={:?} variable_column_count={:?}", column_count, variable_column_count);
@@ -345,6 +345,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
+        println!("*****************add value={:?}*******************", &value);
         //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -411,6 +412,7 @@ impl BlockBuilder {
 
     
     pub fn build(&mut self) -> (u32, &[u8]) {
+        println!("*****************build*******************");
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
         let data_chunk=DataChunk::from_rows(&self.rows, data_types);
         //column_value_state_list saves the field value state 
@@ -612,16 +614,27 @@ mod tests {
     use bytes::Bytes;
 
     use super::*;
-    use crate::hummock::{BlockHolder, BlockIterator};
+    use crate::hummock::{BlockHolder, BlockIterator, HummockValue};
+
+    fn get_hummock_new_value(value: &[u8])->Bytes{
+        let mut v=vec![];
+        v.push(1_u8);
+        v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
+        v.extend_from_slice(value);
+        let  mut raw_value=BytesMut::new();
+        HummockValue::put(&v[..]).encode(&mut raw_value);
+        raw_value.freeze()
+    }
 
     #[test]
     fn test_block_enc_dec() {
         let options = BlockBuilderOptions::default();
         let mut builder = BlockBuilder::new(options);
-        builder.add(&full_key(b"k1", 1), b"v01");
-        builder.add(&full_key(b"k2", 2), b"v02");
-        builder.add(&full_key(b"k3", 3), b"v03");
-        builder.add(&full_key(b"k4", 4), b"v04");
+        builder.set_row_deserializer(vec![DataType::Varchar]);
+        builder.add(&full_key(b"k1", 1), &get_hummock_new_value(b"v01")[..]);
+        builder.add(&full_key(b"k2", 2), &get_hummock_new_value(b"v02")[..]);
+        builder.add(&full_key(b"k3", 3), &get_hummock_new_value(b"v03")[..]);
+        builder.add(&full_key(b"k4", 4), &get_hummock_new_value(b"v04")[..]);
         let buf = builder.build().1.to_vec();
         let capacity = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capacity).unwrap());
@@ -630,22 +643,22 @@ mod tests {
         bi.seek_to_first();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k1", 1)[..], bi.key());
-        assert_eq!(b"v01", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v01"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k2", 2)[..], bi.key());
-        assert_eq!(b"v02", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v02"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k3", 3)[..], bi.key());
-        assert_eq!(b"v03", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v03"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k4", 4)[..], bi.key());
-        assert_eq!(b"v04", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v04"), bi.value().as_slice());
 
         bi.next();
         assert!(!bi.is_valid());
@@ -662,11 +675,13 @@ mod tests {
             compression_algorithm: algo,
             ..Default::default()
         };
+
         let mut builder = BlockBuilder::new(options);
-        builder.add(&full_key(b"k1", 1), b"v01");
-        builder.add(&full_key(b"k2", 2), b"v02");
-        builder.add(&full_key(b"k3", 3), b"v03");
-        builder.add(&full_key(b"k4", 4), b"v04");
+        builder.set_row_deserializer(vec![DataType::Varchar]);
+        builder.add(&full_key(b"k1", 1), &get_hummock_new_value(b"v01")[..]);
+        builder.add(&full_key(b"k2", 2), &get_hummock_new_value(b"v02")[..]);
+        builder.add(&full_key(b"k3", 3), &get_hummock_new_value(b"v03")[..]);
+        builder.add(&full_key(b"k4", 4), &get_hummock_new_value(b"v04")[..]);
        
         let buf = builder.build().1.to_vec();
         let capcitiy = builder.uncompressed_block_size();
@@ -676,22 +691,22 @@ mod tests {
         bi.seek_to_first();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k1", 1)[..], bi.key());
-        assert_eq!(b"v01", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v01"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k2", 2)[..], bi.key());
-        assert_eq!(b"v02", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v02"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k3", 3)[..], bi.key());
-        assert_eq!(b"v03", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v03"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
         assert_eq!(&full_key(b"k4", 4)[..], bi.key());
-        assert_eq!(b"v04", bi.value().as_slice());
+        assert_eq!(get_hummock_new_value(b"v04"), bi.value().as_slice());
 
         bi.next();
         assert!(!bi.is_valid());

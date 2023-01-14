@@ -232,6 +232,7 @@ mod test {
                     )
                 }),
                 sstable_store.clone(),
+                None,
             )
             .await,
         );
@@ -247,6 +248,7 @@ mod test {
                     )
                 }),
                 sstable_store.clone(),
+                None,
             )
             .await,
         );
@@ -262,6 +264,7 @@ mod test {
                     )
                 }),
                 sstable_store.clone(),
+                None,
             )
             .await,
         );

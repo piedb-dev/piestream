@@ -89,7 +89,7 @@ fn bench_block_iter(c: &mut Criterion) {
     for t in 1..=TABLES_PER_SSTABLE {
         for i in 1..=KEYS_PER_TABLE {
             assert_eq!(iter.key(), key(t, i).to_vec());
-            assert_eq!(iter.value(), value(i).to_vec());
+            assert_eq!(iter.value().as_slice(), value(i).to_vec().as_slice());
             iter.next();
         }
     }
@@ -111,7 +111,7 @@ fn build_block_data(t: u32, i: u64) -> Bytes {
             builder.add(&key(tt, ii), &value(ii));
         }
     }
-    Bytes::from(builder.build().to_vec())
+    Bytes::from(builder.build().1.to_vec())
 }
 
 fn key(t: u32, i: u64) -> Bytes {

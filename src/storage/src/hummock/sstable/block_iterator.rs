@@ -74,6 +74,7 @@ impl BlockIterator {
         assert!(self.is_valid());
         let start=self.index*self.block.key_len as usize;
         let end=(((self.index+1)*self.block.key_len as usize)-3) as usize ;
+        //println!("index={:?} block.keys={:?}",self.index, &self.block.keys[start..end]);
         &self.block.keys[start..end]
         //&self.key[..]
     }
@@ -155,11 +156,15 @@ impl BlockIterator {
                 value.put_u8(0u8);
             }
         }
+        //println!("self.index={:?} value={:?}", self.index, value);
+        //assert!(false);
         Box::new(value)
     }
 
     pub fn is_valid(&self) -> bool {
+        //assert!(false);
         //self.offset < self.block.len()
+        //println!("**************index={:?} len={:?}*****************", self.index, self.block.len());
         self.index<self.block.entry_count()
     }
 
@@ -178,11 +183,15 @@ impl BlockIterator {
         let mut left = 0_i32;
         let mut right = (self.block.entry_count() - 1) as i32;
         let mut is_hit=false;
+        let mut is_into=false;
+        let mut compare_type=Ordering::Equal;
         while left>=0 && right>=0 && left <= right {
+            //println!("-----------------into seek while----------------");
             let middle = (left + right)/2;
             let start=middle as usize *self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
             self.index=middle as usize;
+            is_into=true;
             //println!("key1={:?} key2={:?}", &self.block.keys[start..end], key);
             let ordering=VersionedComparator::compare_key(&self.block.keys[start..end], key);
             if ordering==Ordering::Equal{
@@ -190,14 +199,19 @@ impl BlockIterator {
                 break;
             }else if ordering==Ordering::Less{
                 left = middle + 1;
+                compare_type=Ordering::Less;
             }else{
                 right = middle - 1;
+                compare_type=Ordering::Greater;
             }
         }
 
         //search key greater all key of block 
-        if is_hit==false &&  self.index+1==self.block.entry_count() {
-            self.index=self.block.entry_count();
+        if is_hit==false && is_into {
+            if compare_type==Ordering::Less && self.index+1==self.block.entry_count() {
+                println!("is_hit==false &&  self.index+1==self.block.entry_count");
+                self.index=self.block.entry_count();
+            }
         }
         /*for idx in 0..self.block.entry_count(){
             let start=idx*self.block.key_len as usize;

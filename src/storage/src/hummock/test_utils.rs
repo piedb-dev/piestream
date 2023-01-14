@@ -20,6 +20,7 @@ use piestream_common::config::StorageConfig;
 use piestream_hummock_sdk::key::key_with_epoch;
 use piestream_hummock_sdk::HummockSstableId;
 use piestream_pb::hummock::{KeyRange, SstableInfo};
+use piestream_common::catalog::ColumnDesc;
 
 use super::{
     CompressionAlgorithm, HummockResult, InMemWriter, SstableMeta, SstableWriterOptions,
@@ -32,6 +33,7 @@ use crate::hummock::{
     CachePolicy, HummockStateStoreIter, LruCache, Sstable, SstableBuilder, SstableBuilderOptions,
     SstableStoreRef, SstableWriter,
 };
+use crate::hummock::sstable::builder::TableColumnDescHash;
 use crate::monitor::StoreLocalStatistic;
 use crate::storage_value::StorageValue;
 use crate::store::StateStoreIter;
@@ -186,6 +188,7 @@ pub async fn gen_test_sstable_inner(
     kv_iter: impl Iterator<Item = (Vec<u8>, HummockValue<Vec<u8>>)>,
     sstable_store: SstableStoreRef,
     policy: CachePolicy,
+    table_column_hash: Option<Arc<TableColumnDescHash>>,
 ) -> Sstable {
     let writer_opts = SstableWriterOptions {
         capacity_hint: None,
@@ -193,7 +196,7 @@ pub async fn gen_test_sstable_inner(
         policy,
     };
     let writer = sstable_store.clone().create_sst_writer(sst_id, writer_opts);
-    let mut b = SstableBuilder::for_test(sst_id, writer, opts, None);
+    let mut b = SstableBuilder::for_test(sst_id, writer, opts, table_column_hash);
     for (key, value) in kv_iter {
         b.add(&key, value.as_slice(), true).await.unwrap();
     }
@@ -212,8 +215,63 @@ pub async fn gen_test_sstable(
     sst_id: HummockSstableId,
     kv_iter: impl Iterator<Item = (Vec<u8>, HummockValue<Vec<u8>>)>,
     sstable_store: SstableStoreRef,
+    table_column_hash: Option<Arc<TableColumnDescHash>>
 ) -> Sstable {
-    gen_test_sstable_inner(opts, sst_id, kv_iter, sstable_store, CachePolicy::NotFill).await
+    gen_test_sstable_inner(opts, sst_id, kv_iter, sstable_store, CachePolicy::NotFill, table_column_hash).await
+}
+
+pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
+    let mut user_key=vec![];
+    user_key.push('t' as u8);
+    if idx<TEST_KEYS_COUNT/2{
+        user_key.extend_from_slice(&1_u32.to_be_bytes());
+    }else{
+        user_key.extend_from_slice(&2_u32.to_be_bytes());
+    }
+    let  key = format!("{:05}", idx).as_bytes().to_vec();
+    let key_with_epoch=key_with_epoch(key, 233);
+    user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
+    //println!("user_key={:?}", user_key);
+    user_key
+}
+
+pub fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
+    use piestream_common::types::DataType;
+    use std::collections::HashMap;
+
+    let columns = vec![
+        //ColumnDesc::new_atomic(DataType::Int32, "age", 1),
+        ColumnDesc::new_atomic(DataType::Varchar, "name", 0),
+    ];
+    let mut mapping: HashMap<u32, (String, Vec<ColumnDesc>)> = HashMap::new();
+    mapping.insert(1, ("school".to_string(), columns.clone()));
+    mapping.insert(2, ("city".to_string(), columns));
+    println!("mapping={:?}", mapping);
+    Some(Arc::new(mapping))
+}
+
+pub fn new_test_value_of(idx: usize) -> Vec<u8> {
+    let  value = &b"666666"[..];
+    let mut v=vec![];
+    v.push(1_u8);
+    v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
+    v.extend_from_slice(&value);
+    v
+}
+
+pub async fn new_gen_default_test_sstable(
+    opts: SstableBuilderOptions,
+    sst_id: HummockSstableId,
+    sstable_store: SstableStoreRef,
+) -> Sstable {
+    gen_test_sstable(
+        opts,
+        sst_id,
+        (0..TEST_KEYS_COUNT).map(|i| (test_table_and_key_of(i), HummockValue::put(new_test_value_of(i)))),
+        sstable_store,
+        get_table_column_hash(),
+    )
+    .await
 }
 
 /// The key (with epoch 0) of an index in the test table
@@ -246,6 +304,7 @@ pub async fn gen_default_test_sstable(
         sst_id,
         (0..TEST_KEYS_COUNT).map(|i| (test_key_of(i), HummockValue::put(test_value_of(i)))),
         sstable_store,
+        None,
     )
     .await
 }

@@ -90,8 +90,10 @@ impl SstableIterator {
                 .await?;
             let mut block_iter = BlockIterator::new(block);
             if let Some(key) = seek_key {
+                //println!("********************** block_iter.seek={:?}", &key);
                 block_iter.seek(key);
             } else {
+                //println!("********************** block_iter.seek_to_first");
                 block_iter.seek_to_first();
             }
 
@@ -160,6 +162,7 @@ impl HummockIterator for SstableIterator {
                 })
                 .saturating_sub(1); // considering the boundary of 0
 
+            //println!("block_idx={:?}", block_idx);
             self.seek_idx(block_idx, Some(key)).await?;
             if !self.is_valid() {
                 // seek to next block
@@ -196,7 +199,7 @@ mod tests {
     use crate::hummock::iterator::test_utils::mock_sstable_store;
     use crate::hummock::test_utils::{
         create_small_table_cache, default_builder_opt_for_test, gen_default_test_sstable,
-        gen_test_sstable, test_key_of, test_value_of, TEST_KEYS_COUNT,
+        new_gen_default_test_sstable, gen_test_sstable, test_key_of, test_value_of, TEST_KEYS_COUNT,
     };
 
     async fn inner_test_forward_iterator(sstable_store: SstableStoreRef, handle: TableHolder) {
@@ -227,7 +230,7 @@ mod tests {
         // Build remote sstable
         let sstable_store = mock_sstable_store();
         let sstable =
-            gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
+        new_gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
                 .await;
         // We should have at least 10 blocks, so that sstable iterator test could cover more code
         // path.
@@ -322,6 +325,7 @@ mod tests {
             0,
             kv_iter,
             sstable_store.clone(),
+            None,
         )
         .await;
 

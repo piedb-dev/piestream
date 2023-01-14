@@ -491,6 +491,7 @@ impl StateStore for HummockStorage {
         epoch: u64,
         read_options: ReadOptions,
     ) -> Self::IterFuture<'_> {
+        println!("into to HummockStorage 2");
         async move { self.core.iter_inner(key_range, epoch, read_options).await }
     }
 

@@ -113,6 +113,7 @@ impl HummockStorage {
 
         let mut local_stats = StoreLocalStatistic::default();
         for uncommitted_data in shared_buffer_data {
+            println!("overlapped_iters Second 1");
             overlapped_iters.push(HummockIteratorUnion::Second(
                 build_ordered_merge_iter::<T>(
                     &uncommitted_data,
@@ -128,6 +129,7 @@ impl HummockStorage {
             ));
         }
         for sync_uncommitted_data in sync_uncommitted_data {
+            println!("overlapped_iters Second");
             overlapped_iters.push(HummockIteratorUnion::Second(
                 build_ordered_merge_iter::<T>(
                     &sync_uncommitted_data,
@@ -161,9 +163,12 @@ impl HummockStorage {
         //
         // When adopting dynamic compaction group in the future, be sure to revisit this assumption.
         assert!(pinned_version.is_valid());
+        //println!("into pinned_version 1**************");
         for level in pinned_version.levels(compaction_group_id) {
+            //println!("into pinned_version 2**************");
             let table_infos = prune_ssts(level.table_infos.iter(), &key_range);
             if table_infos.is_empty() {
+                //println!("**********table_infos.is_empty");
                 continue;
             }
             if level.level_type == LevelType::Nonoverlapping as i32 {
@@ -204,7 +209,7 @@ impl HummockStorage {
                         sstables.push((*sstable_info).clone());
                     }
                 }
-
+                println!("overlapped_iters Third");
                 overlapped_iters.push(HummockIteratorUnion::Third(ConcatIteratorInner::<
                     T::SstableIteratorType,
                 >::new(
@@ -213,6 +218,7 @@ impl HummockStorage {
                     iter_read_options.clone(),
                 )));
             } else {
+                println!("table_info={:?}", table_infos.len());
                 for table_info in table_infos.into_iter().rev() {
                     let sstable = self
                         .sstable_store
@@ -229,6 +235,7 @@ impl HummockStorage {
                         }
                     }
 
+                    println!("overlapped_iters Fourth");
                     overlapped_iters.push(HummockIteratorUnion::Fourth(
                         T::SstableIteratorType::create(
                             sstable,
@@ -250,6 +257,7 @@ impl HummockStorage {
             key_range.end_bound().map(|b| b.as_ref().to_owned()),
         );
 
+        println!("overlapped_iters={:?}", overlapped_iters.len());
         // The input of the user iterator is a `HummockIteratorUnion` of 4 different types. We use
         // the union because the underlying merge iterator
         let mut user_iterator = T::UserIteratorBuilder::create(
@@ -515,6 +523,7 @@ impl StateStore for HummockStorage {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        //println!("into to HummockStorage 1");
         if let Some(prefix_hint) = prefix_hint.as_ref() {
             let next_key = next_key(prefix_hint);
 
@@ -672,12 +681,12 @@ impl StateStoreIter for HummockStateStoreIter {
     fn next(&mut self) -> Self::NextFuture<'_> {
         async move {
             let iter = &mut self.inner;
-
             if iter.is_valid() {
                 let kv = (
                     Bytes::copy_from_slice(iter.key()),
                     Bytes::copy_from_slice(iter.value()),
                 );
+                println!("HummockStateStoreIte kvr={:?}", &kv);
                 iter.next().await?;
                 Ok(Some(kv))
             } else {

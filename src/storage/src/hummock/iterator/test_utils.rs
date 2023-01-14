@@ -102,6 +102,7 @@ pub async fn gen_iterator_test_sstable_base(
             )
         }),
         sstable_store,
+        None,
     )
     .await
 }
@@ -119,6 +120,7 @@ pub async fn gen_iterator_test_sstable_from_kv_pair(
             .into_iter()
             .map(|kv| (iterator_test_key_of_epoch(kv.0, kv.1), kv.2)),
         sstable_store,
+        None,
     )
     .await
 }
@@ -167,6 +169,7 @@ pub async fn gen_iterator_test_sstable_with_incr_epoch(
             )
         }),
         sstable_store,
+        None,
     )
     .await
 }

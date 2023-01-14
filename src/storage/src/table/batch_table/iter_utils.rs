@@ -61,6 +61,7 @@ pub(super) async fn merge_sort<S>(streams: Vec<S>)
 where
     S: PkAndRowStream + Unpin,
 {
+    println!("*************into merge_sort streams.len()={:?}.****************", streams.len());
     let mut heap = BinaryHeap::with_capacity(streams.len());
     for mut stream in streams {
         if let Some(peeked) = stream.next().await.transpose()? {
@@ -74,7 +75,7 @@ where
         // iteration, so where to fail does not matter. Or we need an `Option` for this.
         yield match node.stream.next().await.transpose()? {
             // There still remains data in the stream, take and update the peeked value.
-            Some(new_peeked) => std::mem::replace(&mut node.peeked, new_peeked),
+            Some(new_peeked) =>{println!("new_peeked={:?}", &new_peeked.0); std::mem::replace(&mut node.peeked, new_peeked)},
             // This stream is exhausted, remove it from the heap.
             None => PeekMut::pop(node).peeked,
         };

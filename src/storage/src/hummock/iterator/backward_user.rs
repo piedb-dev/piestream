@@ -1000,6 +1000,7 @@ mod tests {
                 })
             }),
             sstable_store.clone(),
+            None,
         )
         .await;
 

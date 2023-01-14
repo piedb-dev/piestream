@@ -372,6 +372,7 @@ mod tests {
                 (start_index..end_index)
                     .map(|i| (test_key_of(i), HummockValue::put(test_value_of(i)))),
                 sstable_store.clone(),
+                None,
             )
             .await;
             table_infos.push(table.get_sstable_info());
@@ -470,6 +471,7 @@ mod tests {
                 (start_index..end_index)
                     .map(|i| (test_key_of(i), HummockValue::put(test_value_of(i)))),
                 sstable_store.clone(),
+                None,
             )
             .await;
             table_infos.push(table.get_sstable_info());

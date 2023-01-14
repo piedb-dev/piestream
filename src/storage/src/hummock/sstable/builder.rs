@@ -183,6 +183,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
     value: HummockValue<&[u8]>,
     is_new_user_key: bool,
 ) -> HummockResult<()> {
+    println!("value={:?}", &value);
     // Rotate block builder if the previous one has been built.
     if self.block_builder.is_empty() {
         self.block_metas.push(BlockMeta {
@@ -401,8 +402,8 @@ pub(super) mod tests {
     use super::*;
     use crate::hummock::iterator::test_utils::mock_sstable_store;
     use crate::hummock::test_utils::{
-        default_builder_opt_for_test, gen_default_test_sstable, mock_sst_writer, test_key_of,
-        test_value_of, TEST_KEYS_COUNT,
+        default_builder_opt_for_test, new_gen_default_test_sstable, mock_sst_writer,
+        get_table_column_hash, test_table_and_key_of, new_test_value_of, TEST_KEYS_COUNT,
     };
 
     #[tokio::test]
@@ -421,7 +422,7 @@ pub(super) mod tests {
         b.finish().await.unwrap();
     }
 
-    fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
+    /*fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
         use piestream_common::types::DataType;
 
         let columns = vec![
@@ -430,7 +431,7 @@ pub(super) mod tests {
         ];
         let mut mapping: HashMap<u32, (String, Vec<ColumnDesc>)> = HashMap::new();
         mapping.insert(1, ("school".to_string(), columns.clone()));
-        mapping.insert(2, ("school".to_string(), columns));
+        mapping.insert(2, ("city".to_string(), columns));
         println!("mapping={:?}", mapping);
         Some(Arc::new(mapping))
     }
@@ -458,7 +459,7 @@ pub(super) mod tests {
         v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
         v.extend_from_slice(&value);
         v
-    }
+    }*/
 
     #[tokio::test]
     async fn new_test_basic() {
@@ -478,6 +479,33 @@ pub(super) mod tests {
         assert_eq!(test_table_and_key_of(0), info.key_range.as_ref().unwrap().left);
         assert_eq!(
             test_table_and_key_of(TEST_KEYS_COUNT - 1),
+            info.key_range.as_ref().unwrap().right
+        );
+        let (data, meta) = output.writer_output;
+        assert_eq!(info.file_size, meta.estimated_size as u64);
+        let offset = info.meta_offset as usize;
+        let meta2 = SstableMeta::decode(&mut &data[offset..]).unwrap();
+        assert_eq!(meta2, meta);
+    }
+    #[tokio::test]
+    async fn new_test_one_record() {
+        let opt = default_builder_opt_for_test();
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, get_table_column_hash());
+
+        let max=1;
+        for i in 0..max {
+            b.add(&test_table_and_key_of(i), HummockValue::put(&new_test_value_of(i)), true)
+                .await
+                .unwrap();
+        }
+
+        let output = b.finish().await.unwrap();
+        let info = output.sst_info;
+        println!("info={:?}", info);
+
+        assert_eq!(test_table_and_key_of(0), info.key_range.as_ref().unwrap().left);
+        assert_eq!(
+            test_table_and_key_of(max - 1),
             info.key_range.as_ref().unwrap().right
         );
         let (data, meta) = output.writer_output;
@@ -526,11 +554,11 @@ pub(super) mod tests {
 
         // build remote table
         let sstable_store = mock_sstable_store();
-        let table = gen_default_test_sstable(opts, 0, sstable_store).await;
+        let table = new_gen_default_test_sstable(opts, 0, sstable_store).await;
 
         assert_eq!(table.has_bloom_filter(), with_blooms);
         for i in 0..key_count {
-            let full_key = test_key_of(i);
+            let full_key = test_table_and_key_of(i);
             assert!(!table.surely_not_have_user_key(user_key(full_key.as_slice())));
         }
     }
