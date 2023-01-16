@@ -29,7 +29,7 @@ pub struct BlockIterator {
     /// Block that iterates on.
     block: BlockHolder,
     /// Current restart point index.
-    restart_point_index: usize,
+    //restart_point_index: usize,
     /// Current offset.
     offset: usize,
     /// Current key.
@@ -46,7 +46,7 @@ impl BlockIterator {
         Self {
             block,
             offset: usize::MAX,
-            restart_point_index: usize::MAX,
+            //restart_point_index: usize::MAX,
             key: BytesMut::default(),
             value_range: 0..0,
             entry_len: 0,
@@ -227,7 +227,7 @@ impl BlockIterator {
                 break;
             }
         }*/
-        println!("self.index={:?}", self.index);
+        //println!("self.index={:?}", self.index);
     }
 
     pub fn seek_le(&mut self, key: &[u8]) {
@@ -238,6 +238,7 @@ impl BlockIterator {
         while self.is_valid(){ 
             let start=self.index*self.block.key_len as usize;
             let end=start+self.block.key_len as usize -3 ;
+            //println!("block.keys={:?} key={:?}", &self.block.keys[start..end], key);
             if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
                 if self.index==0 {
                     self.index=self.block.entry_count();

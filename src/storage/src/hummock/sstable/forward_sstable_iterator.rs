@@ -76,7 +76,7 @@ impl SstableIterator {
         // do cooperative scheduling.
         tokio::task::consume_budget().await;
 
-        println!("block_count={:?}", self.sst.value().block_count());
+        //println!("block_count={:?}", self.sst.value().block_count());
         if idx >= self.sst.value().block_count() {
             self.block_iter = None;
         } else {
@@ -162,12 +162,12 @@ impl HummockIterator for SstableIterator {
                     ord == Less || ord == Equal
                 })
                 .saturating_sub(1); // considering the boundary of 0
-            println!("*****************block_idx={:?}", block_idx);
+            //println!("*****************block_idx={:?}", block_idx);
 
             //println!("block_idx={:?}", block_idx);
             self.seek_idx(block_idx, Some(key)).await?;
             if !self.is_valid() {
-                println!("block_idx={:?}", block_idx);
+                //println!("block_idx={:?}", block_idx);
                 // seek to next block
                 self.seek_idx(block_idx + 1, None).await?;
             }
@@ -203,7 +203,8 @@ mod tests {
     use crate::hummock::test_utils::{
         create_small_table_cache, default_builder_opt_for_test, gen_default_test_sstable,
         new_gen_default_test_sstable, gen_test_sstable, new_test_value_of, test_table_and_key_cmp_of,
-        test_key_of, test_value_of,test_table_and_key_of,TEST_KEYS_COUNT,get_table_column_hash
+        test_key_of, test_value_of,test_table_and_key_of,TEST_KEYS_COUNT,get_table_column_hash,
+        test_self_key_of
     };
 
     async fn inner_test_forward_iterator(sstable_store: SstableStoreRef, handle: TableHolder) {
@@ -253,7 +254,7 @@ mod tests {
                 .await;
         // We should have at least 10 blocks, so that sstable iterator test could cover more code
         // path.
-        //assert!(sstable.meta.block_metas.len() > 10);
+        assert!(sstable.meta.block_metas.len() > 10);
         let cache = create_small_table_cache();
         let handle = cache.insert(0, 0, 1, Box::new(sstable));
 
@@ -284,14 +285,16 @@ mod tests {
         assert!(!sstable_iter.is_valid());
 
         // Seek to < first key
-        /*let smallest_key = key_with_epoch(test_table_and_key_of(0), 233);
+        
+        let smallest_key = test_self_key_of(0, key_with_epoch(format!("key_aaaa_{:05}", 0).as_bytes().to_vec(), 233));
+        //println!("smallest_key={:?}", smallest_key);
         //let smallest_key = key_with_epoch(format!("key_aaaa_{:05}", 0).as_bytes().to_vec(), 233);
         sstable_iter.seek(smallest_key.as_slice()).await.unwrap();
         let key = sstable_iter.key();
-        assert_eq!(key, test_table_and_key_of(0));*/
+        assert_eq!(key, test_table_and_key_of(0));
 
         // Seek to > last key
-        let largest_key = key_with_epoch(test_table_and_key_of(TEST_KEYS_COUNT), 233);
+        let largest_key = test_self_key_of(TEST_KEYS_COUNT - 1, key_with_epoch(format!("key_zzzz_{:05}", TEST_KEYS_COUNT - 1).as_bytes().to_vec(), 233));
         //let largest_key = key_with_epoch(format!("key_zzzz_{:05}", 0).as_bytes().to_vec(), 233);
         sstable_iter.seek(largest_key.as_slice()).await.unwrap();
         assert!(!sstable_iter.is_valid());
@@ -304,13 +307,11 @@ mod tests {
             // Our key space is `key_test_00000`, `key_test_00002`, `key_test_00004`, ...
             // And we seek to `key_test_00001` (will produce `key_test_00002`), `key_test_00003`
             // (will produce `key_test_00004`).
-            if idx==251{
-                println!("******************");
-            }
+            //println!("idx={:?}", idx);
             sstable_iter
                 .seek(
                     key_with_epoch(
-                        test_table_and_key_cmp_of(idx),
+                        test_self_key_of(idx, key_with_epoch(format!("key_test_{:05}", idx*2-1).as_bytes().to_vec(),0)),
                         0,
                     )
                     .as_slice(),
@@ -319,7 +320,6 @@ mod tests {
                 .unwrap();
 
             let key = sstable_iter.key();
-            println!("idx={:?}", idx);
             assert_eq!(key, test_table_and_key_of(idx));
             sstable_iter.next().await.unwrap();
         }
@@ -331,7 +331,7 @@ mod tests {
         let sstable_store = mock_sstable_store();
         // when upload data is successful, but upload meta is fail and delete is fail
         let kv_iter =
-            (0..TEST_KEYS_COUNT).map(|i| (test_table_and_key_of(i), HummockValue::put(test_table_and_key_of(i))));
+            (0..TEST_KEYS_COUNT).map(|i| (test_table_and_key_of(i), HummockValue::put(new_test_value_of(i))));
         let table = gen_test_sstable(
             default_builder_opt_for_test(),
             0,

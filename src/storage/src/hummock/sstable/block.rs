@@ -69,9 +69,10 @@ pub struct Block {
 
 impl Block {
     pub fn decode(buf: Bytes, uncompressed_capacity: usize) -> HummockResult<Self> {
+        //println!("uncompressed_capacity={:?}", uncompressed_capacity);
         // Verify checksum.
         let xxhash64_checksum = (&buf[buf.len() - 8..]).get_u64_le();
-        println!("decode xxhash64_checksum={:?}", xxhash64_checksum);
+        //println!("decode xxhash64_checksum={:?}", xxhash64_checksum);
         xxhash64_verify(&buf[..buf.len() - 8], xxhash64_checksum)?;
         // Decompress.
         let compression = CompressionAlgorithm::decode(&mut &buf[buf.len() - 9..buf.len() - 8])?;
@@ -413,7 +414,7 @@ impl BlockBuilder {
 
     
     pub fn build(&mut self) -> (u32, &[u8]) {
-        println!("*****************build*******************");
+        //println!("*****************build*******************");
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
         let data_chunk=DataChunk::from_rows(&self.rows, data_types);
         //column_value_state_list saves the field value state 
@@ -569,7 +570,7 @@ impl BlockBuilder {
         };
         self.compression_algorithm.encode(&mut self.buf);
         let checksum = xxhash64_checksum(&self.buf);
-        println!("checksum={:?}", checksum);
+        //println!("checksum={:?}", checksum);
         self.buf.put_u64_le(checksum);
         (self.uncompressed_block_size as u32, self.buf.as_ref())
         

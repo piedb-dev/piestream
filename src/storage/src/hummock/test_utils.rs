@@ -108,7 +108,7 @@ pub fn gen_dummy_sst_info(id: HummockSstableId, batches: Vec<SharedBufferBatch>)
 }
 
 /// Number of keys in table generated in `generate_table`.
-pub const TEST_KEYS_COUNT: usize = 1000;
+pub const TEST_KEYS_COUNT: usize = 10000;
 
 pub fn default_builder_opt_for_test() -> SstableBuilderOptions {
     SstableBuilderOptions {
@@ -198,7 +198,6 @@ pub async fn gen_test_sstable_inner(
     let writer = sstable_store.clone().create_sst_writer(sst_id, writer_opts);
     let mut b = SstableBuilder::for_test(sst_id, writer, opts, table_column_hash);
     for (key, value) in kv_iter {
-        println!("111111key={:?}", &key);
         b.add(&key, value.as_slice(), true).await.unwrap();
     }
     let output = b.finish().await.unwrap();
@@ -229,9 +228,24 @@ pub fn test_table_and_key_cmp_of(idx: usize) -> Vec<u8> {
     }else{
         user_key.extend_from_slice(&2_u32.to_be_bytes());
     }
-    let  key = format!("{:05}", idx*2-1).as_bytes().to_vec();
+    let  key = format!("key_test_{:05}", idx*2-1).as_bytes().to_vec();
     let key_with_epoch=key_with_epoch(key, 233);
     user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
+    //println!("user_key={:?}", user_key);
+    user_key
+}
+
+pub fn test_self_key_of(idx: usize, key: Vec<u8>) -> Vec<u8> {
+    let mut user_key=vec![];
+    user_key.push('t' as u8);
+    if idx<TEST_KEYS_COUNT/2{
+        user_key.extend_from_slice(&1_u32.to_be_bytes());
+    }else{
+        user_key.extend_from_slice(&2_u32.to_be_bytes());
+    }
+    //let key_with_epoch=key_with_epoch(key, 233);
+    user_key.extend_from_slice(&key.to_vec().as_slice());
+    //println!("user_key.len={:?}", user_key.len());
     //println!("user_key={:?}", user_key);
     user_key
 }
@@ -244,9 +258,10 @@ pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
     }else{
         user_key.extend_from_slice(&2_u32.to_be_bytes());
     }
-    let  key = format!("{:05}", idx*2).as_bytes().to_vec();
+    let  key = format!("key_test_{:05}", idx*2).as_bytes().to_vec();
     let key_with_epoch=key_with_epoch(key, 233);
     user_key.extend_from_slice(&key_with_epoch.to_vec().as_slice());
+    //println!("user_key.len={:?}", user_key.len());
     //println!("user_key={:?}", user_key);
     user_key
 }
@@ -267,7 +282,14 @@ pub fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
 }
 
 pub fn new_test_value_of(idx: usize) -> Vec<u8> {
-    let  value = &b"666666"[..];
+    //let  value = &b"666666"[..];
+    let value="666666"
+        .as_bytes()
+        .iter()
+        .cycle()
+        .cloned()
+        .take(idx % 100 + 1) // so that the table is not too big
+        .collect_vec();
     let mut v=vec![];
     v.push(1_u8);
     v.extend_from_slice(&(value.len() as u32).to_ne_bytes());

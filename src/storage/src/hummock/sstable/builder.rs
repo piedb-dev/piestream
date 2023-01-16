@@ -183,7 +183,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
     value: HummockValue<&[u8]>,
     is_new_user_key: bool,
 ) -> HummockResult<()> {
-    println!("-------value={:?}", &value);
+    //println!("-------value={:?}", &value);
     // Rotate block builder if the previous one has been built.
     if self.block_builder.is_empty() {
         self.block_metas.push(BlockMeta {
@@ -204,7 +204,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
             if self.last_table_id != table_id {
                 self.table_ids.insert(table_id);
                  //a block only saves one table data
-                if self.last_table_id!=0{
+                if self.last_table_id!=0 && !self.block_builder.is_empty() {
                     println!("last_table_id change build_block current_block_key_count={:?}", self.current_block_key_count);
                     self.build_block().await?;
                     self.block_metas.push(BlockMeta {
@@ -232,7 +232,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
                     None=>{
                         panic!("Failed to not found description of the table={:?}.", table_id);}
                 };
-                println!("current_table_info={:?}", current_table_info);
+                //println!("current_table_info={:?}", current_table_info);
                 self.block_builder.set_row_deserializer(current_table_info);
                 
                 //set table last full key
@@ -306,7 +306,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
     /// | Block 0 | ... | Block N-1 | N (4B) |
     /// ```
     pub async fn finish(mut self) -> HummockResult<SstableBuilderOutput<W::Output>> {
-        println!("**********SstableBuilder finish.");
+        //println!("**********SstableBuilder finish.");
         let smallest_key = self.block_metas[0].smallest_key.clone();
         let largest_key = self.last_full_key.clone();
 
@@ -378,7 +378,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
             return Ok(());
         }
 
-        println!("self.block_metas.len={:?}", self.block_metas.len());
+        //println!("self.block_metas.len={:?}", self.block_metas.len());
         let mut block_meta = self.block_metas.last_mut().unwrap();
         //block_meta.uncompressed_size = self.block_builder.uncompressed_block_size() as u32;
         let (uncompressed_size, block) = self.block_builder.build();
@@ -388,7 +388,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
         //block_meta.uncompressed_size = block_build.uncompressed_block_size() as u32;
         block_meta.len = self.writer.data_len() as u32 - block_meta.offset;
         block_meta.table_id=self.last_table_id;
-        println!("write to block_meta={:?}",  block_meta);
+        //println!("write to block_meta={:?}",  block_meta);
         self.block_builder.clear();
         Ok(())
     }

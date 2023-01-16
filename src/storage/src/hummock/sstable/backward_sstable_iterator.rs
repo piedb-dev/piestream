@@ -144,6 +144,7 @@ impl HummockIterator for BackwardSstableIterator {
                 .saturating_sub(1); // considering the boundary of 0
             let block_idx = block_idx as isize;
 
+            //println!("seek**************block_idx={:?}", block_idx);
             self.seek_idx(block_idx, Some(key)).await?;
             if !self.is_valid() {
                 // Seek to prev block
@@ -180,8 +181,8 @@ mod tests {
     use crate::assert_bytes_eq;
     use crate::hummock::iterator::test_utils::mock_sstable_store;
     use crate::hummock::test_utils::{
-        create_small_table_cache, default_builder_opt_for_test, gen_default_test_sstable,
-        test_key_of, test_value_of, TEST_KEYS_COUNT,
+        create_small_table_cache, default_builder_opt_for_test, new_gen_default_test_sstable,
+        test_table_and_key_of, new_test_value_of, test_table_and_key_cmp_of, test_self_key_of, TEST_KEYS_COUNT,
     };
 
     #[tokio::test]
@@ -189,7 +190,7 @@ mod tests {
         // build remote sstable
         let sstable_store = mock_sstable_store();
         let sstable =
-            gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
+            new_gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
                 .await;
         // We should have at least 10 blocks, so that sstable iterator test could cover more code
         // path.
@@ -204,8 +205,8 @@ mod tests {
             cnt -= 1;
             let key = sstable_iter.key();
             let value = sstable_iter.value();
-            assert_bytes_eq!(key, test_key_of(cnt));
-            assert_bytes_eq!(value.into_user_value().unwrap(), test_value_of(cnt));
+            assert_bytes_eq!(key, test_table_and_key_of(cnt));
+            assert_bytes_eq!(value.into_user_value().unwrap(), new_test_value_of(cnt));
             sstable_iter.next().await.unwrap();
         }
 
@@ -216,7 +217,7 @@ mod tests {
     async fn test_backward_sstable_seek() {
         let sstable_store = mock_sstable_store();
         let sstable =
-            gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
+            new_gen_default_test_sstable(default_builder_opt_for_test(), 0, sstable_store.clone())
                 .await;
         // We should have at least 10 blocks, so that sstable iterator test could cover more code
         // path.
@@ -230,31 +231,31 @@ mod tests {
 
         // We seek and access all the keys in random order
         for i in all_key_to_test {
-            sstable_iter.seek(&test_key_of(i)).await.unwrap();
+            sstable_iter.seek(&test_table_and_key_of(i)).await.unwrap();
             // sstable_iter.next().await.unwrap();
             let key = sstable_iter.key();
-            assert_bytes_eq!(key, test_key_of(i));
+            assert_bytes_eq!(key, test_table_and_key_of(i));
         }
 
         // Seek to key #TEST_KEYS_COUNT-500 and start iterating
         sstable_iter
-            .seek(&test_key_of(TEST_KEYS_COUNT - 500))
+            .seek(&test_table_and_key_of(TEST_KEYS_COUNT - 500))
             .await
             .unwrap();
         for i in (0..TEST_KEYS_COUNT - 500 + 1).rev() {
             let key = sstable_iter.key();
-            assert_eq!(key, test_key_of(i), "key index:{}", i);
+            assert_eq!(key, test_table_and_key_of(i), "key index:{}", i);
             sstable_iter.next().await.unwrap();
         }
         assert!(!sstable_iter.is_valid());
 
-        let largest_key = key_with_epoch(format!("key_zzzz_{:05}", 0).as_bytes().to_vec(), 233);
+        let largest_key = test_self_key_of(TEST_KEYS_COUNT - 1, key_with_epoch(format!("key_zzzz_{:05}", TEST_KEYS_COUNT - 1).as_bytes().to_vec(), 233));
         sstable_iter.seek(largest_key.as_slice()).await.unwrap();
         let key = sstable_iter.key();
-        assert_eq!(key, test_key_of(TEST_KEYS_COUNT - 1));
+        assert_eq!(key, test_table_and_key_of(TEST_KEYS_COUNT - 1));
 
         // Seek to > last key
-        let smallest_key = key_with_epoch(format!("key_aaaa_{:05}", 0).as_bytes().to_vec(), 233);
+        let smallest_key = test_self_key_of(0, key_with_epoch(format!("key_aaaa_{:05}", 0).as_bytes().to_vec(), 233));
         sstable_iter.seek(smallest_key.as_slice()).await.unwrap();
         assert!(!sstable_iter.is_valid());
 
@@ -267,7 +268,7 @@ mod tests {
             sstable_iter
                 .seek(
                     key_with_epoch(
-                        format!("key_test_{:05}", idx * 2 - 1).as_bytes().to_vec(),
+                        test_self_key_of(idx, key_with_epoch(format!("key_test_{:05}", idx*2-1).as_bytes().to_vec(),0)),
                         0,
                     )
                     .as_slice(),
@@ -276,7 +277,7 @@ mod tests {
                 .unwrap();
 
             let key = sstable_iter.key();
-            assert_eq!(key, test_key_of(idx - 1));
+            assert_eq!(key, test_table_and_key_of(idx - 1));
             sstable_iter.next().await.unwrap();
         }
         assert!(!sstable_iter.is_valid());

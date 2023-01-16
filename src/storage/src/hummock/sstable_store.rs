@@ -214,7 +214,7 @@ impl SstableStore {
         policy: CachePolicy,
         stats: &mut StoreLocalStatistic,
     ) -> HummockResult<BlockHolder> {
-        println!("block_index={:?}", block_index);
+        //println!("block_index={:?}", block_index);
         stats.cache_data_block_total += 1;
         let tiered_cache = self.tiered_cache.clone();
         let fetch_block = || {
@@ -230,7 +230,7 @@ impl SstableStore {
                 offset: block_meta.offset as usize,
                 size: block_meta.len as usize,
             };
-            println!("block_loc={:?}", &block_loc);
+            //println!("block_index={:?} block_loc={:?}",block_index, &block_loc);
             let data_path = self.get_sst_data_path(sst.id);
             let store = self.store.clone();
             let sst_id = sst.id;
