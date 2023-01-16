@@ -250,6 +250,7 @@ pub fn test_self_key_of(idx: usize, key: Vec<u8>) -> Vec<u8> {
     user_key
 }
 
+
 pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
     let mut user_key=vec![];
     user_key.push('t' as u8);
@@ -266,7 +267,7 @@ pub fn test_table_and_key_of(idx: usize) -> Vec<u8> {
     user_key
 }
 
-pub fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
+pub fn get_table_column_hash()->Arc<TableColumnDescHash>{
     use piestream_common::types::DataType;
     use std::collections::HashMap;
 
@@ -277,8 +278,8 @@ pub fn get_table_column_hash()->Option<Arc<TableColumnDescHash>>{
     let mut mapping: HashMap<u32, (String, Vec<ColumnDesc>)> = HashMap::new();
     mapping.insert(1, ("school".to_string(), columns.clone()));
     mapping.insert(2, ("city".to_string(), columns));
-    println!("mapping={:?}", mapping);
-    Some(Arc::new(mapping))
+    //println!("mapping={:?}", mapping);
+    Arc::new(mapping)
 }
 
 pub fn new_test_value_of(idx: usize) -> Vec<u8> {
@@ -307,7 +308,7 @@ pub async fn new_gen_default_test_sstable(
         sst_id,
         (0..TEST_KEYS_COUNT).map(|i| (test_table_and_key_of(i), HummockValue::put(new_test_value_of(i)))),
         sstable_store,
-        get_table_column_hash(),
+        Some(get_table_column_hash()),
     )
     .await
 }

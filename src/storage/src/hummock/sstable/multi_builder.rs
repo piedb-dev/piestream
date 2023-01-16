@@ -21,6 +21,7 @@ use piestream_hummock_sdk::HummockEpoch;
 use piestream_pb::hummock::SstableInfo;
 use tokio::task::JoinHandle;
 
+
 use crate::hummock::compactor::task_progress::TaskProgress;
 use crate::hummock::sstable_store::SstableStoreRef;
 use crate::hummock::value::HummockValue;
@@ -29,6 +30,7 @@ use crate::hummock::{
     SstableBuilderOptions, SstableWriter, SstableWriterOptions,
 };
 use crate::monitor::StateStoreMetrics;
+use crate::hummock::sstable::builder::TableColumnDescHash;
 
 pub type UploadJoinHandle = JoinHandle<HummockResult<()>>;
 
@@ -212,6 +214,7 @@ pub struct LocalTableBuilderFactory {
     options: SstableBuilderOptions,
     policy: CachePolicy,
     limiter: MemoryLimiter,
+    table_column_hash: Arc<TableColumnDescHash>,
 }
 
 impl LocalTableBuilderFactory {
@@ -219,6 +222,7 @@ impl LocalTableBuilderFactory {
         next_id: u64,
         sstable_store: SstableStoreRef,
         options: SstableBuilderOptions,
+        table_column_hash: Arc<TableColumnDescHash>,
     ) -> Self {
         Self {
             next_id: AtomicU64::new(next_id),
@@ -226,6 +230,7 @@ impl LocalTableBuilderFactory {
             options,
             policy: CachePolicy::NotFill,
             limiter: MemoryLimiter::new(1000000),
+            table_column_hash: table_column_hash,
         }
     }
 }
@@ -246,7 +251,7 @@ impl TableBuilderFactory for LocalTableBuilderFactory {
             .sstable_store
             .clone()
             .create_sst_writer(id, writer_options);
-        let builder = SstableBuilder::for_test(id, writer, self.options.clone(), None);
+        let builder = SstableBuilder::for_test(id, writer, self.options.clone(), Some(self.table_column_hash.clone()));
 
         Ok(builder)
     }
@@ -257,8 +262,24 @@ mod tests {
     use super::*;
     use crate::hummock::iterator::test_utils::mock_sstable_store;
     use crate::hummock::sstable::utils::CompressionAlgorithm;
-    use crate::hummock::test_utils::default_builder_opt_for_test;
+    use crate::hummock::test_utils::{get_table_column_hash, default_builder_opt_for_test};
     use crate::hummock::{SstableBuilderOptions, DEFAULT_RESTART_INTERVAL};
+
+    pub fn get_table_and_key_of(key: Vec<u8>) -> Vec<u8> {
+        let mut user_key=vec![];
+        user_key.push('t' as u8);
+        user_key.extend_from_slice(&1_u32.to_be_bytes());
+        user_key.extend_from_slice(&key.to_vec().as_slice());
+        user_key
+    }
+
+    pub fn get_value_of(value: Vec<u8>) -> Vec<u8> {
+        let mut v=vec![];
+        v.push(1_u8);
+        v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
+        v.extend_from_slice(&value);
+        v
+    }
 
     #[tokio::test]
     async fn test_empty() {
@@ -271,7 +292,7 @@ mod tests {
             bloom_false_positive: 0.1,
             compression_algorithm: CompressionAlgorithm::None,
         };
-        let builder_factory = LocalTableBuilderFactory::new(1001, mock_sstable_store(), opts);
+        let builder_factory = LocalTableBuilderFactory::new(1001, mock_sstable_store(), opts, get_table_column_hash());
         let builder = CapacitySplitTableBuilder::for_test(builder_factory);
         let results = builder.finish().await.unwrap();
         assert!(results.is_empty());
@@ -288,14 +309,14 @@ mod tests {
             bloom_false_positive: 0.1,
             compression_algorithm: CompressionAlgorithm::None,
         };
-        let builder_factory = LocalTableBuilderFactory::new(1001, mock_sstable_store(), opts);
+        let builder_factory = LocalTableBuilderFactory::new(1001, mock_sstable_store(), opts, get_table_column_hash());
         let mut builder = CapacitySplitTableBuilder::for_test(builder_factory);
 
         for i in 0..table_capacity {
             builder
                 .add_user_key(
-                    b"key".to_vec(),
-                    HummockValue::put(b"value"),
+                    get_table_and_key_of(b"key".to_vec()),
+                    HummockValue::put(get_value_of(b"value".to_vec()).as_slice()),
                     (table_capacity - i) as u64,
                 )
                 .await
@@ -313,6 +334,7 @@ mod tests {
             1001,
             mock_sstable_store(),
             opts,
+            get_table_column_hash()
         ));
         let mut epoch = 100;
 
@@ -320,7 +342,7 @@ mod tests {
             () => {
                 epoch -= 1;
                 builder
-                    .add_user_key(b"k".to_vec(), HummockValue::put(b"v"), epoch)
+                    .add_user_key(get_table_and_key_of(b"k".to_vec()), HummockValue::put(get_value_of(b"v".to_vec()).as_slice()), epoch)
                     .await
                     .unwrap();
             };
@@ -353,15 +375,16 @@ mod tests {
             1001,
             mock_sstable_store(),
             opts,
+            get_table_column_hash()
         ));
 
         builder
             .add_full_key(
-                FullKey::from_user_key_slice(b"k", 233)
+                FullKey::from_user_key_slice(get_table_and_key_of(b"k".to_vec()).as_slice(), 233)
                     .as_slice()
                     .into_inner(),
-                HummockValue::put(b"v"),
-                false,
+                HummockValue::put(get_value_of(b"v".to_vec()).as_slice()),
+                true,
             )
             .await
             .unwrap();

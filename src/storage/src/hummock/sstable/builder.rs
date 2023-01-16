@@ -126,7 +126,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
         sstable_id: u64, 
         writer: W, 
         options: SstableBuilderOptions,
-        table_column_hash: Option<Arc<TableColumnDescHash>>,) -> Self {
+        table_column_hash: Option<Arc<TableColumnDescHash>>) -> Self {
         Self::new(
             sstable_id,
             writer,
@@ -474,7 +474,7 @@ pub(super) mod tests {
     #[tokio::test]
     async fn new_test_basic() {
         let opt = default_builder_opt_for_test();
-        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, get_table_column_hash());
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, Some(get_table_column_hash()));
 
         for i in 0..TEST_KEYS_COUNT {
             b.add(&test_table_and_key_of(i), HummockValue::put(&new_test_value_of(i)), true)
@@ -500,7 +500,7 @@ pub(super) mod tests {
     #[tokio::test]
     async fn new_test_one_record() {
         let opt = default_builder_opt_for_test();
-        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, get_table_column_hash());
+        let mut b = SstableBuilder::for_test(0, mock_sst_writer(&opt), opt, Some(get_table_column_hash()));
 
         let max=1;
         for i in 0..max {

@@ -337,7 +337,7 @@ mod tests {
             0,
             kv_iter,
             sstable_store.clone(),
-            get_table_column_hash(),
+            Some(get_table_column_hash()),
         )
         .await;
 
