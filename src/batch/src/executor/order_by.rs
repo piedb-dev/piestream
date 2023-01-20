@@ -64,12 +64,13 @@ impl BoxedExecutorBuilder for OrderByExecutor {
             source.plan_node().get_node_body().unwrap(),
             NodeBody::OrderBy
         )?;
-
+        println!("batch::executor::order_by.rs ======================= order_by_node = {:?}",&order_by_node);
         let order_pairs = order_by_node
             .column_orders
             .iter()
             .map(OrderPair::from_prost)
             .collect();
+        println!("batch::executor::order_by.rs ======================= order_pairs = {:?}",&order_pairs);
         Ok(Box::new(OrderByExecutor::new(
             child,
             order_pairs,

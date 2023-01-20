@@ -172,6 +172,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 OrderType::from_prost(&ProstOrderType::from_i32(order.order_type).unwrap())
             })
             .collect();
+        println!("batch::executor::row_sql_scan.rs ======= order_types = {:?}",&order_types);
 
         let pk_indices = table_desc.pk.iter().map(|k| k.index as usize).collect_vec();
         // println!("batch::executor::row_sql_scan.rs ======= pk_indices = {:?}",&pk_indices);
@@ -246,6 +247,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                         if pk_prefix_value.size() == 0 && is_full_range(&next_col_bounds) {
                             unreachable!()
                         } else if pk_prefix_value.size() == pk_len {
+                            println!("executor::row_seq_scan.rs ========= ScanType::PointGet");
                             let row = {
                                 table
                                     .get_row(
@@ -257,6 +259,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                             ScanType::PointGet(row)
                         } else {
                             assert!(pk_prefix_value.size() < pk_len);
+                            println!("executor::row_seq_scan.rs ========= ScanType::BatchScan");
                             let iter = table
                                 .batch_iter_with_pk_bounds(
                                     HummockReadEpoch::Committed(source.epoch),
