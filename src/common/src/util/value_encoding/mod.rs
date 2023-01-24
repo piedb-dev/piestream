@@ -15,7 +15,7 @@
 //! Value encoding is an encoding format which converts the data into a binary form (not
 //! memcomparable).
 
-use bytes::{Buf, BufMut};
+use bytes::{Buf, BufMut, BytesMut};
 use chrono::{Datelike, Timelike};
 
 use crate::types::{
@@ -66,28 +66,60 @@ pub fn serialize_datum_ref(datum_ref: &DatumRef<'_>, mut buf: impl BufMut) {
 pub fn serialize_datum_separate_ref(datum_ref: &DatumRef<'_>, 
     array_type: &ArrayImpl, 
     mut buf_data_stat: impl BufMut, 
-    buf_len:  u32,
     mut buf: impl BufMut,
-    mut variable_offset: impl BufMut,) {
+    //mut variable_offset: impl BufMut,
+    mut variable_offsets: impl BufMut,
+    mut variable_buf: &mut BytesMut) {
     //Store variable length data type offset
-    match array_type{
+    let is_variable=match array_type{
         ArrayImpl::Utf8(_) |
         ArrayImpl::Struct(_) |
         ArrayImpl::List(_)=>{
-            variable_offset.put_u32_le(buf_len);
+            true
         }
-        _=>{}
-    }
+        _=>{false}
+    };
 
-    if let Some(d) = datum_ref {
-        buf_data_stat.put_u8(1);
-        serialize_value(*d, &mut buf)
-    } else {
-        buf_data_stat.put_u8(0);
-        serialize_fixed_len_default_value(array_type, buf)
+    if !is_variable{
+        if let Some(d) = datum_ref {
+            buf_data_stat.put_u8(1);
+            serialize_value(*d, &mut buf)
+        } else {
+            buf_data_stat.put_u8(0);
+            serialize_fixed_len_default_value(array_type, buf)
+        }
+    }else{
+        variable_offsets.put_u32_le(variable_buf.len() as u32);
+        if let Some(d) = datum_ref {
+            buf_data_stat.put_u8(1);
+            serialize_value(*d, &mut variable_buf)
+        } else {
+            buf_data_stat.put_u8(0);
+        }
     }
 
     
+}
+
+pub fn array_type_to_type_index(array_type: &ArrayImpl) -> u8{
+    match array_type {
+        ArrayImpl::Bool(_) => 0,
+        ArrayImpl::Int16(_) => 1,
+        ArrayImpl::Int32(_) => 2,
+        ArrayImpl::Int64(_) => 3,
+        ArrayImpl::Float32(_) => 4,
+        ArrayImpl::Float64(_) => 5,
+        ArrayImpl::Decimal(_) => 6,
+        ArrayImpl::NaiveDate(_) => 2,
+        ArrayImpl::Utf8(_) => 8,
+        ArrayImpl::NaiveTime(_) => 9,
+        ArrayImpl::NaiveDateTime(_) => 10,
+        //DataType::Timestampz => 11,
+        ArrayImpl::Interval(_) => 12,
+        ArrayImpl::Struct(_) => 8,
+        ArrayImpl::List(_) => 8,
+        _=>{panic!("unknown type.")},
+    }
 }
 
 fn serialize_fixed_len_default_value( array_type: &ArrayImpl, mut buf: impl BufMut){

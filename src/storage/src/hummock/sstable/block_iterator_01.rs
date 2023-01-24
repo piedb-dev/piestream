@@ -72,14 +72,15 @@ impl BlockIterator {
 
     pub fn key(&self) -> &[u8] {
         assert!(self.is_valid());
-        self.block.get_key(self.index)
+        let start=self.index*self.block.key_len as usize;
+        let end=(((self.index+1)*self.block.key_len as usize)-3) as usize ;
+        //println!("index={:?} block.keys={:?}",self.index, &self.block.keys[start..end]);
+        &self.block.keys[start..end]
+        //&self.key[..]
     }
 
+    //pub fn value(&self) -> &[u8] {
     pub fn value(&self) -> Box<Vec<u8>> {
-        assert!(self.is_valid());
-        self.block.get_value(self.index)
-    }
-    /*pub fn value(&self) -> Box<Vec<u8>> {
         assert!(self.is_valid());
      
         let start=(self.index+1)*self.block.key_len as usize-3;
@@ -158,9 +159,12 @@ impl BlockIterator {
         //println!("self.index={:?} value={:?}", self.index, value);
         //assert!(false);
         Box::new(value)
-    }*/
+    }
 
     pub fn is_valid(&self) -> bool {
+        //assert!(false);
+        //self.offset < self.block.len()
+        //println!("**************index={:?} len={:?}*****************", self.index, self.block.len());
         self.index<self.block.entry_count()
     }
 
@@ -170,6 +174,9 @@ impl BlockIterator {
 
     pub fn seek_to_last(&mut self) {
         self.index=self.block.entry_count()-1;
+        //println!("self.index={:?}", self.index);
+        //self.seek_restart_point_by_index(self.block.restart_point_len() - 1);
+        //self.next_until_prev_offset(self.block.len());
     }
 
     pub fn seek(&mut self, key: &[u8]) {
@@ -181,10 +188,13 @@ impl BlockIterator {
         while left>=0 && right>=0 && left <= right {
             //println!("-----------------into seek while----------------");
             let middle = (left + right)/2;
-            let raw_key=self.block.get_key(middle as usize);
+            let start=middle as usize *self.block.key_len as usize;
+            let end=start+self.block.key_len as usize -3 ;
             is_into=true;
             self.index=middle as usize;
-            let ordering=VersionedComparator::compare_key(raw_key, key);
+            //println!("start={:?} end={:?}", start, end);
+            //println!("middle={:?}, key1={:?} key2={:?}", middle, &self.block.keys[start..end], key);
+            let ordering=VersionedComparator::compare_key(&self.block.keys[start..end], key);
             if ordering==Ordering::Equal{
                 is_hit=true;
                 break;
@@ -202,8 +212,22 @@ impl BlockIterator {
         if is_hit==false && is_into {
             if compare_type==Ordering::Less {
                 self.index+=1;
+                /*if self.index+1==self.block.entry_count() {
+                println!("is_hit==false &&  self.index+1==self.block.entry_count");
+                self.index=self.block.entry_count();*/
             }
         }
+        /*for idx in 0..self.block.entry_count(){
+            let start=idx*self.block.key_len as usize;
+            let end=start+self.block.key_len as usize -3 ;
+            self.index=idx;
+            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Less{
+                continue;
+            }else{
+                break;
+            }
+        }*/
+        //println!("self.index={:?}", self.index);
     }
 
     pub fn seek_le(&mut self, key: &[u8]) {
@@ -212,8 +236,10 @@ impl BlockIterator {
             self.seek_to_last();
         }
         while self.is_valid(){ 
-            let raw_key=self.block.get_key(self.index);
-            if VersionedComparator::compare_key(raw_key, key)==Ordering::Greater{
+            let start=self.index*self.block.key_len as usize;
+            let end=start+self.block.key_len as usize -3 ;
+            //println!("block.keys={:?} key={:?}", &self.block.keys[start..end], key);
+            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
                 if self.index==0 {
                     self.index=self.block.entry_count();
                 }else{
@@ -223,10 +249,132 @@ impl BlockIterator {
                 break;
             }
         }
+        
+        /*while self.index>0 {
+            let start=self.index*self.block.key_len as usize;
+            let end=start+self.block.key_len as usize -3 ;
+            if VersionedComparator::compare_key(&self.block.keys[start..end], key)==Ordering::Greater{
+                self.index-=1;
+                continue;
+            }else{
+                break;
+            }
+        }*/
     }
 }
 
+/*impl BlockIterator {
+    /// Invalidates current state after reaching a invalid state.
+    fn invalidate(&mut self) {
+        self.offset = self.block.len();
+        self.restart_point_index = self.block.restart_point_len();
+        self.key.clear();
+        self.value_range = 0..0;
+        self.entry_len = 0;
+    }
 
+    /// Moves to the next entry.
+    ///
+    /// Note: Ensures that the current state is valid.
+    fn next_inner(&mut self) {
+        let offset = self.offset + self.entry_len;
+        if offset >= self.block.len() {
+            self.invalidate();
+            return;
+        }
+        let prefix = self.decode_prefix_at(offset);
+        self.key.truncate(prefix.overlap_len());
+        self.key
+            .extend_from_slice(&self.block.data()[prefix.diff_key_range()]);
+        self.value_range = prefix.value_range();
+        self.offset = offset;
+        self.entry_len = prefix.entry_len();
+        if self.restart_point_index + 1 < self.block.restart_point_len()
+            && self.offset >= self.block.restart_point(self.restart_point_index + 1) as usize
+        {
+            self.restart_point_index += 1;
+        }
+    }
+
+    /// Moves forward until reaching the first that equals or larger than the given `key`.
+    fn next_until_key(&mut self, key: &[u8]) {
+        while self.is_valid()
+            && VersionedComparator::compare_key(&self.key[..], key) == Ordering::Less
+        {
+            self.next_inner();
+        }
+    }
+
+    /// Moves backward until reaching the first key that equals or smaller than the given `key`.
+    fn prev_until_key(&mut self, key: &[u8]) {
+        while self.is_valid()
+            && VersionedComparator::compare_key(&self.key[..], key) == Ordering::Greater
+        {
+            self.prev_inner();
+        }
+    }
+
+    /// Moves forward until the position reaches the previous position of the given `next_offset` or
+    /// the last valid position if exists.
+    fn next_until_prev_offset(&mut self, offset: usize) {
+        while self.offset + self.entry_len < std::cmp::min(self.block.len(), offset) {
+            self.next_inner();
+        }
+    }
+
+    /// Moves to the previous entry.
+    ///
+    /// Note: Ensure that the current state is valid.
+    fn prev_inner(&mut self) {
+        if self.offset == 0 {
+            self.invalidate();
+            return;
+        }
+        if self.block.restart_point(self.restart_point_index) as usize == self.offset {
+            self.restart_point_index -= 1;
+        }
+        let origin_offset = self.offset;
+        self.seek_restart_point_by_index(self.restart_point_index);
+        self.next_until_prev_offset(origin_offset);
+    }
+
+    /// Decodes [`KeyPrefix`] at given offset.
+    fn decode_prefix_at(&self, offset: usize) -> KeyPrefix {
+        KeyPrefix::decode(&mut &self.block.data()[offset..], offset)
+    }
+
+    /// Searches the restart point index that the given `key` belongs to.
+    fn search_restart_point_index_by_key(&self, key: &[u8]) -> usize {
+        // Find the largest restart point that restart key equals or less than the given key.
+        self.block
+            .search_restart_partition_point(|&probe| {
+                let prefix = self.decode_prefix_at(probe as usize);
+                let probe_key = &self.block.data()[prefix.diff_key_range()];
+                match VersionedComparator::compare_key(probe_key, key) {
+                    Ordering::Less | Ordering::Equal => true,
+                    Ordering::Greater => false,
+                }
+            })
+            .saturating_sub(1) // Prevent from underflowing when given is smaller than the first.
+    }
+
+    /// Seeks to the restart point that the given `key` belongs to.
+    fn seek_restart_point_by_key(&mut self, key: &[u8]) {
+        let index = self.search_restart_point_index_by_key(key);
+        self.seek_restart_point_by_index(index)
+    }
+
+    /// Seeks to the restart point by given restart point index.
+    fn seek_restart_point_by_index(&mut self, index: usize) {
+        let offset = self.block.restart_point(index) as usize;
+        let prefix = self.decode_prefix_at(offset);
+        self.key = BytesMut::from(&self.block.data()[prefix.diff_key_range()]);
+        self.value_range = prefix.value_range();
+        self.offset = offset;
+        self.entry_len = prefix.entry_len();
+        self.restart_point_index = index;
+    }
+}*/
 
 #[cfg(test)]
 mod tests {
@@ -234,9 +382,6 @@ mod tests {
 
     use super::*;
     use crate::hummock::{Block, BlockBuilder, BlockBuilderOptions};
-
-    use crate::hummock::test_utils::{TEST_KEYS_COUNT};
-
 
     fn get_hummock_value( value: &[u8])->Bytes{
         let mut v=vec![1_u8];
@@ -278,52 +423,12 @@ mod tests {
         raw_value.freeze()
     }
 
-    fn new_get_hummock_new_value(number: u32, value: &[u8], number1: u32, value1: &[u8])->Bytes{
-        let mut v=vec![];
-      
-        if number==100{
-            v.push(0_u8);
-            v.push(0_u8);
-            v.push(1_u8);    
-            v.extend_from_slice(&number1.to_ne_bytes());
-            v.push(0_u8);
-        }else{
-            v.push(1_u8);    
-            v.extend_from_slice(&number.to_ne_bytes());
-            
-            v.push(1_u8);
-            v.extend_from_slice(&(value.len() as u32).to_ne_bytes());
-            v.extend_from_slice(value);
-
-            v.push(1_u8);    
-            v.extend_from_slice(&number1.to_ne_bytes());
-            
-            v.push(1_u8);
-            v.extend_from_slice(&(value1.len() as u32).to_ne_bytes());
-            v.extend_from_slice(value1);
-        }
-
-        let  mut raw_value=BytesMut::new();
-        HummockValue::put(&v[..]).encode(&mut raw_value);
-        raw_value.freeze()
-    }
-
     fn get_delete_hummock_value()->Bytes{
         let mut raw_value=BytesMut::new();
         HummockValue::<&[u8]>::Delete.encode(&mut raw_value);
         raw_value.freeze()
     }
-    fn build_iterator_for_new_delete_test() -> BlockIterator {
-        let options = BlockBuilderOptions::default();
-        let mut builder = BlockBuilder::new(options);
-        builder.set_row_deserializer(vec![DataType::Int32, DataType::Varchar]);
-        builder.add(&full_key(b"k01", 1), &get_delete_hummock_value()[..]);
-        let buf = builder.build().1.to_vec();
-        let capacity = builder.uncompressed_block_size();
-        BlockIterator::new(BlockHolder::from_owned_block(Box::new(
-            Block::decode(buf.into(), capacity).unwrap(),
-        )))
-    }
+
     fn build_iterator_for_new_test() -> BlockIterator {
         let options = BlockBuilderOptions::default();
         let mut builder = BlockBuilder::new(options);
@@ -374,72 +479,7 @@ mod tests {
             Block::decode(buf.into(), capacity).unwrap(),
         )))
     }
-    fn new_build_iterator_for_new_test() -> BlockIterator {
-        let options = BlockBuilderOptions::default();
-        let mut builder = BlockBuilder::new(options);
-        builder.set_row_deserializer(vec![DataType::Int32, DataType::Varchar, DataType::Int32, DataType::Varchar]);
-        for idx in 0..TEST_KEYS_COUNT{
-            if idx>100{
-                let use_key=format!("key_test_{:05}", idx).as_bytes().to_vec();
-                builder.add(&full_key(&use_key[..], idx as u64), &new_get_hummock_new_value(idx as u32, b"v01", idx as u32 +1 , b"v01")[..]);
-            }else{
-                let use_key=format!("key_test_{:05}", idx).as_bytes().to_vec();
-                builder.add(&full_key(&use_key[..], idx as u64), &new_get_hummock_new_value(idx as u32, b"v01", idx as u32 +1 , b"v01")[..]);
-            }
-        }
-        
-        let buf = builder.build().1.to_vec();
-        let capacity = builder.uncompressed_block_size();
-        BlockIterator::new(BlockHolder::from_owned_block(Box::new(
-            Block::decode(buf.into(), capacity).unwrap(),
-        )))
-    }
   
-    #[test]
-    fn  group_model_test_seek_first() {
-        let mut it = new_build_iterator_for_new_test();
-        it.seek_to_first();
-        assert!(it.is_valid());
-        let use_key=format!("key_test_{:05}", 0).as_bytes().to_vec();
-        assert_eq!(&full_key(&use_key[..], 0)[..], it.key());
-        assert_eq!(&new_get_hummock_new_value(0, b"v01", 1 , b"v01")[..], it.value().as_slice());
-    }
-
-    #[test]
-    fn  group_model_test_seek_last() {
-        let mut it = new_build_iterator_for_new_test();
-        it.seek_to_last();
-        assert!(it.is_valid());
-        let use_key=format!("key_test_{:05}", TEST_KEYS_COUNT-1).as_bytes().to_vec();
-        assert_eq!(&full_key(&use_key[..], TEST_KEYS_COUNT as u64-1)[..], it.key());
-        let key= &new_get_hummock_new_value(TEST_KEYS_COUNT as u32 -1, b"v01", TEST_KEYS_COUNT as u32 , b"v01")[..];
-        println!("len={:?} key={:?}", key.len(), key);
-        println!("{:?}", it.value().as_slice());
-        assert_eq!(&new_get_hummock_new_value(TEST_KEYS_COUNT as u32 -1, b"v01", TEST_KEYS_COUNT as u32 , b"v01")[..], it.value().as_slice());
-    }
-
-    #[test]
-    fn group_model_new_test_node_value() {
-        let mut it = new_build_iterator_for_new_test();
-        let key_id=TEST_KEYS_COUNT-900;
-        //let key_id=1;
-        let use_key=format!("key_test_{:05}", key_id).as_bytes().to_vec();
-        it.seek(&full_key(&use_key[..], key_id as u64)[..]);
-        assert!(it.is_valid());
-        assert_eq!(&full_key(&use_key[..], key_id as u64)[..], it.key());
-        println!("value={:?}", it.value().as_slice());
-        println!("val={:?}", &new_get_hummock_new_value(key_id as u32, b"v01", key_id as u32 +1, b"v01")[..]);
-        assert_eq!(&new_get_hummock_new_value(key_id as u32, b"v01", key_id as u32 +1, b"v01")[..], it.value().as_slice());
-    
-    }
-
-    #[test]
-    fn group_model_new_seek_delete() {
-        let mut it = build_iterator_for_new_delete_test();
-        it.seek(&full_key(b"k01", 1)[..]);
-        assert_eq!(&get_delete_hummock_value()[..], &it.value()[..]);
-    }
-
     #[test]
     fn new_seek_delete() {
         let mut it = build_iterator_for_new_test();

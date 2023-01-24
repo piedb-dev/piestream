@@ -257,7 +257,7 @@ impl HummockStorage {
             key_range.end_bound().map(|b| b.as_ref().to_owned()),
         );
 
-        println!("overlapped_iters={:?}", overlapped_iters.len());
+        //println!("overlapped_iters={:?}", overlapped_iters.len());
         // The input of the user iterator is a `HummockIteratorUnion` of 4 different types. We use
         // the union because the underlying merge iterator
         let mut user_iterator = T::UserIteratorBuilder::create(

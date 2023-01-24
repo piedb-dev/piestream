@@ -326,7 +326,7 @@ impl DataType {
         )
     }
 
-    pub fn type_to_fixed_index(&self) -> u8{
+    pub fn type_to_group_id(&self) -> u8{
         match self {
             DataType::Boolean => 0,
             DataType::Int16 => 1,
@@ -335,11 +335,12 @@ impl DataType {
             DataType::Float32 => 4,
             DataType::Float64 => 5,
             DataType::Decimal => 6,
-            DataType::Date => 7,
+            DataType::Date => 2,
+            //DataType::Date => 7,
             DataType::Varchar => u8::MAX,
             DataType::Time => 9,
             DataType::Timestamp => 10,
-            DataType::Timestampz => 11,
+            DataType::Timestampz => 3,
             DataType::Interval => 12,
             DataType::Struct{..} => u8::MAX,
             DataType::List{..} => u8::MAX,

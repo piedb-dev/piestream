@@ -15,12 +15,13 @@
 use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::{fmt, iter};
-use std::collections::BTreeMap;
-use bytes::{Buf, BytesMut};
+
 use auto_enums::auto_enum;
 use itertools::Itertools;
 use piestream_pb::data::DataChunk as ProstDataChunk;
 
+use std::collections::BTreeMap;
+use bytes::{BytesMut};
 use super::ArrayResult;
 use crate::array::column::Column;
 use crate::array::data_chunk_iter::{Row, RowRef};
@@ -492,18 +493,63 @@ impl DataChunk {
             }
         }
     }
-    
+    /*pub fn serialize_columns(&self, 
+        buffers: &mut Vec<Vec<u8>>, 
+        buffers_stat: &mut Vec<Vec<u8>>, 
+        variable_offsets: &mut Vec<Vec<u8>>,
+        mut variable_buf: &mut BytesMut,    
+    ) {
+        match &self.vis2 {
+            Vis::Bitmap(vis) => {
+                let rows_num = vis.len();
+                //let mut buffers = vec![vec![]; self.columns.len()];
+                //let mut buffers_stat = vec![vec![]; self.columns.len()];
+                //let mut variable_offsets = vec![vec![]; self.columns.len()];
+                for (idx, c) in self.columns.iter().enumerate()  {
+                    let c = c.array_ref();
+                    assert_eq!(c.len(), rows_num);
+                    for i in 0..c.len(){
+                        // SAFETY(value_at_unchecked): the idx is always in bound.
+                        unsafe {
+                            if vis.is_set_unchecked(i) {
+                                serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
+                                &mut buffers_stat[idx], &mut buffers[idx], &mut variable_offsets[idx], variable_buf);
+                            }
+                        }
+                    }
+                }
+                //(buffers_stat, buffers, variable_offsets)
+            }
+            Vis::Compact(rows_num) => {
+                //let mut buffers = vec![vec![]; self.columns.len()];
+                //let mut buffers_stat = vec![vec![]; self.columns.len()];
+                //let mut variable_offsets = vec![vec![]; self.columns.len()];
+                for (idx, c) in self.columns.iter().enumerate()  {
+                    let c = c.array_ref();
+                    assert_eq!(c.len(), *rows_num);
+                    for i in 0..c.len(){
+                        // SAFETY(value_at_unchecked): the idx is always in bound.
+                        unsafe {
+                            serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
+                                &mut buffers_stat[idx],&mut buffers[idx], &mut variable_offsets[idx], variable_buf);
+                        }
+                    }
+                }
+                //(buffers_stat, buffers, variable_offsets)
+            }
+        }
+    }*/
     pub fn serialize_columns(&self, 
         map_data_type: &BTreeMap<u32, Vec<u32>>,
         buffers: &mut Vec<Vec<u8>>, 
         buffers_stat: &mut Vec<Vec<u8>>, 
         variable_offsets: &mut Vec<u8>,
-        variable_buf: &mut BytesMut  
+        mut variable_buf: &mut BytesMut  
     ) {
         match &self.vis2 {
             Vis::Bitmap(vis) => {
                 let rows_num = vis.len();
-                for (gidx, (gid, v)) in  map_data_type.iter().enumerate(){
+                for (gid, v) in  map_data_type{
                     for idx in v{
                         let c=self.columns[*idx as usize].array_ref();
                         assert_eq!(c.len(), rows_num);
@@ -511,14 +557,14 @@ impl DataChunk {
                             // SAFETY(value_at_unchecked): the idx is always in bound.
                             unsafe {
                                 serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
-                                    &mut buffers_stat[gidx],&mut buffers[gidx], &mut *variable_offsets, variable_buf);
+                                    &mut buffers_stat[*gid as usize],&mut buffers[*gid as usize], &mut variable_offsets, variable_buf);
                             }
                         }
                     }
                 }
             }
             Vis::Compact(rows_num) => {
-                for (gidx, (gid, v)) in  map_data_type.iter().enumerate(){
+                for (gid, v) in  map_data_type{
                     for idx in v{
                         let c=self.columns[*idx as usize].array_ref();
                         assert_eq!(c.len(), *rows_num);
@@ -526,7 +572,7 @@ impl DataChunk {
                             // SAFETY(value_at_unchecked): the idx is always in bound.
                             unsafe {
                                 serialize_datum_separate_ref(&c.value_at_unchecked(i), c,
-                                    &mut buffers_stat[gidx],&mut buffers[gidx],  &mut *variable_offsets, variable_buf);
+                                    &mut buffers_stat[*gid as usize],&mut buffers[*gid as usize], &mut variable_offsets, variable_buf);
                             }
                         }
                     }
@@ -534,7 +580,7 @@ impl DataChunk {
             }
         }
     }
-}
+    
 
 impl fmt::Debug for DataChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

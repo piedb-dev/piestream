@@ -456,6 +456,7 @@ impl<S: StateStore> StateTable<S> {
 
         let key_bytes = serialize_pk_with_vnode(&pk, &self.pk_serde, self.compute_vnode(&pk));
         let value_bytes = value.serialize(&self.value_indices);
+        println!("insert mem_table key_bytes={:?}", key_bytes);
         self.mem_table
             .insert(key_bytes, value_bytes)
             .unwrap_or_else(|e| self.handle_mem_table_error(e));
@@ -467,6 +468,7 @@ impl<S: StateStore> StateTable<S> {
         let pk = old_value.by_indices(self.pk_indices());
         let key_bytes = serialize_pk_with_vnode(&pk, &self.pk_serde, self.compute_vnode(&pk));
         let value_bytes = old_value.serialize(&self.value_indices);
+        println!("delete mem_table key_bytes={:?}", key_bytes);
         self.mem_table
             .delete(key_bytes, value_bytes)
             .unwrap_or_else(|e| self.handle_mem_table_error(e));
@@ -551,6 +553,7 @@ impl<S: StateStore> StateTable<S> {
     }
 
     pub async fn commit(&mut self, new_epoch: EpochPair) -> StorageResult<()> {
+        //println!("****************commit");
         assert_eq!(self.epoch(), new_epoch.prev);
         let mem_table = std::mem::take(&mut self.mem_table).into_parts();
         self.batch_write_rows(mem_table, new_epoch.prev).await?;
@@ -560,6 +563,7 @@ impl<S: StateStore> StateTable<S> {
 
     /// used for unit test, and do not need to assert epoch.
     pub async fn commit_for_test(&mut self, new_epoch: EpochPair) -> StorageResult<()> {
+        //println!("****************commit_for_test");
         let mem_table = std::mem::take(&mut self.mem_table).into_parts();
         self.batch_write_rows(mem_table, new_epoch.prev).await?;
         self.update_epoch(new_epoch);
@@ -584,6 +588,9 @@ impl<S: StateStore> StateTable<S> {
             epoch,
             table_id: self.table_id(),
         });
+        if buffer.len()>0{
+            println!("batch_write_rows buffer.len={:?} buffer={:?}", buffer.len(), &buffer);
+        }
         for (pk, row_op) in buffer {
             match row_op {
                 // Currently, some executors do not strictly comply with these semantics. As a
@@ -649,10 +656,13 @@ impl<S: StateStore> StateTable<S> {
         old_row: &[u8],
         epoch: u64,
     ) -> StorageResult<()> {
+        println!("do_delete_sanity_check key={:?}", key);
         let stored_value = self
             .keyspace
             .get(key, false, self.get_read_option(epoch))
             .await?;
+        
+        println!("stored_value={:?} old_row={:?}", stored_value, old_row);
 
         if stored_value.is_none() || stored_value.as_ref().unwrap() != old_row {
             let (vnode, key) = deserialize_pk_with_vnode(key, &self.pk_serde).unwrap();

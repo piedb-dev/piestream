@@ -16,8 +16,8 @@
 use std::cmp::Ordering;
 use std::io::{Read, Write};
 use std::sync::Arc;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use piestream_hummock_sdk::VersionedComparator;
 use {lz4, zstd};
@@ -37,12 +37,20 @@ pub const DEFAULT_ENTRY_SIZE: usize = 24; // table_id(u64) + primary_key(u64) + 
 
 struct Compression{}
 impl Compression{
-    fn get_decompression_algorithm(data_type_value: u8)->u8{
-        data_type_value as u8
+    fn get_decompression_algorithm(gid: u8)->u8{
+        gid as u8
     }
 
-    pub fn decompression(buf: &[u8], data_type_value: u8)->Vec<u8>{
-        let algorithm=Compression::get_decompression_algorithm(data_type_value);
+    pub fn decompression(buf: &[u8], gid: u8)->Vec<u8>{
+        let algorithm=Compression::get_decompression_algorithm(gid);
+        match algorithm{
+            1=> buf.to_vec(),
+            _=> buf.to_vec(),
+        }
+    }
+
+    pub fn compress(buf: &[u8], gid: u8)->Vec<u8>{
+        let algorithm=Compression::get_decompression_algorithm(gid);
         match algorithm{
             1=> buf.to_vec(),
             _=> buf.to_vec(),
@@ -54,17 +62,17 @@ impl Compression{
 pub struct Block {
     data: Bytes,
     data_len: usize,
-    pub entry_count: u16,
-    pub vaild_entry_count: u16,
-    pub column_count: u16,
-    pub variable_column_count: u16,
-    pub key_len: u16,
+    pub entry_count: usize,
+    pub vaild_entry_count: usize,
+    pub column_count: usize,
+    pub variable_column_count: usize,
+    pub key_offset_start_pos: usize,
+    pub key_len: usize,
+    pub variable_text_len: usize,
     pub data_type_values: Arc<Vec<(u8,usize)>>,
-    pub offsets: Arc<Vec<u8>>,
-    pub lens: Arc<Vec<u8>>,
-    pub vec_text: Arc<Vec<Vec<u8>>>,
     pub states: Arc<Vec<u8>>,
-    pub keys: Arc<Vec<u8>>,
+    pub columns_offset: Arc<Vec<u32>>,
+   
 }
 
 impl Block {
@@ -100,125 +108,325 @@ impl Block {
                 Bytes::from(decoded)
             }
         };
-        Ok(Self::decode_from_raw(buf))
+        Ok(Self::decode_from_raw(Self::decode_columns_from_raw(buf)))
     }
 
-    pub fn decode_from_raw(data: Bytes) -> Self {
-        let buf=data.clone();
+    fn decode_columns_from_raw(buf: Bytes)->Bytes {
         let mut offset=0;
-        let entry_count=(&buf[buf.len()-offset-2..]).get_u16_le();
-        offset+=2;
-        let vaild_entry_count=(&buf[buf.len()-offset-2..]).get_u16_le();
-        offset+=2;
-        let column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
-        offset+=2;
-        /*let variable_column_count=(&buf[buf.len()-offset-2..]).get_u16_le();
-        offset+=2;*/
+        let total_raw_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
 
-        let mut variable_column_count=0;
-        let column_count_usize=column_count as usize;
-        //let mut data_type_values= vec![(0_u8,0_usize); column_count_usize];
-        let mut data_type_values= Vec::with_capacity(column_count_usize);
-        let mut ptr=&buf[buf.len()-offset-column_count_usize..];
+        let entry_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let vaild_entry_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let column_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+
+        let key_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let variable_text_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let fixed_column_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let key_and_column_offset_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let value_state_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+
+        let save_group_compress_size=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let map_group_data_type_len=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let groups_compress_number=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+
+        let mut map_columns_offset= BTreeMap::new();
+        let mut new_buffer=BytesMut::with_capacity(total_raw_len+column_count*4+64);
+        new_buffer.extend_from_slice(&buf[0..key_len+variable_text_len]);
+
+        let columns_data_type_buf=&buf[buf.len()-offset-column_count..buf.len()-offset];
+        offset+=column_count;
+        new_buffer.extend_from_slice(&columns_data_type_buf);
+       
+
+        let mut map_group_data_type_buf=&buf[buf.len()-offset-map_group_data_type_len..buf.len()-offset];
+        offset+=map_group_data_type_len;
+        //new_buffer.extend_from_slice(&map_group_data_type_buf);
+        
+        let mut variable_column=0_usize;
+        let mut map_group_data_type= BTreeMap::new();
+        let size=map_group_data_type_buf.get_u8() as usize;
+        for _ in 0..size {
+            let gid=map_group_data_type_buf.get_u8();
+            println!("gid={:?}", gid);
+            let vlen=map_group_data_type_buf.get_u16_le() as usize;
+            if gid==u8::MAX{
+                variable_column=vlen;
+            }
+            let mut v=vec![];
+            for _ in 0..vlen{
+                v.push(map_group_data_type_buf.get_u16_le() as u32);
+            }
+            map_group_data_type.insert(gid, v);
+        }
+
+        //println!("22222222save_group_compress_size={:?}", save_group_compress_size);
+        let mut groups_compress_len_buf=&buf[buf.len()-offset-save_group_compress_size..buf.len()-offset];
+        offset+=save_group_compress_size;
+
+        assert_eq!(save_group_compress_size/4, groups_compress_number);
+        let mut groups_compress_len=vec![];
+        for _ in 0..groups_compress_number{
+            groups_compress_len.push(groups_compress_len_buf.get_u32_le());
+        } 
+
+        let value_state_buf=&buf[buf.len()-offset-value_state_len..buf.len()-offset];
+        offset+=value_state_len;
+        //println!("value_state_buf={:?}", value_state_buf);
+
+        //adjust to colunm index 
+        let mut map_states= BTreeMap::new();
+        let col_state_bytes_number=((vaild_entry_count+DEFAULT_DATA_TYPE_BIT_SIZE as usize-1) / DEFAULT_DATA_TYPE_BIT_SIZE as usize) * 4;
+        assert_eq!(col_state_bytes_number*column_count, value_state_len);
+        let mut count=0;
+        for (_,v) in  &map_group_data_type{  
+            for (_, cidx) in v.iter().enumerate(){
+                let mut vec=vec![];
+                let start=count*col_state_bytes_number;
+                let end=(count+1)*col_state_bytes_number;
+                //println!("cidx={:?} value_state_buf[start..end]={:?}", cidx, &value_state_buf[start..end]);
+                assert!(end<=value_state_buf.len());
+                vec.extend_from_slice(&value_state_buf[start..end]);
+                map_states.insert(cidx, vec);
+                count+=1;
+            }
+        }
+        let state_offset=new_buffer.len();
+        println!("state new_buffer.len:{:?}", new_buffer.len());
+        for (_,v) in  &map_states{
+            //println!("*****idx={:?} v={:?}", idx, &v);
+            new_buffer.extend_from_slice(&v[..]);
+        }
+
+        //let state_offset=new_buffer.len();
+        //new_buffer.extend_from_slice(&value_state_buf);
+    
+        let key_offset_start_pos=new_buffer.len();
+        let key_and_column_offset_buf=&buf[buf.len()-offset-key_and_column_offset_len..buf.len()-offset];
+        offset+=key_and_column_offset_len;
+        println!("entry_count={:?} variable_column={:?} key_and_column_offset_len={:?}", entry_count, variable_column, key_and_column_offset_len);
+        let buffer=Compression::decompression(key_and_column_offset_buf, u8::MAX);
+        assert_eq!(((entry_count+vaild_entry_count*variable_column)*4) as usize, buffer.len());
+        new_buffer.extend_from_slice(&buffer.as_slice());
+
+        println!("fixed_column_len={:?}", fixed_column_len);
+        let fixed_column_buf=&buf[buf.len()-offset-fixed_column_len..buf.len()-offset];
+        //offset+=fixed_column_len;
+
+        let mut idx=0;
+        for (gid,v) in  &map_group_data_type{
+            if *gid==u8::MAX{
+                for (i, cidx) in v.iter().enumerate(){
+                    let pos=key_offset_start_pos+entry_count*4+i*vaild_entry_count*4;
+                    map_columns_offset.insert(cidx, pos);
+                }
+                continue;
+            }
+            let len=index_to_len(*gid as u8);
+            let tmp=&fixed_column_buf[0..groups_compress_len[idx] as usize];
+            let buffer=Compression::decompression(tmp, *gid);
+            println!("vaild_entry_count={:?} len={:?} v.len={:?}", vaild_entry_count, len, v.len());
+            assert_eq!(vaild_entry_count*len*v.len(), buffer.len());
+            
+            for (i, cidx) in v.iter().enumerate(){
+                let pos=new_buffer.len()+i*vaild_entry_count*len;
+                map_columns_offset.insert(cidx, pos);
+            }
+            new_buffer.extend_from_slice(&buffer.as_slice());
+            
+            idx+=1;
+        }
+
+        //all field start offset 
+        for (_, offset) in map_columns_offset.iter(){
+            new_buffer.put_u32_le(*offset as u32);
+        }
+        new_buffer.put_u32_le(state_offset as u32);
+        new_buffer.put_u32_le(key_offset_start_pos as u32);
+        new_buffer.put_u32_le(value_state_len as u32);
+        new_buffer.put_u32_le(variable_text_len as u32);
+        new_buffer.put_u32_le(key_len as u32);
+        new_buffer.put_u16_le(column_count as u16);
+        //row count of not delete
+        new_buffer.put_u16_le(vaild_entry_count as u16);
+        //total row count
+        new_buffer.put_u16_le(entry_count as u16);
+        println!("total_raw_len+column_count*4+64={:?} new_buffer.len={:?}", total_raw_len+column_count*4+64, new_buffer.len());
+        new_buffer.freeze()
+    }
+    
+    pub fn decode_from_raw(buf: Bytes) -> Self {
+        //let buf=data.clone();
+        let mut offset=0;
+        let entry_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let vaild_entry_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+        let column_count=(&buf[buf.len()-offset-2..]).get_u16_le() as usize;
+        offset+=2;
+
+        let key_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let variable_text_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let value_state_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let key_offset_start_pos=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+        let state_offset=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
+        offset+=4;
+       
+        let mut columns_offset_buf=&buf[buf.len()-offset-column_count*4..buf.len()-offset];
+        //offset+=column_count*4;
+        let mut columns_offset=vec![];
+        for _ in 0..column_count{
+            columns_offset.push(columns_offset_buf.get_u32_le());
+        }
+
+        let state_buf=&buf[state_offset..state_offset+value_state_len];
+        //println!("value_state_len={:?} state_offset={:?} state_buf={:?}", value_state_len, state_offset, state_buf);
+        let mut states= Vec::with_capacity(value_state_len);
+        states.extend_from_slice(state_buf);
+
+        let offset_data_type=key_len+variable_text_len;
+        let mut data_type_values= Vec::with_capacity(column_count);
+        let mut ptr=&buf[offset_data_type..offset_data_type+column_count];
+        let  mut variable_column_count=0_usize;
         for _ in  0..column_count{
             let v=ptr.get_u8();
-            if let None=value_to_type(v){
+            let len=index_to_len(v);
+            if len==0{
                 variable_column_count+=1;
             }
-            data_type_values.push((v, index_to_len(v)));
-            //data_type_values[i as usize]=(ptr.get_u8(),index_to_len(v));
+            data_type_values.push((v, len));
         }
-        //println!("data_type_values={:?}", data_type_values);
-        offset+=column_count_usize;
-        let key_len=(&buf[buf.len()-offset-2..]).get_u16_le();
-        offset+=2;
-        let keys_compress_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
-        offset+=4;
-        let states_len=(&buf[buf.len()-offset-4..]).get_u32_le() as usize;
-        offset+=4;
-        let offset_len=(&buf[buf.len()-offset-4..]).get_u32_le();
-        offset+=4;
-        let text_len=(&buf[buf.len()-offset-4..]).get_u32_le();
-        offset+=4;
-        //offset of per column
-        let mut offsets=&buf[buf.len()-offset-offset_len as usize..buf.len()-offset];
-        offset+= offset_len as usize;
-
-        //println!("column_count={:?} variable_column_count={:?}", column_count, variable_column_count);
-        assert_eq!(offsets.len(), ((column_count+variable_column_count)*4) as usize);
-        //len of per column
-        let mut lens=&buf[buf.len()-offset-text_len as usize..buf.len()-offset];
-        //offset+= text_len as usize;
-        assert_eq!(offsets.len(), lens.len());
-
-        let mut next_start=0;
-        //column text
-        let mut vec_text=vec![vec![]; (column_count+variable_column_count) as usize];
-        //let variable_column_type=vec![8_u8, 13, 14];
-        let mut vec_variable_column_idx=vec![0; variable_column_count as usize];
-        for i in 0..(column_count+variable_column_count){
-            let a=offsets.get_u32_le() as usize;
-            let b=lens.get_u32_le() as usize ;
-            
-            if i==0{
-                next_start=a;
-            }
-
-            let mut data_type_value=0_u8;
-            if i<column_count{
-                data_type_value=data_type_values[i as usize].0 as u8;
-                if let None=value_to_type(data_type_value){
-                    //save variable column index
-                    vec_variable_column_idx.push(i);
-                    //offset is u32
-                    data_type_value+=2_u8;
-                }
-            }else{
-                    //variable column text
-                    data_type_value+=8_u8;
-            }
-            //variable column content
-            let buffer=Compression::decompression(&buf[a..a+b], data_type_value);
-            vec_text[i as usize].extend_from_slice(buffer.as_slice());
-        }
-
-        let mut states=vec![];
-        let buffer=Compression::decompression(&buf[(next_start-states_len)..next_start], 2_u8);
-        assert_eq!((next_start-states_len), keys_compress_len);
-        states.extend_from_slice(buffer.as_slice());
         
-        let mut keys=vec![];
-        let buffer=Compression::decompression(&buf[0..keys_compress_len], 8_u8);
-        keys.extend_from_slice(buffer.as_slice());
-
         Block{
-            data_len:data.len(),
-            data:data,
+            data_len:buf.len(),
+            data:buf,
             entry_count: entry_count,
             vaild_entry_count: vaild_entry_count,
-            column_count: column_count,
-            variable_column_count: variable_column_count,
+            column_count: column_count ,
+            variable_column_count:variable_column_count,
+            key_offset_start_pos:key_offset_start_pos,
             key_len:key_len ,
-            data_type_values: Arc::new(data_type_values),
-            offsets: Arc::new(offsets.to_vec()),
-            lens: Arc::new(lens.to_vec()),
-            vec_text:Arc::new(vec_text),
-            states: Arc::new(states),
-            keys: Arc::new(keys),
+            variable_text_len:variable_text_len,
+            data_type_values:Arc::new(data_type_values),
+            states:Arc::new(states),
+            columns_offset:Arc::new(columns_offset),
         }
     }
     
+    //pub fn key_index_offset(&self, idx:usize)->usize{
+
+    //}
+    pub fn get_key(&self, index:usize)->&[u8]{
+        let key=self.get_raw_key(index);
+        println!("get_key={:?}", &key[0..key.len()-3]);
+        &key[0..key.len()-3]
+    }
+
+    pub fn get_raw_key(&self, index:usize)->&[u8]{
+        let mut pos=self.key_offset_start_pos+index*4;
+        let offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+        let next_offset;
+        if (index+1)<self.entry_count{
+            pos+=4;
+            next_offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+        }else{
+            next_offset=self.key_len;
+        }
+        println!("index={:?} offset={:?} next_offset={:?}, key_len={:?}", index, offset, next_offset, self.key_len);
+        assert!(next_offset>offset+3);
+        &self.data[offset..next_offset]
+    }
+
+    pub fn get_value(&self, index:usize) -> Box<Vec<u8>> {
+        let key=self.get_raw_key(index);
+        let mut buf=&key[key.len()-3..key.len()];
+    
+        let row_state=buf.get_u8();
+        if row_state==VALUE_DELETE{
+            return Box::new(vec![VALUE_DELETE]);
+        }
+
+        let current_put_entry_idx=buf.get_u16_le() as usize;
+        println!("current_put_entry_idx={:?} vaild_entry_count={:?}",current_put_entry_idx, self.vaild_entry_count );
+        assert!(current_put_entry_idx<self.vaild_entry_count as usize);
+    
+        let mut value =Vec::new();
+        value.put_u8(VALUE_PUT);
+        let col_state_bytes_number=((self.vaild_entry_count as usize+DEFAULT_DATA_TYPE_BIT_SIZE as usize-1) / DEFAULT_DATA_TYPE_BIT_SIZE as usize) * 4;
+
+        let  mut variable_column_count=0_usize;
+        for idx in 0..self.column_count as usize {
+   
+            let state_offset=idx * col_state_bytes_number + (current_put_entry_idx / DEFAULT_DATA_TYPE_BIT_SIZE as usize)*4 ;
+            let mut col_state=&self.states[..];
+            col_state.advance(state_offset );
+           
+  
+            let stat=col_state.get_u32_le();
+            //get current column value state
+            let v=(stat>>(current_put_entry_idx % DEFAULT_DATA_TYPE_BIT_SIZE as usize)) & 0x1;
+            println!("idx={:?} state_offset={:?} stat={:?}", idx, state_offset, stat);
+            //is Some
+            if v>0 {
+                value.put_u8(1u8);
+                //variable column
+                if self.data_type_values[idx].1==0{
+                    let mut pos=self.columns_offset[idx] as usize+current_put_entry_idx * 4;
+                    let offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+
+                    let  next_offset;
+                    if (current_put_entry_idx+1) < self.vaild_entry_count as usize{
+                        let pos=self.columns_offset[idx] as usize+(current_put_entry_idx+1) * 4;
+                        next_offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+                    }else{
+                        if (variable_column_count+1)<self.variable_column_count{
+                            pos+=4;
+                            //offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+                            next_offset=(&self.data[pos..pos+4]).get_u32_le() as usize;
+                        }else{
+                            next_offset=self.key_len+self.variable_text_len;
+                        }
+                    }
+                    let text=&self.data[offset..next_offset];
+                    value.extend_from_slice(text);
+                    variable_column_count+=1;
+                    
+                }else{
+                    //fixed column
+                    let offset=self.columns_offset[idx] as usize+current_put_entry_idx * self.data_type_values[idx].1 ;
+                    let text=&self.data[offset..offset+self.data_type_values[idx].1];
+                    value.extend_from_slice(text);
+                }
+            }else{
+                //is None
+                value.put_u8(0u8);
+            }
+        }
+
+        Box::new(value)
+    }
+
     pub fn entry_count(&self) -> usize{
         self.entry_count as usize
     }
    
     pub fn capacity(&self) -> usize {
-        let mut column_len=0;
-        for i in 0..self.vec_text.len(){
-            column_len+=self.vec_text[i].capacity();
-        }
-        self.data_type_values.capacity() + self.offsets.capacity() +self.lens.capacity() + column_len + self.states.capacity() + self.keys.capacity() +
-             2 + 2 + 2 + 2 + 2
+        self.data.len()
     }
 
     /// Entries data len.
@@ -237,7 +445,6 @@ impl Block {
         &self.data[..]
     }
 }
-
 
 pub struct BlockBuilderOptions {
     /// Reserved bytes size when creating buffer to avoid frequent allocating.
@@ -272,7 +479,7 @@ pub struct BlockBuilder {
     column_num: usize,
     //column number
     variable_columns: Vec<usize>,
-    map_data_type: HashMap<u32, Vec<u32>>,
+    map_data_type: BTreeMap<u32, Vec<u32>>,
     // need mem size
     current_mem_size: usize,  
     uncompressed_block_size: usize,
@@ -283,9 +490,11 @@ pub struct BlockBuilder {
     //row_deserializer: Option<Arc<RowDeserializer>>,
     row_deserializer: Option<RowDeserializer>,
     data_type_bit_size: u32,
-    hummock_value_list: Vec<u32>,
+    //hummock_value_list: Vec<u32>,
     //put_record_idxs: Vec<u16>,
-    keys: Vec<Vec<u8>>,
+    //keys: Vec<Vec<u8>>,
+    keys_offset: Vec<u8>,
+    //keys_len: Vec<u16>,
     rows: Vec<Row>,
 
 }
@@ -300,15 +509,17 @@ impl BlockBuilder {
             entry_count: 0,
             column_num: 0,
             variable_columns: Vec::new() ,
-            map_data_type: HashMap::new(),
+            map_data_type: BTreeMap::new(),
             current_mem_size: 0,
             uncompressed_block_size: 0,
             compression_algorithm: options.compression_algorithm,
             row_deserializer: None,
             data_type_bit_size: DEFAULT_DATA_TYPE_BIT_SIZE,
-            hummock_value_list: Vec::new(),
+            //hummock_value_list: Vec::new(),
             //put_record_idxs: Vec::new(),
-            keys: Vec::new(),
+            //keys: Vec::new(),
+            keys_offset: Vec::new(),
+            //keys_len: Vec::new(),
             rows: Vec::new(),
 
             //table_column_datatype:Vec::new(),
@@ -318,6 +529,7 @@ impl BlockBuilder {
     pub fn set_row_deserializer(&mut self, table_column_datatype: Vec<DataType>){
         //println!("table_column_datatype={:?}", table_column_datatype);
         self.variable_columns.clear();
+        self.map_data_type.clear();
         //self.row_deserializer=Some(Arc::new(RowDeserializer::new(table_column_datatype)));
         self.row_deserializer=Some(RowDeserializer::new(table_column_datatype));
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
@@ -329,7 +541,7 @@ impl BlockBuilder {
             };
 
             match self.map_data_type
-                .entry(data_types[idx].type_to_fixed_index() as u32)
+                .entry(data_types[idx].type_to_group_id() as u32)
             {
                 Entry::Occupied(mut entry) => {
                     entry.get_mut().push(idx as u32);
@@ -347,7 +559,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
-        //println!("*****************add value={:?}*******************", &value);
+        println!("*****************key_len={:?} value={:?}*******************", key.len(), value.len());
         //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -366,25 +578,30 @@ impl BlockBuilder {
         //let is_put= self.is_put(&mut &value[..]);
        
         //println!("is_put={:?} hummock_value={:?}", is_put, buffer);
-        let idx=self.entry_count % self.data_type_bit_size as usize;
-        if idx==0{
-            self.hummock_value_list.push(0_u32);
-        }
+        //let idx=self.entry_count % self.data_type_bit_size as usize;
+        //if idx==0{
+        //    self.hummock_value_list.push(0_u32);
+        //}
 
-        let mut key_vec=key.to_vec();
+        //let mut key_vec=key.to_vec();
+        //self.keys_offset[self.entry_count]=self.buf.len() as u32;
+        self.keys_offset.extend_from_slice(&(self.buf.len() as u32).to_le_bytes());
+        self.buf.extend_from_slice(&key[..]);
         if is_put {
             let row = self.row_deserializer.as_ref().unwrap().deserialize(buffer).unwrap();
             //println!("row={:?}", row);
             self.rows.push(row.clone());
-            let v=self.hummock_value_list.last_mut().unwrap();
-            *v|=1<<idx;
+            //let v=self.hummock_value_list.last_mut().unwrap();
+            //*v|=1<<idx;
             //println!("v={:?}", v);
             //self.put_record_idxs.push(self.put_entry_count as u16);
             //self.put_entry_count+=1;
-            key_vec.push(VALUE_PUT as u8);
-            key_vec.append(&mut (self.put_entry_count as u16).to_le_bytes().to_vec());
+            //key_vec.push(VALUE_PUT as u8);
+            self.buf.put_u8(VALUE_PUT as u8);
+            //key_vec.append(&mut (self.put_entry_count as u16).to_le_bytes().to_vec());
+            self.buf.put_u16_le(self.put_entry_count as u16);
             self.put_entry_count+=1;
-            self.current_mem_size+=key_vec.len()+value_len+self.variable_columns.len()*4;
+            self.current_mem_size+=key.len()+3+value_len+self.variable_columns.len()*4;
             for i in 0..row.size(){
                 let len=match row.0[i] {
                     //fill default value to fixed data type 
@@ -398,141 +615,196 @@ impl BlockBuilder {
                 //println!("len={:?} self.current_mem_size={:?}", len, self.current_mem_size);
             }
         }else{
-            key_vec.push(VALUE_DELETE as u8);
-            key_vec.append(&mut u16::MAX.to_le_bytes().to_vec());
+            //key_vec.push(VALUE_DELETE as u8);
+            self.buf.put_u8(VALUE_DELETE as u8);
+            //key_vec.append(&mut u16::MAX.to_le_bytes().to_vec());
+            self.buf.put_u16_le(u16::MAX);
             //self.put_record_idxs.push(u16::MAX);
-            self.current_mem_size+=key_vec.len()+value_len;
+            self.current_mem_size+=key.len()+3+value_len;
         }
-
+        //self.keys_len[self.entry_count]=(self.buf.len()-self.keys_offset[self.entry_count] as usize) as u16;
         //self.keys.push(key.to_vec());
-        self.keys.push(key_vec);
+        //self.keys.push(key_vec);
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
         //self.current_mem_size+=(key.len()+value.len()+1+2+2+4);
         self.entry_count += 1;
     }
 
-    
     pub fn build(&mut self) -> (u32, &[u8]) {
-        //println!("*****************build*******************");
+        println!("*****************build*******************");
+        assert_eq!(self.keys_offset.len(),  4*self.entry_count);
+
+     
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
         let data_chunk=DataChunk::from_rows(&self.rows, data_types);
-        //column_value_state_list saves the field value state 
-        //println!("data_chunk={:?}", data_chunk);
-        let mut buffers = vec![vec![]; data_types.len()];
-        let mut column_value_state_list = vec![vec![]; data_types.len()];
-        let mut variable_offsets = vec![vec![]; data_types.len()];
-        data_chunk.serialize_columns(&mut buffers, &mut column_value_state_list, &mut variable_offsets);
-        //let (column_value_state_list, columns, variable_offsets)=data_chunk.serialize_columns();
-
-        let columns=&buffers;
+   
+        let mut buffers = vec![vec![]; self.map_data_type.len()];
+        let mut column_value_state_list = vec![vec![]; self.map_data_type.len()];
+        //let mut variable_offsets=vec![];
+        
+        let key_len=self.buf.len();
+        let mut offset= key_len;
+        let mut total_raw_len=key_len;
+        //save variable text to buf
+        data_chunk.serialize_columns(&self.map_data_type, &mut buffers, &mut column_value_state_list, &mut self.keys_offset, &mut self.buf);
+        assert_eq!(buffers.len(), self.map_data_type.len());
+        assert_eq!(column_value_state_list.len(), self.map_data_type.len());
         //println!("column_value_state_list={:?}", column_value_state_list);
-        //println!("columns={:?}", columns);
-        //println!("variable_offsets={:?}", variable_offsets);
-      
-        //assert_eq!(columns.len(), data_types.len());
-        //assert_eq!(data_types.len(), column_value_state_list.len());
 
+        let mut  groups_compress_len=vec![];
+        let variable_text_len=self.buf.len()-offset;
+        offset += variable_text_len;
+        total_raw_len+=variable_text_len;
+
+        let mut variable_columns=0;
+        //compress fixed len column
+        for (idx, (gid, vec_culumns_idx)) in  (&self.map_data_type).iter().enumerate(){
+            if *gid==u8::MAX as u32{
+                variable_columns=vec_culumns_idx.len();
+                continue;
+            }
+            let first_column_idx=vec_culumns_idx[0];
+            let column_len=data_types[first_column_idx as usize].data_type_len();
+            total_raw_len+=buffers[idx].len();
+         
+            assert_eq!(buffers[idx].len(), self.put_entry_count*vec_culumns_idx.len()*column_len);
+            let v=Compression::compress( &buffers[idx], *gid as u8);
+            groups_compress_len.push(v.len() as u32);
+            self.buf.extend_from_slice(v.as_slice());
+        }
+        let fixed_column_len=self.buf.len()-offset;
+        offset+=fixed_column_len;
+        
+        //save offset include key and variable
+        assert_eq!(self.keys_offset.len(), 4*self.entry_count+self.put_entry_count*variable_columns*4);
+        let v=Compression::compress(&self.keys_offset,u8::MAX);
+        groups_compress_len.push(v.len() as u32);
+        self.buf.extend_from_slice(v.as_slice());
+        if variable_columns==0{
+            assert_eq!(groups_compress_len.len(), self.map_data_type.len()+1);
+        }else{
+            assert_eq!(groups_compress_len.len(), self.map_data_type.len());
+        }
+        
+        total_raw_len+=self.keys_offset.len();
+        let key_and_column_offset_len=self.buf.len()-offset;
+        offset+=key_and_column_offset_len;
+
+        let vec_data_type: Vec<&Vec<u32>>=self.map_data_type.values().collect();
+        /*for v in vec_data_type{
+            println!("**********v={:?}", v);
+        }*/
+        //store each column value state
         let size=(self.put_entry_count + (self.data_type_bit_size as usize -1)) / self.data_type_bit_size as usize;
         let mut state_list =vec![vec![]; column_value_state_list.len()];
         for (pos, column_state_list) in column_value_state_list.iter().enumerate(){
-            assert_eq!(self.put_entry_count, column_state_list.len());
-            for (idx,element) in column_state_list.iter().enumerate(){
-                if idx % self.data_type_bit_size as usize==0{
+            assert_eq!(self.put_entry_count*&vec_data_type[pos].len(), column_state_list.len());
+            let mut count=0;
+            let mut column_record_count=0;
+            for (_,element) in column_state_list.iter().enumerate(){
+                if column_record_count % self.data_type_bit_size as usize==0{
                     state_list[pos].push(0_u32);
+                    //println!("11111111111111111111");
                 }
                 if *element==1 {
                     let v=state_list[pos].last_mut().unwrap();
-                    *v|=1<<(idx%self.data_type_bit_size as usize);
+                    *v|=1<<(column_record_count%self.data_type_bit_size as usize);
                 }
+                
+                column_record_count+=1;
+                if column_record_count%self.put_entry_count==0{
+                    column_record_count=0;
+                    //println!("22222222222222222");
+                    count+=1;
+                    assert_eq!(state_list[pos].len(), size*count);
+                    
+                }
+                //column_record_count+=1;
             }
-            assert_eq!(state_list[pos].len(), size);
+            assert_eq!(state_list[pos].len(), size*&vec_data_type[pos].len());
         }
        
-        //saved keys info
-        for idx in 0.. self.keys.len() {
-            //println!("keys.len={:?}", &self.keys[idx].len());
-            self.buf.extend_from_slice(&self.keys[idx]);
-        }
-        let keys_compress_len=self.buf.len();
-        //println!("keys_compress_len={:?}", keys_compress_len);
-
-        //saved value state (whether None)
+        //println!("state_list={:?}", state_list);
         for idx in 0..state_list.len() {
             for v in &state_list[idx]{
+                //println!("list={:?}", &v.to_le_bytes());
                 self.buf.extend_from_slice(&v.to_le_bytes());
             }
         }
-        let states_len=self.buf.len()-keys_compress_len;
-        //println!("states_len={:?} buf.len={:?}", keys_compress_len, self.buf.len());
-
-        let mut start_offset=self.buf.len();
-        //let mut vec=vec![(0,0); columns.len()];
-        //let mut offsets=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
-        //let mut lens=vec![0_u8; 4*(columns.len()+self.variable_columns.len())];
-        let mut offsets=Vec::with_capacity(4*(columns.len()+self.variable_columns.len()) as usize);
-        let mut lens=Vec::with_capacity(4*(columns.len()+self.variable_columns.len()) as usize);
-        //let data_types=self.row_deserializer.as_ref().unwrap().data_types();
-        //assert_eq!(columns.len(), data_types.len());
-
-        let mut variable_column_num=0;
-        for idx in 0..columns.len(){
-            //fixed len columns
-            if data_types[idx].data_type_len()>0{
-                self.buf.extend_from_slice(&columns[idx]);
-                assert_eq!(columns[idx].len(), self.put_entry_count*data_types[idx].data_type_len());
-                //assert_eq!(columns[idx].len()%data_types[idx].data_type_len(), 0);
-            }else{
-                assert_eq!(variable_offsets[idx].len(), self.put_entry_count*4);
-                //offset
-                self.buf.extend_from_slice(&variable_offsets[idx]);
-                variable_column_num+=1;
-            }
-            //vec.push((start_offset, self.buf.len()-start_offset));
-            //println!("start_offset={:?}, buf.len={:?}", start_offset, self.buf.len());
-            offsets.extend_from_slice(&(start_offset as u32).to_le_bytes());
-            lens.extend_from_slice(&((self.buf.len()-start_offset) as u32).to_le_bytes());
-            start_offset=self.buf.len();
+        let value_state_len=self.buf.len()-offset;
+        offset+=value_state_len;
+        total_raw_len+=value_state_len;
+        
+        //self.buf.put_u16_le(groups_compress_len.len() as u16);
+        for compress_len in &groups_compress_len{
+            //self.buf.extend_from_slice(&(compress_len).to_le_bytes());
+            self.buf.put_u32_le(*compress_len);
         }
+  
+        let save_group_compress_size=self.buf.len()-offset;
+        //println!("11111111save_group_compress_size={:?}", save_group_compress_size);
+        offset+=save_group_compress_size;
+        total_raw_len+=save_group_compress_size;
 
-        assert_eq!(self.variable_columns.len(), variable_column_num);
-        for (_, &idx) in self.variable_columns.iter().enumerate() {
-            //fixed len columns
-            if data_types[idx].data_type_len()==0{
-                self.buf.extend_from_slice(&columns[idx]);
+        self.buf.put_u8(self.map_data_type.len() as u8);
+        for  (gid, v) in &self.map_data_type {
+            //println!("***********gid={:?}", *gid);
+            let vlen=v.len();
+            self.buf.put_u8(*gid as u8);
+            self.buf.put_u16_le(vlen as u16);
+            for idx in v{
+                self.buf.put_u16_le(*idx as u16);
+                //self.buf.extend_from_slice(&(*idx as u16).to_le_bytes());
             }
-            //vec.push((start_offset, self.buf.len()-start_offset));
-            offsets.extend_from_slice(&(start_offset as u32).to_le_bytes());
-            lens.extend_from_slice(&((self.buf.len()-start_offset) as u32).to_le_bytes());
-            start_offset=self.buf.len();
         }
+        
+        let map_data_type_len=self.buf.len()-offset;
+        offset+=map_data_type_len;
+        total_raw_len+=map_data_type_len;
 
-        //println!("lens.len={:?}", lens.len());
-        //println!("offsets.len={:?}", offsets.len());
-        self.buf.extend_from_slice(&lens);
-        self.buf.extend_from_slice(&offsets);
-        self.buf.put_u32_le(lens.len() as u32);
-        self.buf.put_u32_le(offsets.len() as u32);
-        //value state len 
-        self.buf.put_u32_le(states_len as u32);
-        //compress keys len 
-        self.buf.put_u32_le(keys_compress_len as u32);
-        //key length
-        self.buf.put_u16_le((self.last_key.len() as u16 +3) as u16);
-       
-        //column type
-        for data_type in data_types {
-            //println!("data_type.type_to_index={:?}", data_type.type_to_index());
+         //column type
+         for data_type in data_types {
             self.buf.put_u8(data_type.type_to_index());
         }
-        //variable column count
-        //self.buf.put_u16_le(self.variable_columns.len() as u16);
-        //column count
-        self.buf.put_u16_le(data_types.len() as u16);
+
+        let data_type_len=self.buf.len()-offset;
+        //offset+=data_type_len;
+        total_raw_len+=data_type_len;
+        assert_eq!(data_type_len, data_types.len());
+
+        //equal map_data_type_len or map_data_type_len+1 
+        self.buf.put_u16_le(groups_compress_len.len() as u16);
+        total_raw_len+=2;
+        //self.buf.put_u8(self.map_data_type.len() as u8);
+        //self.buf.put_u16_le(data_type_len as u16);
+        self.buf.put_u16_le(map_data_type_len as u16);
+        total_raw_len+=2;
+        self.buf.put_u16_le(save_group_compress_size as u16);
+        total_raw_len+=2;
+        //value state len 
+        self.buf.put_u32_le(value_state_len as u32);
+        total_raw_len+=4;
+        //offset len 
+        self.buf.put_u32_le(key_and_column_offset_len as u32);
+        total_raw_len+=4;
+        self.buf.put_u32_le(fixed_column_len as u32);
+        total_raw_len+=4;
+        self.buf.put_u32_le(variable_text_len as u32);
+        total_raw_len+=4;
+        self.buf.put_u32_le(key_len as u32);
+        total_raw_len+=4;
+        self.buf.put_u16_le(data_type_len as u16);
+        total_raw_len+=2;
         //row count of not delete
         self.buf.put_u16_le(self.put_entry_count as u16);
+        total_raw_len+=2;
         //total row count
         self.buf.put_u16_le(self.entry_count as u16);
+        total_raw_len+=2;
+
+        total_raw_len+=4;
+        self.buf.put_u32_le(total_raw_len as u32);
         
         self.uncompressed_block_size=self.buf.len();
         //compression block
@@ -570,10 +842,8 @@ impl BlockBuilder {
         };
         self.compression_algorithm.encode(&mut self.buf);
         let checksum = xxhash64_checksum(&self.buf);
-        //println!("checksum={:?}", checksum);
         self.buf.put_u64_le(checksum);
         (self.uncompressed_block_size as u32, self.buf.as_ref())
-        
     }
 
     pub fn get_last_key(&self) -> &[u8] {
@@ -581,21 +851,22 @@ impl BlockBuilder {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.keys.is_empty()
+        self.entry_count==0
     }
 
     pub fn clear(&mut self) {
         self.buf.clear();
-        //self.restart_points.clear();
     
         self.last_key.clear();
-        self.hummock_value_list.clear();
-        self.keys.clear();
+        //self.hummock_value_list.clear();
+        self.keys_offset.clear();
         self.rows.clear();
+        self.keys_offset.clear();
         //self.variable_columns.clear();
         self.put_entry_count=0;
         self.entry_count = 0;
         self.current_mem_size=0;
+        self.uncompressed_block_size=0;
     
     }
 
@@ -608,7 +879,8 @@ impl BlockBuilder {
     /// Approximate block len (uncompressed).
     pub fn approximate_len(&self) -> usize {
         let data_types=self.row_deserializer.as_ref().unwrap().data_types();
-        self.current_mem_size+data_types.len()+self.hummock_value_list.capacity()+(self.column_num+self.variable_columns.len())*(4+4)+8+4+4+2+4+4+2+2+4*4
+        self.current_mem_size+data_types.len()+(self.column_num+self.variable_columns.len())*(4+4)+8+4+4+2+4+4+2+2+4*4
+   
     }
 }
 
@@ -633,11 +905,11 @@ mod tests {
     fn test_block_enc_dec() {
         let options = BlockBuilderOptions::default();
         let mut builder = BlockBuilder::new(options);
-        builder.set_row_deserializer(vec![DataType::Varchar]);
+        builder.set_row_deserializer( vec![DataType::Varchar]);
         builder.add(&full_key(b"k1", 1), &get_hummock_new_value(b"v01")[..]);
-        builder.add(&full_key(b"k2", 2), &get_hummock_new_value(b"v02")[..]);
-        builder.add(&full_key(b"k3", 3), &get_hummock_new_value(b"v03")[..]);
-        builder.add(&full_key(b"k4", 4), &get_hummock_new_value(b"v04")[..]);
+        builder.add(&full_key(b"k22", 2), &get_hummock_new_value(b"v026")[..]);
+        builder.add(&full_key(b"k333", 3), &get_hummock_new_value(b"v03566")[..]);
+        builder.add(&full_key(b"k4444", 4), &get_hummock_new_value(b"v046666")[..]);
         let buf = builder.build().1.to_vec();
         let capacity = builder.uncompressed_block_size();
         let block = Box::new(Block::decode(buf.into(), capacity).unwrap());
@@ -650,18 +922,18 @@ mod tests {
 
         bi.next();
         assert!(bi.is_valid());
-        assert_eq!(&full_key(b"k2", 2)[..], bi.key());
-        assert_eq!(get_hummock_new_value(b"v02"), bi.value().as_slice());
+        assert_eq!(&full_key(b"k22", 2)[..], bi.key());
+        assert_eq!(get_hummock_new_value(b"v026"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
-        assert_eq!(&full_key(b"k3", 3)[..], bi.key());
-        assert_eq!(get_hummock_new_value(b"v03"), bi.value().as_slice());
+        assert_eq!(&full_key(b"k333", 3)[..], bi.key());
+        assert_eq!(get_hummock_new_value(b"v03566"), bi.value().as_slice());
 
         bi.next();
         assert!(bi.is_valid());
-        assert_eq!(&full_key(b"k4", 4)[..], bi.key());
-        assert_eq!(get_hummock_new_value(b"v04"), bi.value().as_slice());
+        assert_eq!(&full_key(b"k4444", 4)[..], bi.key());
+        assert_eq!(get_hummock_new_value(b"v046666"), bi.value().as_slice());
 
         bi.next();
         assert!(!bi.is_valid());
