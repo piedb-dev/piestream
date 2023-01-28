@@ -496,6 +496,7 @@ impl<S: StateStore> StateTable<S> {
     // allow(izip, which use zip instead of zip_eq)
     #[allow(clippy::disallowed_methods)]
     pub fn write_chunk(&mut self, chunk: StreamChunk) {
+        println!("*********write_chunk*********");
         let (chunk, op) = chunk.into_parts();
 
         let mut vnode_and_pks = vec![vec![]; chunk.capacity()];
@@ -505,25 +506,29 @@ impl<S: StateStore> StateTable<S> {
             .zip_eq(vnode_and_pks.iter_mut())
             .for_each(|(vnode, vnode_and_pk)| vnode_and_pk.extend(vnode.to_be_bytes()));
         let values = chunk.serialize();
-
+        println!("*********write_chunk 1********* vnode_and_pks={:?} op={:?} values={:?}", op, vnode_and_pks, values);
+        println!("pk_indeices={:?}", self.pk_indices());
         let chunk = chunk.reorder_columns(self.pk_indices());
         chunk
             .rows_with_holes()
             .zip_eq(vnode_and_pks.iter_mut())
             .for_each(|(r, vnode_and_pk)| {
                 if let Some(r) = r {
+                    println!("vnode_and_pk={:?} r={:?}", vnode_and_pk, &r);
                     self.pk_serde.serialize_ref(r, vnode_and_pk);
+                    //println!("r={:?}", &r);
                 }
             });
-
-        let (_, vis) = chunk.into_parts();
+            println!("*********write_chunk 2********* vone_and_pk={:?}", vnode_and_pks);
+        let (c, vis) = chunk.into_parts();
+        println!("*********write_chunk 3********* c={:?} vis={:?}", c, vis);
         match vis {
             Vis::Bitmap(vis) => {
                 for ((op, key, value), vis) in izip!(op, vnode_and_pks, values).zip_eq(vis.iter()) {
                     if vis {
                         match op {
-                            Op::Insert | Op::UpdateInsert => self.mem_table.insert(key, value),
-                            Op::Delete | Op::UpdateDelete => self.mem_table.delete(key, value),
+                            Op::Insert | Op::UpdateInsert => {println!("bitmap update insert."); self.mem_table.insert(key, value)},
+                            Op::Delete | Op::UpdateDelete => {println!("bitmap update delete."); self.mem_table.delete(key, value)},
                         }
                         .unwrap_or_else(|e| self.handle_mem_table_error(e))
                     }
@@ -532,13 +537,14 @@ impl<S: StateStore> StateTable<S> {
             Vis::Compact(_) => {
                 for (op, key, value) in izip!(op, vnode_and_pks, values) {
                     match op {
-                        Op::Insert | Op::UpdateInsert => self.mem_table.insert(key, value),
-                        Op::Delete | Op::UpdateDelete => self.mem_table.delete(key, value),
+                        Op::Insert | Op::UpdateInsert => {println!("compact update insert."); self.mem_table.insert(key, value)},
+                        Op::Delete | Op::UpdateDelete => {println!("compact update delete."); self.mem_table.delete(key, value)},
                     }
                     .unwrap_or_else(|e| self.handle_mem_table_error(e))
                 }
             }
         }
+        println!("*********write_chunk 4*********");
     }
 
     fn update_epoch(&mut self, new_epoch: EpochPair) {
@@ -875,6 +881,7 @@ impl<S: StateStore> StateTable<S> {
         prefix_hint: Option<Vec<u8>>,
         epoch: u64,
     ) -> StorageResult<(MemTableIter<'_>, StorageIterInner<S>)> {
+        println!("***********************iter_inner mem_table");
         // Mem table iterator.
         let mem_table_iter = self.mem_table.iter(key_range.clone());
 

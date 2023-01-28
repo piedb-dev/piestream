@@ -686,7 +686,7 @@ impl StateStoreIter for HummockStateStoreIter {
                     Bytes::copy_from_slice(iter.key()),
                     Bytes::copy_from_slice(iter.value()),
                 );
-                println!("HummockStateStoreIte kvr={:?}", &kv);
+                println!("HummockStateStoreIte key={:?} value={:?}", iter.key(), iter.value());
                 iter.next().await?;
                 Ok(Some(kv))
             } else {

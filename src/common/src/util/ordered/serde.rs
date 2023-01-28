@@ -78,6 +78,7 @@ impl OrderedRowSerde {
         append_to: &mut Vec<u8>,
     ) {
         for (datum, order_type) in datum_refs.zip_eq(self.order_types.iter()) {
+            println!("datum={:?} order_type={:?}", datum, order_type);
             let mut serializer = memcomparable::Serializer::new(vec![]);
             serializer.set_reverse(*order_type == OrderType::Descending);
             serialize_datum_ref_into(&datum, &mut serializer).unwrap();

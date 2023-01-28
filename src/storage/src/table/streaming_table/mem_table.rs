@@ -92,7 +92,9 @@ impl MemTable {
     }
 
     pub fn delete(&mut self, pk: Vec<u8>, old_value: Vec<u8>) -> Result<()> {
+        println!("delete={:?} old_value={:?}", pk, old_value);
         let entry = self.buffer.entry(pk);
+        println!("entry={:?}", entry);
         match entry {
             Entry::Vacant(e) => {
                 e.insert(RowOp::Delete(old_value));
