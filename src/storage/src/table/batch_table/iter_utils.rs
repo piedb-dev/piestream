@@ -61,7 +61,7 @@ pub(super) async fn merge_sort<S>(streams: Vec<S>)
 where
     S: PkAndRowStream + Unpin,
 {
-    println!("*************into merge_sort streams.len()={:?}.****************", streams.len());
+    //println!("*************into merge_sort streams.len()={:?}.****************", streams.len());
     let mut heap = BinaryHeap::with_capacity(streams.len());
     for mut stream in streams {
         if let Some(peeked) = stream.next().await.transpose()? {

@@ -456,7 +456,6 @@ impl<S: StateStore> StateTable<S> {
 
         let key_bytes = serialize_pk_with_vnode(&pk, &self.pk_serde, self.compute_vnode(&pk));
         let value_bytes = value.serialize(&self.value_indices);
-        println!("insert mem_table key_bytes={:?}", key_bytes);
         self.mem_table
             .insert(key_bytes, value_bytes)
             .unwrap_or_else(|e| self.handle_mem_table_error(e));
@@ -468,7 +467,6 @@ impl<S: StateStore> StateTable<S> {
         let pk = old_value.by_indices(self.pk_indices());
         let key_bytes = serialize_pk_with_vnode(&pk, &self.pk_serde, self.compute_vnode(&pk));
         let value_bytes = old_value.serialize(&self.value_indices);
-        println!("delete mem_table key_bytes={:?}", key_bytes);
         self.mem_table
             .delete(key_bytes, value_bytes)
             .unwrap_or_else(|e| self.handle_mem_table_error(e));
@@ -496,7 +494,7 @@ impl<S: StateStore> StateTable<S> {
     // allow(izip, which use zip instead of zip_eq)
     #[allow(clippy::disallowed_methods)]
     pub fn write_chunk(&mut self, chunk: StreamChunk) {
-        println!("*********write_chunk*********");
+        //println!("*********write_chunk*********");
         let (chunk, op) = chunk.into_parts();
 
         let mut vnode_and_pks = vec![vec![]; chunk.capacity()];
@@ -506,22 +504,22 @@ impl<S: StateStore> StateTable<S> {
             .zip_eq(vnode_and_pks.iter_mut())
             .for_each(|(vnode, vnode_and_pk)| vnode_and_pk.extend(vnode.to_be_bytes()));
         let values = chunk.serialize();
-        println!("*********write_chunk 1********* vnode_and_pks={:?} op={:?} values={:?}", op, vnode_and_pks, values);
-        println!("pk_indeices={:?}", self.pk_indices());
+        //println!("*********write_chunk 1********* vnode_and_pks={:?} op={:?} values={:?}", op, vnode_and_pks, values);
+        //println!("pk_indeices={:?}", self.pk_indices());
         let chunk = chunk.reorder_columns(self.pk_indices());
         chunk
             .rows_with_holes()
             .zip_eq(vnode_and_pks.iter_mut())
             .for_each(|(r, vnode_and_pk)| {
                 if let Some(r) = r {
-                    println!("vnode_and_pk={:?} r={:?}", vnode_and_pk, &r);
+                    //println!("vnode_and_pk={:?} r={:?}", vnode_and_pk, &r);
                     self.pk_serde.serialize_ref(r, vnode_and_pk);
                     //println!("r={:?}", &r);
                 }
             });
-        println!("*********write_chunk 2********* vone_and_pk={:?}", vnode_and_pks);
+        //println!("*********write_chunk 2********* vone_and_pk={:?}", vnode_and_pks);
         let (c, vis) = chunk.into_parts();
-        println!("*********write_chunk 3********* c={:?} vis={:?}", c, vis);
+        //println!("*********write_chunk 3********* c={:?} vis={:?}", c, vis);
         match vis {
             Vis::Bitmap(vis) => {
                 for ((op, key, value), vis) in izip!(op, vnode_and_pks, values).zip_eq(vis.iter()) {
@@ -544,7 +542,7 @@ impl<S: StateStore> StateTable<S> {
                 }
             }
         }
-        println!("*********write_chunk 4*********");
+        //println!("*********write_chunk 4*********");
     }
 
     fn update_epoch(&mut self, new_epoch: EpochPair) {
@@ -594,9 +592,6 @@ impl<S: StateStore> StateTable<S> {
             epoch,
             table_id: self.table_id(),
         });
-        if buffer.len()>0{
-            println!("batch_write_rows buffer.len={:?} buffer={:?}", buffer.len(), &buffer);
-        }
         for (pk, row_op) in buffer {
             match row_op {
                 // Currently, some executors do not strictly comply with these semantics. As a

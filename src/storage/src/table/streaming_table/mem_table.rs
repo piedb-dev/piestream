@@ -69,7 +69,6 @@ impl MemTable {
 
     /// write methods
     pub fn insert(&mut self, pk: Vec<u8>, value: Vec<u8>) -> Result<()> {
-        println!("insert pk={:?}", pk);
         let entry = self.buffer.entry(pk);
         match entry {
             Entry::Vacant(e) => {

@@ -159,7 +159,6 @@ impl Block {
         let size=map_group_data_type_buf.get_u8() as usize;
         for _ in 0..size {
             let gid=map_group_data_type_buf.get_u8();
-            println!("gid={:?}", gid);
             let vlen=map_group_data_type_buf.get_u16_le() as usize;
             if gid==u8::MAX{
                 variable_column=vlen;
@@ -203,7 +202,6 @@ impl Block {
             }
         }
         let state_offset=new_buffer.len();
-        println!("state new_buffer.len:{:?}", new_buffer.len());
         for (_,v) in  &map_states{
             //println!("*****idx={:?} v={:?}", idx, &v);
             new_buffer.extend_from_slice(&v[..]);
@@ -215,12 +213,10 @@ impl Block {
         let key_offset_start_pos=new_buffer.len();
         let key_and_column_offset_buf=&buf[buf.len()-offset-key_and_column_offset_len..buf.len()-offset];
         offset+=key_and_column_offset_len;
-        println!("entry_count={:?} variable_column={:?} key_and_column_offset_len={:?}", entry_count, variable_column, key_and_column_offset_len);
+        //println!("entry_count={:?} variable_column={:?} key_and_column_offset_len={:?}", entry_count, variable_column, key_and_column_offset_len);
         let buffer=Compression::decompression(key_and_column_offset_buf, u8::MAX);
         assert_eq!(((entry_count+vaild_entry_count*variable_column)*4) as usize, buffer.len());
         new_buffer.extend_from_slice(&buffer.as_slice());
-
-        println!("fixed_column_len={:?}", fixed_column_len);
         let fixed_column_buf=&buf[buf.len()-offset-fixed_column_len..buf.len()-offset];
         //offset+=fixed_column_len;
 
@@ -236,9 +232,7 @@ impl Block {
             }
             let len=index_to_len(*gid as u8);
             let tmp=&fixed_column_buf[current_start_pos..current_start_pos+groups_compress_len[idx] as usize];
-            println!("gid={:?} tmp={:?}", *gid, tmp);
             let buffer=Compression::decompression(tmp, *gid);
-            println!("vaild_entry_count={:?} len={:?} v.len={:?}", vaild_entry_count, len, v.len());
             assert_eq!(vaild_entry_count*len*v.len(), buffer.len());
             
             for (i, cidx) in v.iter().enumerate(){
@@ -265,7 +259,6 @@ impl Block {
         new_buffer.put_u16_le(vaild_entry_count as u16);
         //total row count
         new_buffer.put_u16_le(entry_count as u16);
-        println!("total_raw_len+column_count*4+64={:?} new_buffer.len={:?}", total_raw_len+column_count*4+64, new_buffer.len());
         new_buffer.freeze()
     }
     
@@ -336,7 +329,6 @@ impl Block {
     //}
     pub fn get_key(&self, index:usize)->&[u8]{
         let key=self.get_raw_key(index);
-        println!("get_key={:?}", &key[0..key.len()-3]);
         &key[0..key.len()-3]
     }
 
@@ -350,7 +342,7 @@ impl Block {
         }else{
             next_offset=self.key_len;
         }
-        println!("index={:?} offset={:?} next_offset={:?}, key_len={:?}", index, offset, next_offset, self.key_len);
+        //println!("index={:?} offset={:?} next_offset={:?}, key_len={:?}", index, offset, next_offset, self.key_len);
         assert!(next_offset>offset+3);
         &self.data[offset..next_offset]
     }
@@ -365,7 +357,6 @@ impl Block {
         }
 
         let current_put_entry_idx=buf.get_u16_le() as usize;
-        println!("current_put_entry_idx={:?} vaild_entry_count={:?}",current_put_entry_idx, self.vaild_entry_count );
         assert!(current_put_entry_idx<self.vaild_entry_count as usize);
     
         let mut value =Vec::new();
@@ -383,7 +374,6 @@ impl Block {
             let stat=col_state.get_u32_le();
             //get current column value state
             let v=(stat>>(current_put_entry_idx % DEFAULT_DATA_TYPE_BIT_SIZE as usize)) & 0x1;
-            println!("idx={:?} state_offset={:?} stat={:?}", idx, state_offset, stat);
             //is Some
             if v>0 {
                 value.put_u8(1u8);
@@ -413,8 +403,6 @@ impl Block {
                     //fixed column
                     let offset=self.columns_offset[idx] as usize+current_put_entry_idx * self.data_type_values[idx].1 ;
                     let text=&self.data[offset..offset+self.data_type_values[idx].1];
-                    println!("data_type_len={:?}", self.data_type_values[idx].1);
-                    println!("text={:?}", text);
                     value.extend_from_slice(text);
                 }
             }else{
@@ -564,7 +552,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
-        println!("*****************key_len={:?} value={:?}*******************", key, value);
+        //println!("*****************key_len={:?} value={:?}*******************", key, value);
         //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -637,7 +625,7 @@ impl BlockBuilder {
     }
 
     pub fn build(&mut self) -> (u32, &[u8]) {
-        println!("*****************build*******************");
+        //println!("*****************build*******************");
         assert_eq!(self.keys_offset.len(),  4*self.entry_count);
 
      
@@ -656,7 +644,7 @@ impl BlockBuilder {
         assert_eq!(buffers.len(), self.map_data_type.len());
         assert_eq!(column_value_state_list.len(), self.map_data_type.len());
         //println!("column_value_state_list={:?}", column_value_state_list);
-        println!("buffers={:?}", buffers);
+        //println!("buffers={:?}", buffers);
 
         let mut  groups_compress_len=vec![];
         let variable_text_len=self.buf.len()-offset;

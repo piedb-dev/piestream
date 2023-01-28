@@ -183,7 +183,7 @@ impl<W: SstableWriter> SstableBuilder<W> {
     value: HummockValue<&[u8]>,
     is_new_user_key: bool,
 ) -> HummockResult<()> {
-    println!("---full_key={:?}----value={:?}", full_key, &value);
+    //println!("---full_key={:?}----value={:?}", full_key, &value);
     // Rotate block builder if the previous one has been built.
     if self.block_builder.is_empty() {
         self.block_metas.push(BlockMeta {
@@ -195,7 +195,6 @@ impl<W: SstableWriter> SstableBuilder<W> {
         })
     }
 
-    //println!("full_key={:?}", &full_key);
     // TODO: refine me
     value.encode(&mut self.raw_value);
     if is_new_user_key {

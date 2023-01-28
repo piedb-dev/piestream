@@ -113,7 +113,7 @@ impl HummockStorage {
 
         let mut local_stats = StoreLocalStatistic::default();
         for uncommitted_data in shared_buffer_data {
-            println!("overlapped_iters Second 1");
+            //println!("overlapped_iters Second 1");
             overlapped_iters.push(HummockIteratorUnion::Second(
                 build_ordered_merge_iter::<T>(
                     &uncommitted_data,
@@ -129,7 +129,6 @@ impl HummockStorage {
             ));
         }
         for sync_uncommitted_data in sync_uncommitted_data {
-            println!("overlapped_iters Second");
             overlapped_iters.push(HummockIteratorUnion::Second(
                 build_ordered_merge_iter::<T>(
                     &sync_uncommitted_data,
@@ -209,7 +208,7 @@ impl HummockStorage {
                         sstables.push((*sstable_info).clone());
                     }
                 }
-                println!("overlapped_iters Third");
+                //println!("overlapped_iters Third");
                 overlapped_iters.push(HummockIteratorUnion::Third(ConcatIteratorInner::<
                     T::SstableIteratorType,
                 >::new(
@@ -218,7 +217,7 @@ impl HummockStorage {
                     iter_read_options.clone(),
                 )));
             } else {
-                println!("table_info={:?}", table_infos.len());
+                //println!("table_info={:?}", table_infos.len());
                 for table_info in table_infos.into_iter().rev() {
                     let sstable = self
                         .sstable_store
@@ -235,7 +234,7 @@ impl HummockStorage {
                         }
                     }
 
-                    println!("overlapped_iters Fourth");
+                    //println!("overlapped_iters Fourth");
                     overlapped_iters.push(HummockIteratorUnion::Fourth(
                         T::SstableIteratorType::create(
                             sstable,
@@ -686,7 +685,7 @@ impl StateStoreIter for HummockStateStoreIter {
                     Bytes::copy_from_slice(iter.key()),
                     Bytes::copy_from_slice(iter.value()),
                 );
-                println!("HummockStateStoreIte key={:?} value={:?}", iter.key(), iter.value());
+                //println!("HummockStateStoreIte key={:?} value={:?}", iter.key(), iter.value());
                 iter.next().await?;
                 Ok(Some(kv))
             } else {

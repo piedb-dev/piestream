@@ -83,7 +83,6 @@ pub fn serialize_datum_separate_ref(datum_ref: &DatumRef<'_>,
     if !is_variable{
         if let Some(d) = datum_ref {
             buf_data_stat.put_u8(1);
-            println!("**********serialize_datum_separate_ref d={:?}", d);
             serialize_value(*d, &mut buf)
         } else {
             buf_data_stat.put_u8(0);
