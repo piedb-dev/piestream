@@ -503,7 +503,7 @@ impl DataChunk {
         match &self.vis2 {
             Vis::Bitmap(vis) => {
                 let rows_num = vis.len();
-                for (gidx, (gid, v)) in  map_data_type.iter().enumerate(){
+                for (gidx, (_, v)) in  map_data_type.iter().enumerate(){
                     for idx in v{
                         let c=self.columns[*idx as usize].array_ref();
                         assert_eq!(c.len(), rows_num);
@@ -518,7 +518,7 @@ impl DataChunk {
                 }
             }
             Vis::Compact(rows_num) => {
-                for (gidx, (gid, v)) in  map_data_type.iter().enumerate(){
+                for (gidx, (_, v)) in  map_data_type.iter().enumerate(){
                     for idx in v{
                         let c=self.columns[*idx as usize].array_ref();
                         assert_eq!(c.len(), *rows_num);

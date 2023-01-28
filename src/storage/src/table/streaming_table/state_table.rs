@@ -519,7 +519,7 @@ impl<S: StateStore> StateTable<S> {
                     //println!("r={:?}", &r);
                 }
             });
-            println!("*********write_chunk 2********* vone_and_pk={:?}", vnode_and_pks);
+        println!("*********write_chunk 2********* vone_and_pk={:?}", vnode_and_pks);
         let (c, vis) = chunk.into_parts();
         println!("*********write_chunk 3********* c={:?} vis={:?}", c, vis);
         match vis {

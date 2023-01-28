@@ -1,0 +1,116 @@
+*********write_chunk*********
+*********write_chunk 1********* vnode_and_pks=[Insert] op=[[16]] values=[[1, 1, 0, 0, 0, 1, 0, 0, 12, 226, 45, 222, 90, 3]]
+pk_indeices=[1]
+vnode_and_pk=[16] r=[Some(Int64(241749818665074688))]
+datum=Some(Int64(241749818665074688)) order_type=Ascending
+*********write_chunk 2********* vone_and_pk=[[16, 0, 131, 90, 222, 45, 226, 12, 0, 0]]
+*********write_chunk 3********* c=[Column { array: Int64(PrimitiveArray { bitmap: [true], data: [241749818665074688] }) }] vis=Bitmap([true])
+bitmap update insert.
+insert pk=[16, 0, 131, 90, 222, 45, 226, 12, 0, 0]
+*********write_chunk 4*********
+batch_write_rows buffer.len=1 buffer={[16, 0, 131, 90, 222, 45, 226, 12, 0, 0]: Insert([1, 1, 0, 0, 0, 1, 0, 0, 12, 226, 45, 222, 90, 3])}
+******************compact_and_build_sst*************
+---full_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]----value=Put([1, 1, 0, 0, 0, 1, 0, 0, 12, 226, 45, 222, 90, 3])
+*****************key_len=23 value=15*******************
+*****************build*******************
+gid=2
+gid=3
+state new_buffer.len:28
+entry_count=1 variable_column=0 key_and_column_offset_len=4
+fixed_column_len=12
+vaild_entry_count=1 len=4 v.len=1
+vaild_entry_count=1 len=8 v.len=1
+total_raw_len+column_count*4+64=183 new_buffer.len=86
+table_info=1
+overlapped_iters Fourth
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+current_put_entry_idx=0 vaild_entry_count=1
+idx=0 state_offset=0 stat=1
+idx=1 state_offset=4 stat=1
+*************into merge_sort streams.len()=64.****************
+HummockStateStoreIte key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0] value=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+table_info=1
+overlapped_iters Fourth
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+current_put_entry_idx=0 vaild_entry_count=1
+idx=0 state_offset=0 stat=1
+idx=1 state_offset=4 stat=1
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+HummockStateStoreIte key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0] value=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+table_info=1
+overlapped_iters Fourth
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+current_put_entry_idx=0 vaild_entry_count=1
+idx=0 state_offset=0 stat=1
+idx=1 state_offset=4 stat=1
+*************into merge_sort streams.len()=64.****************
+HummockStateStoreIte key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0] value=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+*************into merge_sort streams.len()=64.****************
+table_info=1
+overlapped_iters Fourth
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+index=0 offset=0 next_offset=26, key_len=26
+current_put_entry_idx=0 vaild_entry_count=1
+idx=0 state_offset=0 stat=1
+idx=1 state_offset=4 stat=1
+*************into merge_sort streams.len()=64.****************
+HummockStateStoreIte key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0] value=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+index=0 offset=0 next_offset=26, key_len=26
+get_key=[116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255]
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+*************into merge_sort streams.len()=64.****************
+*********write_chunk*********
+*********write_chunk 1********* vnode_and_pks=[Delete] op=[[175]] values=[[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]]
+pk_indeices=[1]
+vnode_and_pk=[175] r=[Some(Int64(-2158350121417310207))]
+datum=Some(Int64(-2158350121417310207)) order_type=Ascending
+*********write_chunk 2********* vone_and_pk=[[175, 0, 98, 12, 0, 0, 0, 0, 0, 1]]
+*********write_chunk 3********* c=[Column { array: Int64(PrimitiveArray { bitmap: [true], data: [-2158350121417310207] }) }] vis=Bitmap([true])
+bitmap update delete.
+delete=[175, 0, 98, 12, 0, 0, 0, 0, 0, 1] old_value=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+entry=Entry(VacantEntry([175, 0, 98, 12, 0, 0, 0, 0, 0, 1]))
+*********write_chunk 4*********
+batch_write_rows buffer.len=1 buffer={[175, 0, 98, 12, 0, 0, 0, 0, 0, 1]: Delete([1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226])}
+do_delete_sanity_check key=[175, 0, 98, 12, 0, 0, 0, 0, 0, 1]
+stored_value=None old_row=[1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 12, 226]
+thread 'piestream-streaming-actor' panicked at 'inconsistent delete!
+table_id: 1002, vnode: 175, key: Row([Some(Int64(-2158350121417310207))])
+stored value: None
+expected value: Row([Some(Int32(1)), Some(Int64(-2158350121417310207))])', /Users/umietsuka/piestream/src/storage/src/table/streaming_table/state_table.rs:678:13
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/9067d5277d10f0f32a49ec9c125a33828e26a32b/library/std/src/panicking.rs:584:5
+   1: core::panicking::panic_fmt
+             at /rustc/9067d5277d10f0f32a49ec9c125a33828e26a32b/library/core/src/panicking.rs:142:14
+   2: piestream_storage::table::streaming_table::state_table::StateTable<S>::do_delete_sanity_check::{{closure}}
+             at ./src/storage/src/table/streaming_table/state_table.rs:678:13

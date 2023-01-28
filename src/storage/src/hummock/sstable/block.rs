@@ -224,6 +224,7 @@ impl Block {
         let fixed_column_buf=&buf[buf.len()-offset-fixed_column_len..buf.len()-offset];
         //offset+=fixed_column_len;
 
+        let mut current_start_pos=0_usize;
         let mut idx=0;
         for (gid,v) in  &map_group_data_type{
             if *gid==u8::MAX{
@@ -234,7 +235,8 @@ impl Block {
                 continue;
             }
             let len=index_to_len(*gid as u8);
-            let tmp=&fixed_column_buf[0..groups_compress_len[idx] as usize];
+            let tmp=&fixed_column_buf[current_start_pos..current_start_pos+groups_compress_len[idx] as usize];
+            println!("tmp={:?}", tmp);
             let buffer=Compression::decompression(tmp, *gid);
             println!("vaild_entry_count={:?} len={:?} v.len={:?}", vaild_entry_count, len, v.len());
             assert_eq!(vaild_entry_count*len*v.len(), buffer.len());
@@ -245,6 +247,7 @@ impl Block {
             }
             new_buffer.extend_from_slice(&buffer.as_slice());
             
+            current_start_pos=groups_compress_len[idx] as usize;
             idx+=1;
         }
 
@@ -410,6 +413,8 @@ impl Block {
                     //fixed column
                     let offset=self.columns_offset[idx] as usize+current_put_entry_idx * self.data_type_values[idx].1 ;
                     let text=&self.data[offset..offset+self.data_type_values[idx].1];
+                    println!("data_type_len={:?}", self.data_type_values[idx].1);
+                    println!("text={:?}", text);
                     value.extend_from_slice(text);
                 }
             }else{
@@ -559,7 +564,7 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, key: &[u8], value: &[u8]) {
-        println!("*****************key_len={:?} value={:?}*******************", key.len(), value.len());
+        println!("*****************key_len={:?} value={:?}*******************", key, value);
         //println!("add value={:?}", &value);
         if self.entry_count > 0 {
             debug_assert!(!key.is_empty());
@@ -651,6 +656,7 @@ impl BlockBuilder {
         assert_eq!(buffers.len(), self.map_data_type.len());
         assert_eq!(column_value_state_list.len(), self.map_data_type.len());
         //println!("column_value_state_list={:?}", column_value_state_list);
+        println!("buffers={:?}", buffers);
 
         let mut  groups_compress_len=vec![];
         let variable_text_len=self.buf.len()-offset;
@@ -672,6 +678,7 @@ impl BlockBuilder {
             let v=Compression::compress( &buffers[idx], *gid as u8);
             groups_compress_len.push(v.len() as u32);
             self.buf.extend_from_slice(v.as_slice());
+            println!("buf={:?}", self.buf);
         }
         let fixed_column_len=self.buf.len()-offset;
         offset+=fixed_column_len;
@@ -901,6 +908,22 @@ mod tests {
         raw_value.freeze()
     }
 
+    #[test]
+    fn new_test_block_enc_dec() {
+        let options = BlockBuilderOptions::default();
+        let key=vec![116, 0, 0, 3, 234, 16, 0, 131, 90, 222, 45, 226, 12, 0, 0, 255, 242, 148, 135, 73, 99, 255, 255];
+        let value=vec![0, 1, 1, 0, 0, 0, 1, 0, 0, 140, 67, 20, 231, 90, 3];
+        let mut builder = BlockBuilder::new(options);
+        builder.set_row_deserializer( vec![DataType::Int32,DataType::Int64]);
+        builder.add(&key[..], &value[..]);
+      
+        let buf = builder.build().1.to_vec();
+        let capacity = builder.uncompressed_block_size();
+        let block = Box::new(Block::decode(buf.into(), capacity).unwrap());
+        let mut bi = BlockIterator::new(BlockHolder::from_owned_block(block));
+        bi.seek_to_first();
+        println!("********key={:?} value={:?}", bi.key(), bi.value());
+    }
     #[test]
     fn test_block_enc_dec() {
         let options = BlockBuilderOptions::default();
