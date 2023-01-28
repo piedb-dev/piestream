@@ -236,7 +236,7 @@ impl Block {
             }
             let len=index_to_len(*gid as u8);
             let tmp=&fixed_column_buf[current_start_pos..current_start_pos+groups_compress_len[idx] as usize];
-            println!("tmp={:?}", tmp);
+            println!("gid={:?} tmp={:?}", *gid, tmp);
             let buffer=Compression::decompression(tmp, *gid);
             println!("vaild_entry_count={:?} len={:?} v.len={:?}", vaild_entry_count, len, v.len());
             assert_eq!(vaild_entry_count*len*v.len(), buffer.len());
@@ -247,7 +247,7 @@ impl Block {
             }
             new_buffer.extend_from_slice(&buffer.as_slice());
             
-            current_start_pos=groups_compress_len[idx] as usize;
+            current_start_pos+=groups_compress_len[idx] as usize;
             idx+=1;
         }
 
@@ -678,7 +678,7 @@ impl BlockBuilder {
             let v=Compression::compress( &buffers[idx], *gid as u8);
             groups_compress_len.push(v.len() as u32);
             self.buf.extend_from_slice(v.as_slice());
-            println!("buf={:?}", self.buf);
+            //println!("buf={:?}", self.buf);
         }
         let fixed_column_len=self.buf.len()-offset;
         offset+=fixed_column_len;
