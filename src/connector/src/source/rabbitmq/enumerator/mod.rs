@@ -16,8 +16,6 @@ use async_trait::async_trait;
 use anyhow::{Context};
 use crate::source::rabbitmq::{RabbitMQProperties, RabbitMQSplit};
 use crate::source::SplitEnumerator;
-use amqp::{Basic, Session, Channel, protocol};
-use amqp::ConsumeBuilder;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RabbitMQSplitEnumerator {
@@ -35,6 +33,14 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
        
         let queue_name = &properties.queue_name;
         let service_url = &properties.service_url;
+        // let _server_url =  &properties.check_url_api(queue_name.to_string(),service_url.to_string()).await.with_context(|| {
+        //     format!(
+        //         "failed to fetch metadata from rabbitmq (service url error)"            )
+        // })?;
+        let _queue_name =  &properties.check_queue_name(queue_name.to_string(),service_url.to_string()).await.with_context(|| {
+            format!(
+                "failed to fetch metadata from rabbitmq (queue not exists)"            )
+        })?;
         //ensure!(splits.len() == 1, "only support single split");
         assert!(!queue_name.is_empty(), "rabbitmq queue is empty.");
         assert!(!queue_name.trim().len()>0, "rabbitmq queue name len is zero.");
@@ -42,11 +48,6 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
     }
 
     async fn list_splits(&mut self) -> anyhow::Result<Vec<RabbitMQSplit>> {
-        
-        let _queue_name = self.fetch_queue_name().await.with_context(|| {
-            format!(
-                "failed to fetch metadata from rabbitmq (queue not exists)"            )
-        })?;
         let mut splits = vec![];
         splits.push(RabbitMQSplit {
             queue_name: self.queue_name.clone(),
@@ -54,48 +55,4 @@ impl SplitEnumerator for RabbitMQSplitEnumerator {
         });
         Ok(splits)
     }
-}
-
-
-
-struct MyConsumer {
-    deliveries_number: u64
-}
-impl amqp::Consumer for MyConsumer {
-    fn handle_delivery(&mut self, channel: &mut Channel, deliver: protocol::basic::Deliver, _headers: protocol::basic::BasicProperties, _body: Vec<u8>){
-        println!("[struct] Got a delivery # {}", self.deliveries_number);
-        self.deliveries_number += 1;
-        channel.basic_ack(deliver.delivery_tag, false).unwrap();
-    }
-}
-fn consumer_function(channel: &mut Channel, deliver: protocol::basic::Deliver, _headers: protocol::basic::BasicProperties, _body: Vec<u8>){
-    println!("[function] Got a delivery:");
-    channel.basic_ack(deliver.delivery_tag, false).unwrap();
-}
-
-
-impl RabbitMQSplitEnumerator {
-
-    async fn fetch_queue_name(&self) -> anyhow::Result<Vec<i32>> {
-        let amqp_url = &self.service_url;
-        let queue_name = &self.queue_name;
-        let mut session = match Session::open_url(amqp_url) {
-            Ok(session) => session,
-            Err(error) =>{
-                panic!("Can't create session: {:?}", error)
-            }
-        };
-        let mut channel = session.open_channel(1).unwrap();
-        
-        let consume_builder = ConsumeBuilder::new(consumer_function, queue_name);
-        match consume_builder.basic_consume(&mut channel) {
-            Ok(_consumer) => {
-                return Ok(vec![1]);
-            },
-            Err(e) =>{ 
-                return Err(anyhow::Error::from(e));
-            }
-        }
-    }
-
 }

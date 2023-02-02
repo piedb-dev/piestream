@@ -4828,6 +4828,7 @@ dependencies = [
  "madsim-tokio",
  "parking_lot 0.12.1",
  "pprof",
+ "time 0.3.13",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
@@ -6822,6 +6823,7 @@ version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db76ff9fa4b1458b3c7f077f3ff9887394058460d21e634355b273aaf11eea45"
 dependencies = [
+ "itoa 1.0.3",
  "libc",
  "num_threads",
 ]
@@ -7166,6 +7168,7 @@ dependencies = [
  "sharded-slab",
  "smallvec",
  "thread_local 1.1.4",
+ "time 0.3.13",
  "tracing",
  "tracing-core",
  "tracing-log",
