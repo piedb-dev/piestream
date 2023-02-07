@@ -72,7 +72,7 @@ pub struct ComputeNodeOpts {
 
     /// Path to file cache data directory.
     /// Left empty to disable file cache.
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value = "/mnt/data/")]
     pub file_cache_dir: String,
 
     /// Enable managed lru cache, or use local lru cache.
