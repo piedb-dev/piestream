@@ -1,0 +1,66 @@
+version: "3"
+services:
+  etcd-3:
+    image: "quay.io/coreos/etcd:latest"
+    command:
+      - /usr/local/bin/etcd
+      - "--listen-client-urls"
+      - "http://0.0.0.0:2388"
+      - "--advertise-client-urls"
+      - "http://etcd-3:2388"
+      - "--listen-peer-urls"
+      - "http://0.0.0.0:2389"
+      - "--initial-advertise-peer-urls"
+      - "http://etcd-3:2389"
+      - "--listen-metrics-urls"
+      - "http://0.0.0.0:2379"
+      - "--name"
+      - risedev-meta
+      - "--max-txn-ops"
+      - "999999"
+      - "--auto-compaction-mode"
+      - periodic
+      - "--auto-compaction-retention"
+      - 1m
+      - "--snapshot-count"
+      - "10000"
+    expose:
+      - "2388"
+    ports:
+      - "2388:2388"
+      - "2389:2389"
+    depends_on: []
+    volumes:
+      - "/Users/wangdexin/work/docker/etcd/etcd-3:/etcd-data"
+    environment: {}
+    container_name: etcd-3
+  minio-3:
+    image: "quay.io/minio/minio:latest"
+    command:
+      - server
+      - "--address"
+      - "0.0.0.0:9308"
+      - "--console-address"
+      - "0.0.0.0:9400"
+      - /data
+    expose:
+      - "9308"
+      - "9400"
+    ports:
+      - "9308:9308"
+      - "9400:9400"
+    depends_on: []
+    volumes:
+      - "/Users/wangdexin/work/docker/minio/minio-3:/data"
+    entrypoint: "\n/bin/sh -c '\nset -e\nmkdir -p \"/data/hummock001\"\n/usr/bin/docker-entrypoint.sh \"$$0\" \"$$@\"\n'"
+    environment:
+      MINIO_CI_CD: "1"
+      MINIO_ROOT_PASSWORD: hummockadmin
+      MINIO_ROOT_USER: hummockadmin
+    container_name: minio-3
+
+volumes:
+  etcd-3:
+    external: false
+  minio-3:
+    external: false
