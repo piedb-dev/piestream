@@ -316,6 +316,7 @@ impl HummockStorage {
             table_counts += table_count;
         }
         for sync_uncommitted_data in sync_uncommitted_data {
+            /// =========================
             let (value, table_count) = get_from_order_sorted_uncommitted_data(
                 self.sstable_store.clone(),
                 sync_uncommitted_data,
@@ -342,6 +343,7 @@ impl HummockStorage {
             match level.level_type() {
                 LevelType::Overlapping | LevelType::Unspecified => {
                     let sstable_infos = prune_ssts(level.table_infos.iter(), &(key..=key));
+                    // println!("state_store.rs get sstable_infos = ");
                     for sstable_info in sstable_infos {
                         table_counts += 1;
                         if let Some(v) = get_from_sstable_info(
@@ -436,6 +438,7 @@ impl StateStore for HummockStorage {
         check_bloom_filter: bool,
         read_options: ReadOptions,
     ) -> Self::GetFuture<'_> {
+        // println!("storage::hummock::state_store.rs ====== get");
         async move { self.get(key, check_bloom_filter, read_options).await }
     }
 
@@ -450,6 +453,7 @@ impl StateStore for HummockStorage {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        println!("storage::hummock::state_store.rs ====== scan");
         async move {
             self.iter(prefix_hint, key_range, read_options)
                 .await?
@@ -468,6 +472,7 @@ impl StateStore for HummockStorage {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        println!("storage::hummock::state_store.rs ====== backward_scan");
         async move {
             self.backward_iter(key_range, read_options)
                 .await?

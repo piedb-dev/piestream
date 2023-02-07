@@ -345,6 +345,7 @@ impl<S: StateStore> RowSeqScanExecutor<S> {
     ) {
         match scan_type {
             ScanType::BatchScan(iter) => {
+                println!("do_execute ============= BatchScan");
                 pin_mut!(iter);
                 loop {
                     // let timer = stats.row_seq_scan_next_duration.start_timer();
@@ -367,6 +368,7 @@ impl<S: StateStore> RowSeqScanExecutor<S> {
                 }
             }
             ScanType::PointGet(row) => {
+                println!("do_execute ============= PointGet");
                 if let Some(row) = row {
                     yield DataChunk::from_rows(&[row], &schema.data_types());
                 }

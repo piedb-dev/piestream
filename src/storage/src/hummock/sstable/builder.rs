@@ -172,10 +172,10 @@ impl<W: SstableWriter> SstableBuilder<W> {
         value.encode(&mut self.raw_value);
         if is_new_user_key {
             let mut extract_key = user_key(full_key);
-            println!("storage::hummock::sstable::builder.rs ============= full_key = {:?}",&full_key);
+            // println!("storage::hummock::sstable::builder.rs ============= full_key = {:?}",&full_key);
             if let Some(table_id) = get_table_id(full_key) {
                 if self.last_table_id != table_id {
-                    println!("storage::hummock::sstable::builder.rs ============= table-id = {:?}",&table_id);
+                    // println!("storage::hummock::sstable::builder.rs ============= table-id = {:?}",&table_id);
                     self.table_ids.insert(table_id);
                     self.last_table_id = table_id;
                 }

@@ -74,17 +74,17 @@ pub struct MetaNodeOpts {
     #[clap(long)]
     prometheus_host: Option<String>,
 
-    #[clap(long, arg_enum, default_value_t = Backend::Mem)]
-    backend: Backend,
-
-    // #[clap(long, arg_enum, default_value_t = Backend::Etcd)]
+    // #[clap(long, arg_enum, default_value_t = Backend::Mem)]
     // backend: Backend,
 
-    // #[clap(long, default_value_t = String::from("127.0.0.1:2388"))]
-    // etcd_endpoints: String,
+    #[clap(long, arg_enum, default_value_t = Backend::Etcd)]
+    backend: Backend,
 
-    #[clap(long, default_value_t = String::from(""))]
+    #[clap(long, default_value_t = String::from("127.0.0.1:2388"))]
     etcd_endpoints: String,
+
+    // #[clap(long, default_value_t = String::from(""))]
+    // etcd_endpoints: String,
 
     /// Enable authentication with etcd. By default disabled.
     #[clap(long)]

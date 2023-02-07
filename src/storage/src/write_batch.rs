@@ -123,7 +123,7 @@ impl<'a, S: StateStore> KeySpaceWriteBatch<'a, S> {
     /// Puts a value, with the key prepended by the prefix of `keyspace`, like `[prefix | given
     /// key]`.
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: StorageValue) {
-        println!("storage::write_table.rs put");
+        // println!("storage::write_table.rs put");
         self.do_push(key.as_ref(), value);
     }
 

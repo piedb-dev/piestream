@@ -344,7 +344,7 @@ pub async fn get_from_order_sorted_uncommitted_data(
 
                 UncommittedData::Sst((_, sstable_info)) => {
                     table_counts += 1;
-
+                    // println!("storage::hummock::mod.rs get from order sorted_uncommitted sstable_info = {:?}",&sstable_info);
                     if let Some(data) = get_from_sstable_info(
                         sstable_store_ref.clone(),
                         &sstable_info,

@@ -229,9 +229,11 @@ impl SstableStore {
                 size: block_meta.len as usize,
             };
             let data_path = self.get_sst_data_path(sst.id);
+            println!("storage::hummock::sstable_store.rs ===== data_path = {:?},block_index = {:?}",&data_path,&block_index);
             let store = self.store.clone();
             let sst_id = sst.id;
             let use_tiered_cache = !matches!(policy, CachePolicy::Disable);
+            println!("hummock::sstable_store   use_tiered_cache =  {:?}",&use_tiered_cache);
             let uncompressed_capacity = block_meta.uncompressed_size as usize;
 
             async move {
@@ -240,11 +242,13 @@ impl SstableStore {
                     .await
                     .map_err(HummockError::tiered_cache)?
                 {
+                    println!("hummock::sstable_store ============================= if ");
                     // TODO(MrCroxx): `into_owned()` may perform buffer copy, eliminate it later.
                     return Ok(holder.into_owned());
                 }
 
                 let block_data = store.read(&data_path, Some(block_loc)).await?;
+                println!("storage::hummock::sstable_store.rs ===== block_data len = {:?}",&block_data.len());
                 let block = Block::decode(block_data, uncompressed_capacity)?;
                 Ok(Box::new(block))
             }
@@ -343,10 +347,12 @@ impl SstableStore {
                 };
                 async move {
                     let now = Instant::now();
+                    /// =========
                     let buf = store
                         .read(&meta_path, Some(loc))
                         .await
                         .map_err(HummockError::object_io_error)?;
+                    println!("hummock::sstable_store.rs =============== {:?}",&buf.len());
                     let meta = SstableMeta::decode(&mut &buf[..])?;
                     let sst = Sstable::new(sst_id, meta);
                     let charge = sst.meta.encoded_size();

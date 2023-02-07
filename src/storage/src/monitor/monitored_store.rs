@@ -102,6 +102,7 @@ where
         check_bloom_filter: bool,
         read_options: ReadOptions,
     ) -> Self::GetFuture<'_> {
+        // println!("storage::monitor::monitored_store.rs ====== get");
         async move {
             let timer = self.stats.get_duration.start_timer();
             let value = self
@@ -160,6 +161,7 @@ where
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        // println!("storage::monitor::monitored_store.rs ====== backward_scan");
         async move {
             let timer = self.stats.range_backward_scan_duration.start_timer();
             let result = self

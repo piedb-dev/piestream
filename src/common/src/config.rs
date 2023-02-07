@@ -315,7 +315,7 @@ mod default {
     }
 
     pub fn block_cache_capacity_mb() -> usize {
-        256
+        2560
     }
 
     pub fn meta_cache_capacity_mb() -> usize {

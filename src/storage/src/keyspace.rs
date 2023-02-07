@@ -77,6 +77,7 @@ impl<S: StateStore> Keyspace<S> {
         check_bloom_filter: bool,
         read_options: ReadOptions,
     ) -> StorageResult<Option<Bytes>> {
+        // println!("storage::src:keyspace.rs  fn get");
         self.store
             .get(&self.prefixed_key(key), check_bloom_filter, read_options)
             .await
@@ -90,6 +91,7 @@ impl<S: StateStore> Keyspace<S> {
         limit: Option<usize>,
         read_options: ReadOptions,
     ) -> StorageResult<Vec<(Bytes, Bytes)>> {
+        println!("storage::src:keyspace.rs  fn scan");
         self.scan_with_range::<_, &[u8]>(.., limit, read_options)
             .await
     }
@@ -109,6 +111,7 @@ impl<S: StateStore> Keyspace<S> {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
+        println!("storage::src:keyspace.rs  fn scan_with_range");
         let range = prefixed_range(range, &self.prefix);
         let mut pairs = self.store.scan(None, range, limit, read_options).await?;
         pairs

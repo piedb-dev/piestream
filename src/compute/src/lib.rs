@@ -40,11 +40,11 @@ pub struct ComputeNodeOpts {
     #[clap(long)]
     pub client_address: Option<String>,
 
-    #[clap(long, default_value = "hummock+memory")]
-    pub state_store: String,
-
-    // #[clap(long, default_value = "hummock+minio://hummockadmin:hummockadmin@127.0.0.1:9308/hummock001")]
+    // #[clap(long, default_value = "hummock+memory")]
     // pub state_store: String,
+
+    #[clap(long, default_value = "hummock+minio://hummockadmin:hummockadmin@127.0.0.1:9308/hummock001")]
+    pub state_store: String,
 
     #[clap(long, default_value = "127.0.0.1:1222")]
     pub prometheus_listener_addr: String,
