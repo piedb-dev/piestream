@@ -353,7 +353,6 @@ impl SstableStore {
                         .read(&meta_path, Some(loc))
                         .await
                         .map_err(HummockError::object_io_error)?;
-                        assert!(false);
                     println!("hummock::sstable_store.rs =============== buf.len = {:?}, meta_path = {:?} ,loc = {:?}",&buf.len(),&meta_path,&loc);
                     let meta = SstableMeta::decode(&mut &buf[..])?;
                     let sst = Sstable::new(sst_id, meta);
