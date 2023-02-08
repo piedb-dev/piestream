@@ -322,8 +322,10 @@ impl HummockStorageCore {
         let mut staging_sst_iter_count = 0;
         for sstable_info in uncommitted_ssts {
             let v=&vec![sstable_info.clone()];
+            /// 
             let table_infos = prune_ssts(v.iter(), &key_range);
             if table_infos.is_empty() {
+                println("hummock::store::state_store.rs ============== table_infos.is_empty");
                 continue;
             }
             
