@@ -319,7 +319,7 @@ mod default {
     }
 
     pub fn meta_cache_capacity_mb() -> usize {
-        64
+        640
     }
 
     pub fn disable_remote_compactor() -> bool {
