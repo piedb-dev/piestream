@@ -325,7 +325,7 @@ impl HummockStorageCore {
             /// 
             let table_infos = prune_ssts(v.iter(), &key_range);
             if table_infos.is_empty() {
-                println("hummock::store::state_store.rs ============== table_infos.is_empty");
+                println!("hummock::store::state_store.rs ============== table_infos.is_empty");
                 continue;
             }
             
