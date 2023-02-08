@@ -242,8 +242,7 @@ impl SstableStore {
                     .await
                     .map_err(HummockError::tiered_cache)?
                 {
-                    println!("hummock::sstable_store ============================= if ");
-                    // TODO(MrCroxx): `into_owned()` may perform buffer copy, eliminate it later.
+                     // TODO(MrCroxx): `into_owned()` may perform buffer copy, eliminate it later.
                     return Ok(holder.into_owned());
                 }
 
@@ -353,7 +352,7 @@ impl SstableStore {
                         .await
                         .map_err(HummockError::object_io_error)?;
                         assert!(false);
-                    println!("hummock::sstable_store.rs =============== buf.len = {:?},meta_path = {:?}",&buf.len(),&meta_path);
+                    println!("hummock::sstable_store.rs =============== buf.len = {:?}, meta_path = {:?} ,size = {:?}",&buf.len(),&meta_path,&loc.size);
                     let meta = SstableMeta::decode(&mut &buf[..])?;
                     let sst = Sstable::new(sst_id, meta);
                     let charge = sst.meta.encoded_size();
