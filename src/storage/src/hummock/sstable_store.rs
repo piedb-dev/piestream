@@ -352,7 +352,8 @@ impl SstableStore {
                         .read(&meta_path, Some(loc))
                         .await
                         .map_err(HummockError::object_io_error)?;
-                    println!("hummock::sstable_store.rs =============== {:?}",&buf.len());
+                        assert!(false);
+                    println!("hummock::sstable_store.rs =============== buf.len = {:?},meta_path = {:?}",&buf.len(),&meta_path);
                     let meta = SstableMeta::decode(&mut &buf[..])?;
                     let sst = Sstable::new(sst_id, meta);
                     let charge = sst.meta.encoded_size();
