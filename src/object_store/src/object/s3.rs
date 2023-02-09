@@ -31,7 +31,10 @@ use hyper::Body;
 use itertools::Itertools;
 use tokio::io::AsyncRead;
 use tokio::task::JoinHandle;
+use aws_smithy_types::timeout;
+use aws_smithy_types::tristate::TriState;
 
+use std::time::Duration;
 use super::object_metrics::ObjectStoreMetrics;
 use super::{
     BlockLocation, BoxedStreamingUploader, Bytes, ObjectError, ObjectMetadata, ObjectResult,
@@ -531,12 +534,17 @@ impl S3ObjectStore {
 
     /// Creates a minio client. The server should be like `minio://key:secret@address:port/bucket`.
     pub async fn with_minio(server: &str, metrics: Arc<ObjectStoreMetrics>) -> Self {
+    
         let server = server.strip_prefix("minio://").unwrap();
         let (access_key_id, rest) = server.split_once(':').unwrap();
         let (secret_access_key, rest) = rest.split_once('@').unwrap();
         let (address, bucket) = rest.split_once('/').unwrap();
 
-        let loader = aws_config::ConfigLoader::default();
+        let api_time_out = timeout::Config::new().with_api_timeouts(
+            timeout::Api::new().with_call_timeout(TriState::Set(Duration::from_secs(5))));
+        let loader = aws_config::ConfigLoader::default().timeout_config(api_time_out);
+        // let loader = aws_config::ConfigLoader::default();
+
         let builder = aws_sdk_s3::config::Builder::from(&loader.load().await)
             .region(Region::new("custom"))
             .endpoint_resolver(Endpoint::immutable(
@@ -548,7 +556,9 @@ impl S3ObjectStore {
                 None,
             ));
         let config = builder.build();
+        println!("object_store::object::s3.rs ================== {:?}",&config.timeout_config().cloned().unwrap_or_default());
         let client = Client::from_conf(config);
+        println!("object_store::object::s3.rs client ================== {:?}",&client);
 
         Self {
             client,

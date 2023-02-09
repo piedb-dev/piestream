@@ -51,7 +51,7 @@ pub fn compact_task_to_string(compact_task: &CompactTask) -> String {
 
 pub fn append_sstable_info_to_string(s: &mut String, sstable_info: &SstableInfo) {
     use std::fmt::Write;
-
+    println!("storage::hummock_sdk::compact.rs  sstable_info = {:?}",&sstable_info);
     let key_range = sstable_info.key_range.as_ref().unwrap();
     let key_range_str = if key_range.inf {
         "(-inf, +inf)".to_owned()
