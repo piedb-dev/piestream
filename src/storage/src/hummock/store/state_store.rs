@@ -359,6 +359,7 @@ impl HummockStorageCore {
         for level in committed.levels(compaction_group_id) {
             let table_infos = prune_ssts(level.table_infos.iter(), &key_range);
             if table_infos.is_empty() {
+                println!("hummock::store::state_store.rs ============== table_infos.is_empty");
                 continue;
             }
 
