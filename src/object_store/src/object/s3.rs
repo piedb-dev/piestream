@@ -540,8 +540,9 @@ impl S3ObjectStore {
         let (secret_access_key, rest) = rest.split_once('@').unwrap();
         let (address, bucket) = rest.split_once('/').unwrap();
 
-        let api_time_out = timeout::Config::new().with_api_timeouts(
-            timeout::Api::new().with_call_timeout(TriState::Set(Duration::from_secs(5))));
+        
+        let api_time_out = timeout::Config::new().with_http_timeouts(
+            timeout::Http::new().with_read_timeout(TriState::Set(Duration::from_secs(5))));
         let loader = aws_config::ConfigLoader::default().timeout_config(api_time_out);
         // let loader = aws_config::ConfigLoader::default();
 
