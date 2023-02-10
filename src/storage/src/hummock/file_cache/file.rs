@@ -81,6 +81,7 @@ impl CacheFile {
     /// punching.
     pub async fn open(path: impl AsRef<Path>, options: CacheFileOptions) -> Result<Self> {
         options.assert();
+        println!("storage::hummock::file_cache::file.rs FileCache open ===========");
 
         let path = path.as_ref().to_owned();
 
@@ -126,6 +127,7 @@ impl CacheFile {
     #[tracing::instrument(skip(buf))]
     pub async fn append(&self, buf: DioBuffer) -> Result<u64> {
         utils::debug_assert_aligned(self.core.block_size, buf.len());
+        println!("storage::hummock::file_cache::file.rs FileCache append ===========");
 
         let core = self.core.clone();
         let fallocate_unit = self.fallocate_unit;
@@ -184,6 +186,7 @@ impl CacheFile {
     pub async fn read(&self, offset: u64, len: usize) -> Result<DioBuffer> {
         utils::debug_assert_aligned(self.core.block_size, len);
         let core = self.core.clone();
+        println!("storage::hummock::file_cache::file.rs FileCache read ===========");
 
         let span = tracing::trace_span!("read_exact_at", sid = tracing::field::Empty);
 
@@ -207,6 +210,8 @@ impl CacheFile {
     pub fn punch_hole(&self, offset: u64, len: usize) -> Result<()> {
         utils::debug_assert_aligned(self.core.block_size as u64, offset);
         utils::debug_assert_aligned(self.core.block_size, len);
+        println!("storage::hummock::file_cache::file.rs FileCache punch_hole ===========");
+
         fallocate(
             self.fd(),
             FallocateFlags::FALLOC_FL_PUNCH_HOLE | FallocateFlags::FALLOC_FL_KEEP_SIZE,

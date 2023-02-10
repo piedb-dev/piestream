@@ -103,6 +103,8 @@ where
 {
     pub fn open(path: impl AsRef<Path>, fallocate_unit: usize) -> Result<Self> {
         let mut oopts = OpenOptions::new();
+        println!("storage::hummock::file_cache::meta.rs MetaCFile open ===========");
+
         oopts.create(true);
         oopts.write(true);
         oopts.read(true);
@@ -164,6 +166,8 @@ where
         if self.free.is_empty() {
             self.grow()?;
         }
+        println!("storage::hummock::file_cache::meta.rs MetaCFile insert ===========");
+
         let slot = self.free.pop_front().unwrap();
 
         let mut cursor = Self::slot_info_len() * slot;
@@ -175,6 +179,8 @@ where
     }
 
     pub fn free(&mut self, slot: SlotId) -> Option<BlockLoc> {
+        println!("storage::hummock::file_cache::meta.rs MetaCFile free ===========");
+
         debug_assert!(
             (slot + 1) * Self::slot_info_len() <= self.size,
             "slot: {}, offset: {}, size: {}",
@@ -198,6 +204,8 @@ where
     }
 
     pub fn get(&self, slot: SlotId) -> Option<(BlockLoc, K)> {
+        println!("storage::hummock::file_cache::meta.rs MetaCFile get ===========");
+
         debug_assert!(
             (slot + 1) * Self::slot_info_len() <= self.size,
             "slot: {}, offset: {}, size: {}",
@@ -245,6 +253,7 @@ where
     fn grow(&mut self) -> Result<()> {
         let old_size = self.size;
         let new_size = old_size + self.fallocate_unit;
+        println!("storage::hummock::file_cache::meta.rs MetaCFile grow ===========");
 
         fallocate(
             self.fd,

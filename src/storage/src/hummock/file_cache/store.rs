@@ -83,6 +83,8 @@ where
 
     #[allow(clippy::uninit_vec)]
     pub fn append(&mut self, key: K, value: &V) {
+        println!("storage::hummock::file_cache::store.rs StoreBatchWriter append ===========");
+
         let offset = self.buffer.len();
         let len = value.encoded_len();
         let bloc = BlockLoc {
@@ -114,6 +116,7 @@ where
     #[tracing::instrument(skip(self))]
     pub async fn finish(mut self) -> Result<(Vec<K>, Vec<SlotId>)> {
         // First free slots during last batch.
+        println!("storage::hummock::file_cache::store.rs StoreBatchWriter finish ===========");
 
         let mut freelist = Vec::with_capacity(FREELIST_DEFAULT_CAPACITY);
         std::mem::swap(&mut *self.store.freelist.write(), &mut freelist);
@@ -213,6 +216,7 @@ where
         if !PathBuf::from(options.dir.as_str()).exists() {
             std::fs::create_dir_all(options.dir.as_str())?;
         }
+        println!("storage::hummock::file_cache::store.rs Store open ===========");
 
         // Get file system type and block size by `statfs(2)`.
         let fs_stat = statfs(options.dir.as_str())?;
@@ -234,7 +238,7 @@ where
             PathBuf::from(&options.dir).join(META_FILE_FILENAME),
             options.cache_meta_fallocate_unit,
         )?;
-
+        println!("storage::hummock::file_cache::store.rs     open ================");
         let cf = CacheFile::open(
             PathBuf::from(&options.dir).join(CACHE_FILE_FILENAME),
             cf_opts,
@@ -295,6 +299,8 @@ where
         indices: &Arc<LruCache<K, SlotId>>,
         hash_builder: &S,
     ) -> Result<()> {
+        println!("storage::hummock::file_cache::store.rs Store restore ===========");
+
         let slots = self.meta_file.read().await.slots();
 
         for slot in 0..slots {
@@ -320,6 +326,8 @@ where
     #[tracing::instrument(skip(self))]
     pub async fn get(&self, slot: SlotId) -> Result<Vec<u8>> {
         // Read guard should be held during reading meta and loading data.
+        println!("storage::hummock::file_cache::store.rs Store get ===========");
+
         let guard = self
             .meta_file
             .read()

@@ -78,6 +78,7 @@ where
             for hook in &self.hooks {
                 hook.pre_flush().await?;
             }
+            println!("storage::hummock::file_cache::cache.rs BufferFlusher run ===========");
 
             let frozen = self.buffer.frozen();
 
@@ -236,6 +237,7 @@ where
 
     pub fn insert(&self, key: K, value: V) -> Result<()> {
         let timer = self.metrics.insert_latency.start_timer();
+        println!("storage::hummock::file_cache::cache.rs FileCache insert ===========");
 
         let hash = self.hash_builder.hash_one(&key);
         self.buffer.insert(hash, key, value.len(), value);
@@ -250,6 +252,7 @@ where
     #[tracing::instrument(skip(self))]
     pub async fn get(&self, key: &K) -> Result<Option<TieredCacheEntryHolder<K, V>>> {
         let timer = self.metrics.get_latency.start_timer();
+        println!("storage::hummock::file_cache::cache.rs FileCache get ===========");
 
         let hash = self.hash_builder.hash_one(key);
         if let Some(holder) = self.buffer.get(hash, key) {
@@ -275,6 +278,7 @@ where
 
     pub fn erase(&self, key: &K) -> Result<()> {
         let timer = self.metrics.erase_latency.start_timer();
+        println!("storage::hummock::file_cache::cache.rs FileCache erase ===========");
 
         let hash = self.hash_builder.hash_one(key);
         self.buffer.erase(hash, key);

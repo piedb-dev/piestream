@@ -81,11 +81,14 @@ where
 
     pub fn insert(&self, hash: u64, key: K, charge: usize, value: V) {
         let core = self.core.read();
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer insert ===========");
         core.active_buffer.insert(key, hash, charge, value);
     }
 
     pub fn get(&self, hash: u64, key: &K) -> Option<TieredCacheEntryHolder<K, V>> {
         let core = self.core.read();
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer get ===========");
+
         if let Some(entry) = core.active_buffer.lookup(hash, key) {
             return Some(TieredCacheEntryHolder::from_cached_value(entry));
         }
@@ -97,23 +100,30 @@ where
 
     pub fn erase(&self, hash: u64, key: &K) {
         let core = self.core.read();
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer erase ===========");
         core.active_buffer.erase(hash, key);
         core.frozen_buffer.erase(hash, key);
     }
 
     pub fn active(&self) -> Buffer<K, V> {
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer active ===========");
+
         self.core.read().active_buffer.clone()
     }
 
     pub fn frozen(&self) -> Buffer<K, V> {
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer fronzen ===========");
         self.core.read().frozen_buffer.clone()
     }
 
     pub fn swap(&self) {
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer swap ===========");
         self.core.write().swap();
     }
 
     pub fn rotate(&self) -> Buffer<K, V> {
+        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer rotate ===========");
+
         let mut buffer = Arc::new(LruCache::new(LRU_SHARD_BITS, self.capacity));
         let mut core = self.core.write();
         std::mem::swap(&mut buffer, &mut core.active_buffer);
