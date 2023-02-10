@@ -44,6 +44,8 @@ pub async fn validate_ssts(task: ValidationTask, sstable_store: SstableStoreRef)
             worker_id,
             task.epoch
         );
+        // println!("hummock::validator.rs validate_ssts 8888888888888888888888888888888888888888");
+
         let holder = match sstable_store.sstable(&sst, unused.borrow_mut()).await {
             Ok(holder) => holder,
             Err(err) => {

@@ -762,7 +762,7 @@ pub fn estimate_memory_use_for_compaction(task: &CompactTask) -> u64 {
 }
 
 fn build_multi_compaction_filter(compact_task: &CompactTask) -> MultiCompactionFilter {
-    println!("============================== build_multi_compaction_filter");
+    // println!("============================== build_multi_compaction_filter");
     use piestream_common::catalog::TableOption;
     let mut multi_filter = MultiCompactionFilter::default();
     let compaction_filter_flag =
@@ -813,6 +813,8 @@ async fn generate_splits(compact_task: &mut CompactTask, context: Arc<Context>) 
     let sstable_size = (context.options.sstable_size_mb as u64) << 20;
     if compaction_size > sstable_size * 2 {
         let mut indexes = vec![];
+        // println!("hummock::compactor::mod.rs generate_splits 8888888888888888888888888888888888888888");
+
         // preload the meta and get the smallest key to split sub_compaction
         for sstable_info in sstable_infos {
             indexes.extend(

@@ -125,7 +125,7 @@ pub async fn handle_create_mv(
         }
 
         let (plan, table) = gen_create_mv_plan(&session, context.into(), query, name)?;
-        println!("frontend::handler::create_mv.rs ========= {:?}",&plan);
+        // println!("frontend::handler::create_mv.rs ========= {:?}",&plan);
         let graph = build_graph(plan);
 
         (table, graph)

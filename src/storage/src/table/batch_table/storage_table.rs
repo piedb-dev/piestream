@@ -178,7 +178,7 @@ impl<S: StateStore> StorageTable<S> {
             .map(|i| table_columns[*i].data_type.clone())
             .collect();
         let all_data_types = table_columns.iter().map(|d| d.data_type.clone()).collect();
-        println!("storage::table::batch_table::storage_table.rs ============= order_types = {:?}",&order_types);
+        // println!("storage::table::batch_table::storage_table.rs ============= order_types = {:?}",&order_types);
         let pk_serializer = OrderedRowSerde::new(pk_data_types, order_types);
         // println!("storage::table::batch_table::storage_table.rs ============= pk_serializer = {:?}",&pk_serializer);
 
@@ -438,7 +438,7 @@ impl<S: StateStore> StorageTable<S> {
             next_col_bounds.end_bound(),
             false,
         );
-        println!("batch_table::storage_table.rs ====== start_key={:?},end_key={:?}",&start_key,&end_key);
+        // println!("batch_table::storage_table.rs ====== start_key={:?},end_key={:?}",&start_key,&end_key);
         assert!(pk_prefix.size() <= self.pk_indices.len());
         let pk_prefix_indices = (0..pk_prefix.size())
             .into_iter()
@@ -490,7 +490,7 @@ impl<S: StateStore> StorageTable<S> {
         pk_prefix: &Row,
         next_col_bounds: impl RangeBounds<Datum>,
     ) -> StorageResult<StorageTableIter<S>> {
-        println!("storage::table::batch_table::storage_table.rs  batch_iter_with_pk_bounds ====== epoch = {:?},pk_prefix = {:?}",&epoch,&pk_prefix);
+        // println!("storage::table::batch_table::storage_table.rs  batch_iter_with_pk_bounds ====== epoch = {:?},pk_prefix = {:?}",&epoch,&pk_prefix);
         self.iter_with_pk_bounds(epoch, pk_prefix, next_col_bounds, true)
             .await
     }

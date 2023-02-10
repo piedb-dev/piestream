@@ -109,6 +109,7 @@ impl StateStoreImpl {
     ) -> StorageResult<Self> {
         #[cfg(not(target_os = "linux"))]
         let tiered_cache = TieredCache::none();
+        println!("storage::store_impl.rs StateStoreImpl::new() cfg(not(target_os = linux))=====================");
 
         #[cfg(target_os = "linux")]
         let tiered_cache = if file_cache_dir.is_empty() {
@@ -116,7 +117,7 @@ impl StateStoreImpl {
         } else {
             use crate::hummock::file_cache::cache::FileCacheOptions;
             use crate::hummock::HummockError;
-
+            println!("storage::store_impl.rs StateStoreImpl::new()=====================");
             let options = FileCacheOptions {
                 dir: file_cache_dir.to_string(),
                 capacity: config.file_cache.capacity_mb * 1024 * 1024,

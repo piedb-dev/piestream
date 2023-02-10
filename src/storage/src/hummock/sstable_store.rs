@@ -340,7 +340,7 @@ impl SstableStore {
                 let meta_path = self.get_sst_data_path(sst_id);
                 stats.cache_meta_block_miss += 1;
                 let stats_ptr = stats.remote_io_time.clone();
-                println!("hummock::sstable_store.rs =============== sst.file_size = {:?},sst.meta_offset = {:?}",&sst.file_size,&sst.meta_offset);
+                // println!("hummock::sstable_store.rs =============== sst.file_size = {:?},sst.meta_offset = {:?}",&sst.file_size,&sst.meta_offset);
 
                 let loc = BlockLocation {
                     offset: sst.meta_offset as usize,
@@ -353,7 +353,7 @@ impl SstableStore {
                         .read(&meta_path, Some(loc))
                         .await
                         .map_err(HummockError::object_io_error)?;
-                    println!("hummock::sstable_store.rs =============== buf.len = {:?}, meta_path = {:?} ,loc = {:?}",&buf.len(),&meta_path,&loc);
+                    // println!("hummock::sstable_store.rs =============== buf.len = {:?}, meta_path = {:?} ,loc = {:?}",&buf.len(),&meta_path,&loc);
                     let meta = SstableMeta::decode(&mut &buf[..])?;
                     let sst = Sstable::new(sst_id, meta);
                     let charge = sst.meta.encoded_size();
@@ -709,6 +709,8 @@ mod tests {
         meta: SstableMeta,
         x_range: Range<usize>,
     ) {
+        // println!("hummock::sstable_store.rs validate_sst 8888888888888888888888888888888888888888");
+
         let mut stats = StoreLocalStatistic::default();
         let holder = sstable_store.sstable(info, &mut stats).await.unwrap();
         assert_eq!(holder.value().meta, meta);

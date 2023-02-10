@@ -557,9 +557,9 @@ impl S3ObjectStore {
                 None,
             ));
         let config = builder.build();
-        println!("object_store::object::s3.rs ================== {:?}",&config.timeout_config().cloned().unwrap_or_default());
+        // println!("object_store::object::s3.rs ================== {:?}",&config.timeout_config().cloned().unwrap_or_default());
         let client = Client::from_conf(config);
-        println!("object_store::object::s3.rs client ================== {:?}",&client);
+        // println!("object_store::object::s3.rs client ================== {:?}",&client);
 
         Self {
             client,

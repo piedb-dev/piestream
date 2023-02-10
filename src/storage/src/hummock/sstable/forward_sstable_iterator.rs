@@ -326,6 +326,7 @@ mod tests {
         .await;
 
         let mut stats = StoreLocalStatistic::default();
+
         let mut sstable_iter = SstableIterator::create(
             sstable_store
                 .sstable(&table.get_sstable_info(), &mut stats)

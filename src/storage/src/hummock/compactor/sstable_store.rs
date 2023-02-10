@@ -45,6 +45,7 @@ impl CompactorSstableStore {
         sst: &SstableInfo,
         stats: &mut StoreLocalStatistic,
     ) -> HummockResult<TableHolder> {
+        // println!("hummock::compactor::sstable_store.rs sstable 8888888888888888888888888888888888888888");
         self.sstable_store.sstable(sst, stats).await
     }
 

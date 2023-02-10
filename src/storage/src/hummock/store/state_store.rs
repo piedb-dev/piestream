@@ -200,6 +200,7 @@ impl HummockStorageCore {
 
         for local_sst in staging_sst {
             table_counts += 1;
+            // println!("hummock::state_store.rs get_inner staging_sst 1111111111111111111111111111");
 
             if let Some(data) = get_from_sstable_info(
                 self.sstable_store.clone(),
@@ -225,6 +226,8 @@ impl HummockStorageCore {
                     let sstable_infos = prune_ssts(level.table_infos.iter(), &(key..=key));
                     for sstable_info in sstable_infos {
                         table_counts += 1;
+                        // println!("hummock::state_store.rs get_innder committed_version.levels 1111111111111111111111111111");
+
                         if let Some(v) = get_from_sstable_info(
                             self.sstable_store.clone(),
                             sstable_info,
@@ -264,6 +267,8 @@ impl HummockStorageCore {
                     }
 
                     table_counts += 1;
+                    // println!("hummock::state_store.rs get_inner LevelType::Nonoverlapping 1111111111111111111111111111");
+
                     if let Some(v) = get_from_sstable_info(
                         self.sstable_store.clone(),
                         &level.table_infos[table_info_idx],
@@ -325,10 +330,11 @@ impl HummockStorageCore {
             /// 
             let table_infos = prune_ssts(v.iter(), &key_range);
             if table_infos.is_empty() {
-                println!("hummock::store::state_store.rs ============== table_infos.is_empty");
+                // println!("hummock::store::state_store.rs ============== table_infos.is_empty");
                 continue;
             }
-            
+            // println!("hummock::store::state_store.rs iter_inner 8888888888888888888888888888888888888888");
+
             let table_holder = self
                 .sstable_store
                 .sstable(&sstable_info, &mut local_stats)
@@ -359,7 +365,7 @@ impl HummockStorageCore {
         for level in committed.levels(compaction_group_id) {
             let table_infos = prune_ssts(level.table_infos.iter(), &key_range);
             if table_infos.is_empty() {
-                println!("hummock::store::state_store.rs ============== table_infos.is_empty");
+                // println!("hummock::store::state_store.rs ============== table_infos.is_empty");
                 continue;
             }
 
@@ -405,7 +411,9 @@ impl HummockStorageCore {
             } else {
                 // Overlapping
                 let mut iters = Vec::new();
+
                 for table_info in table_infos.into_iter().rev() {
+                    // println!("hummock::store::state_store.rs iter_inner2 8888888888888888888888888888888888888888");
                     let sstable = self
                         .sstable_store
                         .sstable(table_info, &mut local_stats)

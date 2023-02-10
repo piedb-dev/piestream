@@ -105,7 +105,7 @@ pub async fn compute_node_serve(
     ));
 
     let mut join_handle_vec = vec![];
-
+    println!("compute::server.rs  compute_node_serve =====================");
     let state_store = StateStoreImpl::new(
         &opts.state_store,
         &opts.file_cache_dir,

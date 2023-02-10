@@ -322,7 +322,7 @@ fn main() -> Result<()> {
     }
 
     println!("Configuration saved at {}", file_path);
-    println!("=========================");
+    // println!("=========================");
 
     let mut file = BufWriter::new(
         OpenOptions::new()

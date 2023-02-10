@@ -94,6 +94,9 @@ impl HummockStorage {
         B: AsRef<[u8]> + Send,
         T: HummockIteratorType,
     {
+
+        // println!("hummock::state_store.rs HummockStorage:iter_inner 8888888888888888888888888888888888888888");
+
         let epoch = read_options.epoch;
         let table_id = read_options.table_id;
         let compaction_group_id = self
@@ -346,6 +349,8 @@ impl HummockStorage {
                     // println!("state_store.rs get sstable_infos = ");
                     for sstable_info in sstable_infos {
                         table_counts += 1;
+                        // println!("hummock::state_store.rs get Overlapping 1111111111111111111111111111");
+
                         if let Some(v) = get_from_sstable_info(
                             self.sstable_store.clone(),
                             sstable_info,
@@ -384,6 +389,8 @@ impl HummockStorage {
                     }
 
                     table_counts += 1;
+                    // println!("hummock::state_store.rs get Nonoverlapping 1111111111111111111111111111");
+
                     if let Some(v) = get_from_sstable_info(
                         self.sstable_store.clone(),
                         &level.table_infos[table_info_idx],
@@ -453,7 +460,7 @@ impl StateStore for HummockStorage {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
-        println!("storage::hummock::state_store.rs ====== scan");
+        // println!("storage::hummock::state_store.rs ====== scan");
         async move {
             self.iter(prefix_hint, key_range, read_options)
                 .await?
@@ -472,7 +479,7 @@ impl StateStore for HummockStorage {
         R: RangeBounds<B> + Send,
         B: AsRef<[u8]> + Send,
     {
-        println!("storage::hummock::state_store.rs ====== backward_scan");
+        // println!("storage::hummock::state_store.rs ====== backward_scan");
         async move {
             self.backward_iter(key_range, read_options)
                 .await?

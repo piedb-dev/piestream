@@ -68,6 +68,8 @@ impl<TI: SstableIteratorType> ConcatIteratorInner<TI> {
                 old_iter.collect_local_statistic(&mut self.stats);
             }
         } else {
+            // println!("hummock::iterator::concat_inner.rs seek_idx 8888888888888888888888888888888888888888");
+
             let table = self
                 .sstable_store
                 .sstable(&self.tables[idx], &mut self.stats)

@@ -136,6 +136,7 @@ pub(crate) async fn build_ordered_merge_iter<T: HummockIteratorType>(
                     ));
                 }
                 UncommittedData::Sst((_, table_info)) => {
+                    // println!("hummock::shared_buffer::mod.rs build_ordered_merge_iter 8888888888888888888888888888888888888888");
                     let table = sstable_store.sstable(table_info, local_stats).await?;
                     data_iters.push(UncommittedDataIteratorType::Second(
                         T::SstableIteratorType::create(

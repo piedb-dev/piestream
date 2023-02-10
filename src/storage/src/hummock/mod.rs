@@ -275,6 +275,7 @@ pub async fn get_from_sstable_info(
     check_bloom_filter: bool,
     local_stats: &mut StoreLocalStatistic,
 ) -> HummockResult<Option<HummockValue<Bytes>>> {
+    // println!("hummock::mod.rs get_from_sstable_info 8888888888888888888888888888888888888888");
     let sstable = sstable_store_ref.sstable(sstable_info, local_stats).await?;
 
     let ukey = user_key(internal_key);
@@ -344,6 +345,7 @@ pub async fn get_from_order_sorted_uncommitted_data(
 
                 UncommittedData::Sst((_, sstable_info)) => {
                     table_counts += 1;
+                    // println!("hummock::mod.rs get_from_order_sorted_uncommitted_data 1111111111111111111111111111");
                     // println!("storage::hummock::mod.rs get from order sorted_uncommitted sstable_info = {:?}",&sstable_info);
                     if let Some(data) = get_from_sstable_info(
                         sstable_store_ref.clone(),

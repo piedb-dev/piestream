@@ -142,7 +142,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
         let table_id = TableId {
             table_id: table_desc.table_id,
         };
-        println!("batch::executor::row_sql_scan.rs ======= table_desc = {:?}",&table_desc);
+        // println!("batch::executor::row_sql_scan.rs ======= table_desc = {:?}",&table_desc);
 
         let column_descs = table_desc
             .columns
@@ -172,7 +172,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 OrderType::from_prost(&ProstOrderType::from_i32(order.order_type).unwrap())
             })
             .collect();
-        println!("batch::executor::row_sql_scan.rs ======= order_types = {:?}",&order_types);
+        // println!("batch::executor::row_sql_scan.rs ======= order_types = {:?}",&order_types);
 
         let pk_indices = table_desc.pk.iter().map(|k| k.index as usize).collect_vec();
         // println!("batch::executor::row_sql_scan.rs ======= pk_indices = {:?}",&pk_indices);
@@ -220,7 +220,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
             );
 
             if seq_scan_node.scan_ranges.is_empty() {
-                println!("batch::executor::row_seq_scan.rs =======================");
+                // println!("batch::executor::row_seq_scan.rs =======================");
                 let iter = table
                     .batch_iter(HummockReadEpoch::Committed(source.epoch))
                     .await?;
@@ -238,16 +238,16 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                 let scan_type = async {
                     let pk_types = pk_types.clone();
                     let mut table = table.clone();
-                    println!("batch::executor::row_seq_scan.rs scan_range ======== ");
+                    // println!("batch::executor::row_seq_scan.rs scan_range ======== ");
 
                     let (pk_prefix_value, next_col_bounds) =
                         get_scan_bound(scan_range.clone(), pk_types.into_iter());
-                    println!("batch::executor::row_seq_scan.rs pk_prefix_value ======== {:?}",&pk_prefix_value);
+                    // println!("batch::executor::row_seq_scan.rs pk_prefix_value ======== {:?}",&pk_prefix_value);
                     let scan_type =
                         if pk_prefix_value.size() == 0 && is_full_range(&next_col_bounds) {
                             unreachable!()
                         } else if pk_prefix_value.size() == pk_len {
-                            println!("executor::row_seq_scan.rs ========= ScanType::PointGet");
+                            // println!("executor::row_seq_scan.rs ========= ScanType::PointGet");
                             let row = {
                                 table
                                     .get_row(
@@ -259,7 +259,7 @@ impl BoxedExecutorBuilder for RowSeqScanExecutorBuilder {
                             ScanType::PointGet(row)
                         } else {
                             assert!(pk_prefix_value.size() < pk_len);
-                            println!("executor::row_seq_scan.rs ========= ScanType::BatchScan");
+                            // println!("executor::row_seq_scan.rs ========= ScanType::BatchScan");
                             let iter = table
                                 .batch_iter_with_pk_bounds(
                                     HummockReadEpoch::Committed(source.epoch),
@@ -345,7 +345,7 @@ impl<S: StateStore> RowSeqScanExecutor<S> {
     ) {
         match scan_type {
             ScanType::BatchScan(iter) => {
-                println!("do_execute ============= BatchScan");
+                // println!("do_execute ============= BatchScan");
                 pin_mut!(iter);
                 loop {
                     // let timer = stats.row_seq_scan_next_duration.start_timer();
