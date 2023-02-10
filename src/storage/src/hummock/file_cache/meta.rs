@@ -204,7 +204,7 @@ where
     }
 
     pub fn get(&self, slot: SlotId) -> Option<(BlockLoc, K)> {
-        println!("storage::hummock::file_cache::meta.rs MetaCFile get ===========");
+        // println!("storage::hummock::file_cache::meta.rs MetaCFile get ===========");
 
         debug_assert!(
             (slot + 1) * Self::slot_info_len() <= self.size,
