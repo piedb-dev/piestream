@@ -211,7 +211,7 @@ where
             TieredCache::NoneCache(_) => Ok(None),
             #[cfg(target_os = "linux")]
             TieredCache::FileCache(file_cache) => {
-                println!("storage::hummock::tiered_cache.rs  TieredCache get =============");
+                // println!("storage::hummock::tiered_cache.rs  TieredCache get =============");
                 let holder = file_cache.get(key).await?;
                 Ok(holder)
             }
