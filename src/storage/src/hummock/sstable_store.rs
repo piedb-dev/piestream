@@ -229,11 +229,11 @@ impl SstableStore {
                 size: block_meta.len as usize,
             };
             let data_path = self.get_sst_data_path(sst.id);
-            println!("storage::hummock::sstable_store.rs ===== data_path = {:?},block_index = {:?}",&data_path,&block_index);
+            // println!("storage::hummock::sstable_store.rs ===== data_path = {:?},block_index = {:?}",&data_path,&block_index);
             let store = self.store.clone();
             let sst_id = sst.id;
             let use_tiered_cache = !matches!(policy, CachePolicy::Disable);
-            println!("hummock::sstable_store   use_tiered_cache =  {:?}",&use_tiered_cache);
+            // println!("hummock::sstable_store   use_tiered_cache =  {:?}",&use_tiered_cache);
             let uncompressed_capacity = block_meta.uncompressed_size as usize;
 
             async move {

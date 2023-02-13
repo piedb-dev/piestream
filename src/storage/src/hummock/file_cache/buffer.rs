@@ -87,7 +87,7 @@ where
 
     pub fn get(&self, hash: u64, key: &K) -> Option<TieredCacheEntryHolder<K, V>> {
         let core = self.core.read();
-        println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer get ===========");
+        // println!("storage::hummock::file_cache::buffer.rs TwoLevelBuffer get ===========");
 
         if let Some(entry) = core.active_buffer.lookup(hash, key) {
             return Some(TieredCacheEntryHolder::from_cached_value(entry));

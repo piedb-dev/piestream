@@ -252,7 +252,7 @@ where
     #[tracing::instrument(skip(self))]
     pub async fn get(&self, key: &K) -> Result<Option<TieredCacheEntryHolder<K, V>>> {
         let timer = self.metrics.get_latency.start_timer();
-        println!("storage::hummock::file_cache::cache.rs FileCache get ===========");
+        // println!("storage::hummock::file_cache::cache.rs FileCache get ===========");
 
         let hash = self.hash_builder.hash_one(key);
         if let Some(holder) = self.buffer.get(hash, key) {
