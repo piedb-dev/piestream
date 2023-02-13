@@ -173,12 +173,14 @@ where
         options: file_cache::cache::FileCacheOptions,
         metrics: file_cache::metrics::FileCacheMetricsRef,
     ) -> Result<Self> {
+        println!("storage::hummock::tiered_cache.rs  TieredCache open ===========");
         let cache = file_cache::cache::FileCache::open(options, metrics).await?;
         Ok(Self::FileCache(cache))
     }
 
     #[allow(unused_variables)]
     pub fn insert(&self, key: K, value: V) -> Result<()> {
+        println!("storage::hummock::tiered_cache.rs  TieredCache insert ===========");
         match self {
             TieredCache::NoneCache(_) => Ok(()),
             #[cfg(target_os = "linux")]
@@ -191,6 +193,8 @@ where
 
     #[allow(unused_variables)]
     pub fn erase(&self, key: &K) -> Result<()> {
+        println!("storage::hummock::tiered_cache.rs  TieredCache erase ===========");
+
         match self {
             TieredCache::NoneCache(_) => Ok(()),
             #[cfg(target_os = "linux")]
