@@ -315,11 +315,11 @@ mod default {
     }
 
     pub fn block_cache_capacity_mb() -> usize {
-        256
+        6072
     }
 
     pub fn meta_cache_capacity_mb() -> usize {
-        64
+        2024
     }
 
     pub fn disable_remote_compactor() -> bool {
