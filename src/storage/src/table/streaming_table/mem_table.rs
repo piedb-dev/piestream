@@ -81,6 +81,10 @@ impl MemTable {
                     e.insert(RowOp::Update((old_val, value)));
                     Ok(())
                 }
+                RowOp::Insert(_) => {
+                    e.insert(RowOp::Insert(value));
+                    Ok(())
+                }
                 _ => Err(MemTableError::Conflict {
                     key: e.key().clone(),
                     prev: e.get().clone(),
