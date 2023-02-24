@@ -29,7 +29,9 @@ use crate::scheduler::plan_fragmenter::QueryId;
 use crate::scheduler::{SchedulerError, SchedulerResult};
 
 const MAX_WAIT_EPOCH_REQUEST_NUM: usize = 4096;
-const UNPIN_INTERVAL_SECS: u64 = 10;
+// const UNPIN_INTERVAL_SECS: u64 = 10;
+const UNPIN_INTERVAL_SECS: u64 = 60;
+
 
 /// Cache of hummock snapshot in meta.
 pub struct HummockSnapshotManager {
