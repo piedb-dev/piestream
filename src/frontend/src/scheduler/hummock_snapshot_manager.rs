@@ -30,7 +30,7 @@ use crate::scheduler::{SchedulerError, SchedulerResult};
 
 const MAX_WAIT_EPOCH_REQUEST_NUM: usize = 4096;
 // const UNPIN_INTERVAL_SECS: u64 = 10;
-const UNPIN_INTERVAL_SECS: u64 = 60;
+const UNPIN_INTERVAL_SECS: u64 = 120;
 
 
 /// Cache of hummock snapshot in meta.
