@@ -33,15 +33,9 @@ fn test_roundtrip(c: CodecType, datatype: DataType, data: &[u8], uncompress_size
     debug!("test_roundtrip: \n\t codectype {:?} \n\t data {:?} \n\t uncompress_size {:?}", 
                 c, data, uncompress_size);
 
-    let mut psc1 = PiestreamCompression::new();
-    psc1.set_codec(c);
-    psc1.set_datatype(datatype.clone());
-    // psc1.set_level(level);
+    let mut psc1 = PiestreamCompression::new(c, datatype.clone(), 8);
 
-    let mut psc2 = PiestreamCompression::new();
-    psc2.set_codec(c);
-    psc2.set_datatype(datatype.clone());
-    // psc2.set_level(level);
+    let mut psc2 = PiestreamCompression::new(c, datatype.clone(), 8);
 
     // Compress with c1
     let mut compressed = Vec::new();

@@ -32,22 +32,31 @@
 
 use piestream_common::types::DataType;
 use crate::basic::Compression as CodecType;
-use crate::compression::{create_codec, CodecOptionsBuilder};
+use crate::compression::{Codec, create_codec, CodecOptionsBuilder};
 use crate::errors::{ParquetError, Result};
 
 pub struct PiestreamCompression {
     codectype : CodecType,
     level : usize,
     datatype : DataType,
+    codec: Box<dyn Codec>,
 }
 
 impl PiestreamCompression {
 
-    pub fn new() -> Self {
+    pub fn new(c: CodecType, dt: DataType, level: usize) -> Self {
+        let codec_options = CodecOptionsBuilder::default()
+            .set_backward_compatible_lz4(false)
+            .set_type_value(dt.type_to_index())  // this only affects q-compression
+            .set_compression_level(level)
+            .build();
+        let cdc = create_codec(c, &codec_options).unwrap().unwrap();
+
         Self {
-            codectype : CodecType::QCOM,
-            level : 8usize,
-            datatype: DataType::Int16,
+            codectype : c,
+            level : level,
+            datatype: dt,
+            codec: cdc,
         }
     }
 
@@ -64,18 +73,11 @@ impl PiestreamCompression {
     }
 
     pub fn compress(
-        &self, 
+        &mut self, 
         input: &[u8], 
         output: &mut Vec<u8>) -> Result<()>
     {
         if input.len() == 0 { return Ok(()); }
-
-        let codec_options = CodecOptionsBuilder::default()
-            .set_backward_compatible_lz4(false)
-            .set_type_value(self.datatype.type_to_index())  // this only affects q-compression
-            .set_compression_level(self.level)
-            .build();
-        let mut codec = create_codec(self.codectype, &codec_options).unwrap().unwrap();
 
         match self.datatype {
             DataType::Int16 
@@ -84,7 +86,7 @@ impl PiestreamCompression {
             | DataType::Float32 
             | DataType::Float64 => {
 
-                codec.compress(input, output)
+                self.codec.compress(input, output)
 
             },
 
@@ -110,19 +112,12 @@ impl PiestreamCompression {
     }
 
     pub fn decompress(
-        &self, 
+        &mut self, 
         input: &[u8], 
         output: &mut Vec<u8>,
         uncompress_size: Option<usize>) -> Result<usize> 
     {
         if input.len() == 0 { return Ok(0); }
-
-        let codec_options = CodecOptionsBuilder::default()
-            .set_backward_compatible_lz4(false)
-            .set_type_value(self.datatype.type_to_index())  // this only affects q-compression
-            .set_compression_level(self.level)
-            .build();
-        let mut codec = create_codec(self.codectype, &codec_options).unwrap().unwrap();
 
         match self.datatype {
             DataType::Int16 
@@ -131,7 +126,7 @@ impl PiestreamCompression {
             | DataType::Float32 
             | DataType::Float64 => {
 
-                codec.decompress(input, output, uncompress_size)
+                self.codec.decompress(input, output, uncompress_size)
 
             },
 
