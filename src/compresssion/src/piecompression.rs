@@ -60,18 +60,6 @@ impl PiestreamCompression {
         }
     }
 
-    pub fn set_codec(&mut self, c: CodecType) {
-        self.codectype = c;
-    }
-
-    pub fn set_level(&mut self, level: usize) {
-        self.level = level;
-    }
-
-    pub fn set_datatype(&mut self, dt: DataType) {
-        self.datatype = dt;
-    }
-
     pub fn compress(
         &mut self, 
         input: &[u8], 
