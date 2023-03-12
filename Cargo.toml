@@ -42,6 +42,7 @@ members = [
   "src/utils/runtime",
   "src/utils/sync-point",
   "src/utils/workspace-config",
+  "src/compresssion",
   "src/workspace-hack",
 ]
 
