@@ -696,6 +696,181 @@ mod qcom_codec {
                 datatype: dt.clone(), 
             }
         }
+
+        //
+        // piestream uses RustDecimal: {flags: u32, hi: u32, lo: u32, mid: u32}
+        // RustDecimal: 16 bytes, 4 x u32
+        // see src/common/src/types/decimal.rs :: Decimal
+        //
+        // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
+        //
+        // 1. treat all u32 as in the same series
+        fn compress_decimal_single_field(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
+            let len_decimal = self.datatype.data_type_len();
+            if input_buf.len() % len_decimal != 0 {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 to convert into Decimal: input len {:?}, decimal len {:?} type {:?}", 
+                    input_buf.len(), len_decimal, self.datatype).into(),
+                ));
+            }
+
+            // step 1: convert to u32
+            let num_u32 = 4 * input_buf.len() / len_decimal;
+            let mut vec_u32 = Vec::new();
+            vec_u32.resize(num_u32, 0u32);
+            BigEndian::read_u32_into(input_buf, &mut vec_u32);
+
+            // step 2: compress all u32
+            output_buf.append( &mut auto_compress::<u32>(& vec_u32, self.compression_level) );
+
+            Ok(())
+        }
+        // 2. treat u32 in different fields as in the different series
+        fn compress_decimal_separate_fields(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
+            let len_decimal = self.datatype.data_type_len();
+            if input_buf.len() % len_decimal != 0 {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 to convert into Decimal: input len {:?}, decimal len {:?} type {:?}", 
+                    input_buf.len(), len_decimal, self.datatype).into(),
+                ));
+            }
+
+            // step 1: convert to u32
+            let num_u32 = 4 * input_buf.len() / len_decimal;
+            let mut vec_u32 = Vec::new();
+            vec_u32.resize(num_u32, 0u32);
+            BigEndian::read_u32_into(input_buf, &mut vec_u32);
+
+            // step 2: extract Decimal fields
+            let mut vec_flags = Vec::new();
+            let mut vec_hi = Vec::new();
+            let mut vec_lo = Vec::new();
+            let mut vec_mid = Vec::new();
+            for (i, x) in vec_u32.iter().enumerate() {
+                match i % 4 {
+                    0 => vec_flags.push(*x),
+                    1 => vec_hi.push(*x),
+                    2 => vec_lo.push(*x),
+                    3 => vec_mid.push(*x),
+                    _ => panic!("reached unreachable branch in match i%4"),
+                }
+            }
+
+            // step 2: compress into u8 array
+            let mut compressed_flags = auto_compress::<u32>(& vec_flags, self.compression_level);
+            let mut compressed_hi = auto_compress::<u32>(& vec_hi, self.compression_level);
+            let mut compressed_lo = auto_compress::<u32>(& vec_lo, self.compression_level);
+            let mut compressed_mid = auto_compress::<u32>(& vec_mid, self.compression_level);
+
+            // step 3: create header containing the offsets
+            let mut vec_u8_len : Vec<u8> = Vec::new();
+            let mut offset = 4 * std::mem::size_of::<u32>() as u32;
+
+            for i in 0..4 {
+                offset += match i {
+                    0 => 0,
+                    1 => compressed_flags.len() as u32,
+                    2 => compressed_hi.len() as u32,
+                    3 => compressed_lo.len() as u32,
+                    _ => panic!("reached unreachable branch in match i%4"),
+                };
+
+                vec_u8_len.clear();
+                vec_u8_len.resize(std::mem::size_of::<u32>(), 0u8);
+                BigEndian::write_u32_into(&vec![offset], &mut vec_u8_len);
+                output_buf.append(&mut vec_u8_len);
+            }
+
+            // step 4: append all compressed data for each field
+            output_buf.append(&mut compressed_flags);
+            output_buf.append(&mut compressed_hi);
+            output_buf.append(&mut compressed_lo);
+            output_buf.append(&mut compressed_mid);
+
+            Ok(())
+        }
+
+        // decompress decimal (all u32 are treated as in the same series)
+        fn decompress_decimal_single_field(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>, _uncompress_size: Option<usize>) -> Result<usize> {
+            let mut decompressed_u32 = auto_decompress::<u32>(input_buf).expect("failed to decompress");
+
+            BigEndian::write_u32_into(&decompressed_u32, output_buf);
+
+            Ok(output_buf.len())
+        }
+        // decompress decimal, treat u32 in different fields as in the different series
+        fn decompress_decimal_separate_fields(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>, _uncompress_size: Option<usize>) -> Result<usize> {
+            
+            let header_length = 4*std::mem::size_of::<u32>();
+
+            if input_buf.len() <= header_length {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 header to convert into Decimal: input len {:?}, header len {:?} type {:?}", 
+                    input_buf.len(), header_length, self.datatype).into(),
+                ));
+            }
+
+            // step 1: read offsets
+
+            let mut vec_u32_offsets : Vec<u32> = Vec::new();
+            vec_u32_offsets.resize(4, 0u32);
+
+            BigEndian::read_u32_into(&input_buf[0..header_length], &mut vec_u32_offsets);
+            
+            // step 2: decompress each field
+
+            let mut vec_flags = Vec::new();
+            let mut vec_hi = Vec::new();
+            let mut vec_lo = Vec::new();
+            let mut vec_mid = Vec::new();
+
+            for i in 0..4 {
+                let offset_begin = vec_u32_offsets[i] as usize;
+                let offset_end: usize = match i {
+                    0 | 1 | 2 => vec_u32_offsets[i+1] as usize,
+                    3 => input_buf.len(),
+                    _ => panic!("reached unreachable branch in match i%4"),
+                };
+                let mut vec_u32 = auto_decompress::<u32>(&input_buf[offset_begin..offset_end]).expect("failed to decompress");
+                match i {
+                    0 => vec_flags = vec_u32,
+                    1 => vec_hi = vec_u32,
+                    2 => vec_lo = vec_u32,
+                    3 => vec_mid = vec_u32,
+                    _ => panic!("reached unreachable branch in match i%4"),
+                }
+            }
+
+            let num_u32 = vec_flags.len();
+            if num_u32 != vec_hi.len() || vec_lo.len() != num_u32 || vec_mid.len() != num_u32 {
+                return Err(ParquetError::General(
+                    format!("decompress Decimal results in different dimensions in Decimal flags/hi/lo/mid: {:?} {:?} {:?} {:?} input len {:?}, header len {:?} type {:?}", 
+                    vec_flags.len(), vec_hi.len(), vec_lo.len(), vec_mid.len(), input_buf.len(), header_length, self.datatype).into(),
+                ));
+            }
+
+            // step 3 : generate u8 output
+            let mut vec_u8 : Vec<u8> = Vec::new();
+
+            for i in 0..num_u32 {
+                for j in 0..4 {
+                    let x = match j {
+                        0 => vec_flags[i],
+                        1 => vec_hi[i],
+                        2 => vec_lo[i],
+                        3 => vec_mid[i],
+                        _ => panic!("reached unreachable branch in match i%4"),
+                    };
+                    vec_u8.clear();
+                    vec_u8.resize(std::mem::size_of::<u32>(), 0u8);
+                    BigEndian::write_u32_into(&vec![x], &mut vec_u8);        
+                    output_buf.append(&mut vec_u8);
+                }
+            }
+
+            Ok(output_buf.len())
+        }
+
     }
 
     impl Codec for QcomCodec {
@@ -757,6 +932,16 @@ mod qcom_codec {
                     BigEndian::write_f64_into(&internal_output_buf, &mut output_buf[current_len..]);
                     Ok(output_buf.len())
                 },
+                DataType::Decimal => {
+                    //
+                    // piestream uses RustDecimal: {flags: u32, hi: u32, low: u32, mid: u32}
+                    // RustDecimal: 16 bytes, 4 x u32
+                    // see src/common/src/types/decimal.rs :: Decimal
+                    //
+                    // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
+                    //
+                    self.decompress_decimal_single_field(input_buf, output_buf, _uncompress_size)
+                },
                 _ => Err(ParquetError::General(
                     format!("QcomCodec decompress does not deal with this data type: {:?}", self.datatype).into(),
                 )),
@@ -764,6 +949,7 @@ mod qcom_codec {
             
         }
 
+        // general API for compression
         fn compress(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
             match self.datatype {
                 DataType::Int16 => {
@@ -807,6 +993,25 @@ mod qcom_codec {
                     output_buf.append( &mut auto_compress::<f64>(& internal_buf, self.compression_level) );
                     Ok(())
                 },
+                DataType::Decimal => {
+                    //
+                    // piestream uses RustDecimal: {flags: u32, hi: u32, low: u32, mid: u32}
+                    // RustDecimal: 16 bytes, 4 x u32
+                    // see src/common/src/types/decimal.rs :: Decimal
+                    //
+                    // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
+                    //
+                    self.compress_decimal_single_field(input_buf, output_buf)
+                },
+    
+                DataType::Date
+                | DataType::Timestamp
+                | DataType::Timestampz 
+                | DataType::Interval 
+                | DataType::Varchar => {
+                    Ok(())
+                },
+
                 _ => Err(ParquetError::General(
                     format!("QcomCodec compress does not deal with this data type: {:?}", self.datatype).into(),
                 )),
