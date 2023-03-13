@@ -87,29 +87,110 @@ impl PiestreamCompression {
                 // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
                 //
                 
-                let len_decimal = self.datatype.data_type_len();
-                if input.len() % len_decimal != 0 {
-                    return Err(ParquetError::General(
-                        format!("input array does not have enough u8 to convert into Decimal: input len {:?}, decimal len {:?} type {:?}", 
-                        input.len(), len_decimal, self.datatype).into(),
-                    ));
-                }
-
-                // convert to Decimal, then compress into u8 array
-                println!("Now compress data type: {:?}, input: {:?}", self.datatype, input);
-                Ok(())
+                self.codec.compress(input, output)
             },
 
-            DataType::Date
-            | DataType::Timestamp
-            | DataType::Timestampz 
-            | DataType::Interval 
-            | DataType::Varchar 
-            => {
-                println!("Now compress data type: {:?}, input: {:?}", self.datatype, input);
-                Ok(())
+            DataType::Date => {
+                //
+                // DataType::Date --> NativeDateWrapper --> chrono::NaiveDate --> chrono::DateImpl --> i32
+                //
+                // common usage: src/common/src/types/chrono_wrapper.rs
+                //  i32 -> Date: NativeDateWrapper::with_days()
+                //  Date -> Vec<u8>: NativeDateWrapper::to_protobuf_owned()
+                //  Vec<u8> -> Date: NativeDateWrapper::from_protobuf_bytes()
+                //
+                // Serialization / Deserialization: 
+                //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                //
+                // Note: 
+                //      original struct: 4 bytes (i32)
+                //      after serialization: 4 bytes (NaiveDate--> i32)
+                
+                self.codec.compress(input, output)
             },
-
+            DataType::Time => {
+                //
+                // DataType::Time --> NativeTimeWrapper --> chrono::NaiveTime == {secs: u32, frac: u32}
+                //
+                // common usage: src/common/src/types/chrono_wrapper.rs
+                //  (secs, nano) -> Date: NativeTimeWrapper::with_secs_nano(secs: u32, nano: u32)
+                //  Time -> Vec<u8>: NativeTimeWrapper::to_protobuf_owned()
+                //  Vec<u8> -> Time: NativeTimeWrapper::from_protobuf_bytes()
+                //
+                // Serialization / Deserialization: 
+                //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                //
+                // Note: 
+                //      original struct: 8 bytes (secs: u32, frac: u32)
+                //      after serialization: 8 bytes (secs+frac --> u64)
+                
+                self.codec.compress(input, output)
+            },
+            DataType::Timestamp => {
+                //
+                // DataType::Timestamp --> NativeTDateimeWrapper --> chrono::NaiveDateTime == {date: NaiveDate, time: NaiveTime}
+                //
+                // common usage: src/common/src/types/chrono_wrapper.rs
+                //
+                //  (secs, nsecs) -> Date: NativeTDateimeWrapper::with_secs_nsecs(secs: i64, nsecs: u32)
+                //  TimeStamp (i64) -> Vec<u8>: NativeTDateimeWrapper::to_protobuf_owned()
+                //  Vec<u8> -> TimeStamp: NativeTDateimeWrapper::from_protobuf_bytes()
+                // 
+                // Serialization / Deserialization: src/common/src/util/value_encoding/mod.rs::
+                //       serialize_value() 
+                //       deserialize_value()
+                //
+                // Note: 
+                //      original struct: 12 bytes (date: i32, secs: u32, frac: u32)
+                //      after serialization: 8 bytes (date+secs+frac --> i64)
+                
+                self.codec.compress(input, output)
+            },
+            DataType::Timestampz => {
+                //
+                // DataType::Timestamp --> NativeTDateimeWrapper --> chrono::NaiveDateTime == {date: NaiveDate, time: NaiveTime}
+                //
+                // common usage: src/common/src/types/chrono_wrapper.rs
+                //
+                //  (secs, nsecs) -> Date: NativeTDateimeWrapper::with_secs_nsecs(secs: i64, nsecs: u32)
+                //  TimeStamp (i64) -> Vec<u8>: NativeTDateimeWrapper::to_protobuf_owned()
+                //  Vec<u8> -> TimeStamp: NativeTDateimeWrapper::from_protobuf_bytes()
+                // 
+                // Serialization / Deserialization: 
+                //  src/common/src/types/mod.rs,  src/common/src/util/value_encoding/mod.rs,
+                //       serialize_value() -- no serialization for Timestampz
+                //       deserialize_value()
+                //
+                // Note: 
+                //      original struct: 12 bytes (date: i32, secs: u32, frac: u32)
+                //      after serialization: 8 bytes (date+secs+frac --> i64)
+                
+                self.codec.compress(input, output)
+            },
+            DataType::Interval => {
+                //
+                // DataType::Interval --> IntervalUnit == {months: i32, days: i32, ms: i64}
+                //
+                // common usage: src/common/src/types/interval.rs
+                //
+                //  (months, days, ms) -> IntervalUnit: new(months, days, ms)
+                //  Interval -> Vec<u8>: to_protobuf_owned()
+                //  Vec<u8> -> Interval: from_protobuf_bytes()
+                // 
+                // Serialization / Deserialization: 
+                //    src/common/src/types/interval.rs,
+                //       serialize()
+                //       deserialize()
+                //    src/common/src/util/value_encoding/mod.rs,
+                //       serialize_interval()
+                //       deserialize_interval()
+                //
+                // Note: 
+                //      original struct: 16 bytes (months: i32, days: i32, ms: i64)
+                //      after serialization: 16 bytes
+                
+                self.codec.compress(input, output)
+            },
             _ => {
                 Err(ParquetError::General(
                     format!("Unsupported data type {:?}", self.datatype).into(),
@@ -146,8 +227,7 @@ impl PiestreamCompression {
             | DataType::Interval 
             | DataType::Varchar 
             => {
-                println!("Now compress data type: {:?}, input: {:?}", self.datatype, input);
-                Ok(0)
+                self.codec.decompress(input, output, uncompress_size)
             },
 
             _ => {

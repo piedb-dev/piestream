@@ -697,6 +697,13 @@ mod qcom_codec {
             }
         }
 
+        //////////////////////////////////////////////////////////////////////////////////
+        /// 
+        /// compress
+        /// 
+        //////////////////////////////////////////////////////////////////////////////////
+        
+
         //
         // piestream uses RustDecimal: {flags: u32, hi: u32, lo: u32, mid: u32}
         // RustDecimal: 16 bytes, 4 x u32
@@ -725,8 +732,19 @@ mod qcom_codec {
 
             Ok(())
         }
-        // 2. treat u32 in different fields as in the different series
-        fn compress_decimal_separate_fields(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
+
+        // 2. general API to deal with tuples of primitive data types
+        //
+        // use the composite_fields to guide how to extract and compress invidivual fields
+        //
+        // For example:
+        //    1. DateType::Decimal:  { flags: u32, hi: u32, lo: u32, mid: u32 }
+        //    2. DateType::Timestamp: { secs: i64, nsecs: u32 }
+        //    3. DateType::Interval: { months: i32, days: i32, ms: i64 }
+        //
+
+        // DateType::Decimal:  { flags: u32, hi: u32, lo: u32, mid: u32 }
+        fn compress_composite_value_with_separate_fields_decimal(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
             let len_decimal = self.datatype.data_type_len();
             if input_buf.len() % len_decimal != 0 {
                 return Err(ParquetError::General(
@@ -790,6 +808,155 @@ mod qcom_codec {
             Ok(())
         }
 
+        // DateType::Timestamp: { secs: i64, nsecs: u32 }
+        fn compress_composite_value_with_separate_fields_timestamp(
+            &mut self, 
+            input_buf: &[u8], 
+            output_buf: &mut Vec<u8>) -> Result<()> 
+        {
+            // check if input_buf satisfies requirements
+
+            let len_type = self.datatype.data_type_len();
+
+            if input_buf.len() % len_type != 0 {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 to convert into Decimal: input len {:?}, datatype len {:?} type {:?}", 
+                    input_buf.len(), len_type, self.datatype).into(),
+                ));
+            }
+
+            // step 1: convert to (i64, u32)
+            let num_composites = input_buf.len() / len_type;
+
+            let mut vec_secs : Vec<i64> = Vec::new();
+            vec_secs.resize(num_composites, 0);
+
+            let mut vec_nsecs: Vec<u32> = Vec::new();
+            vec_nsecs.resize(num_composites, 0);
+
+            let mut index_begin = 0usize;
+            let mut index_end = 0usize;
+            for i in 0..num_composites {
+                // i64
+                index_begin = i * len_type;
+                index_end = index_begin + std::mem::size_of::<i64>();
+                BigEndian::read_i64_into(
+                    &input_buf[index_begin..index_end], 
+                    &mut vec_secs[i..]
+                );
+                // u32
+                index_begin = index_end;
+                index_end = index_begin + std::mem::size_of::<u32>();
+                BigEndian::read_u32_into(
+                    &input_buf[index_begin..index_end], 
+                    &mut vec_nsecs[i..]
+                );
+            }
+
+            // step 2: compress into u8 array
+            let mut compressed_secs = auto_compress::<i64>(& vec_secs, self.compression_level);
+            let mut compressed_nsecs = auto_compress::<u32>(& vec_nsecs, self.compression_level);
+            
+            // step 3: create header containing the offsets
+            let vec_header = vec![compressed_secs.len() as u32, compressed_nsecs.len() as u32];
+            let mut vec_header_u8 : Vec<u8> = Vec::new();
+            BigEndian::write_u32_into(&vec_header, &mut vec_header_u8);
+
+            output_buf.append(&mut vec_header_u8);
+
+            // step 4: append all compressed data for each field
+            output_buf.append(&mut compressed_secs);
+            output_buf.append(&mut compressed_nsecs);
+
+            Ok(())
+        }
+
+        // DateType::Interval: { months: i32, days: i32, ms: i64 }
+        fn compress_composite_value_with_separate_fields_interval(
+            &mut self, 
+            input_buf: &[u8], 
+            output_buf: &mut Vec<u8>) -> Result<()> 
+        {
+            // check if input_buf satisfies requirements
+
+            let len_type = self.datatype.data_type_len();
+
+            if input_buf.len() % len_type != 0 {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 to convert into Decimal: input len {:?}, datatype len {:?} type {:?}", 
+                    input_buf.len(), len_type, self.datatype).into(),
+                ));
+            }
+
+            // step 1: convert to (i64, u32)
+            let num_composites = input_buf.len() / len_type;
+
+            let mut vec_months : Vec<i32> = Vec::new();
+            vec_months.resize(num_composites, 0);
+
+            let mut vec_days: Vec<i32> = Vec::new();
+            vec_days.resize(num_composites, 0);
+
+            let mut vec_ms: Vec<i64> = Vec::new();
+            vec_ms.resize(num_composites, 0);
+
+            let mut index_begin = 0usize;
+            let mut index_end = 0usize;
+            for i in 0..num_composites {
+                // i32
+                index_begin = i * len_type;
+                index_end = index_begin + std::mem::size_of::<i32>();
+                BigEndian::read_i32_into(
+                    &input_buf[index_begin..index_end], 
+                    &mut vec_months[i..]
+                );
+                // i32
+                index_begin = index_end;
+                index_end = index_begin + std::mem::size_of::<i32>();
+                BigEndian::read_i32_into(
+                    &input_buf[index_begin..index_end], 
+                    &mut vec_days[i..]
+                );
+                // i64
+                index_begin = index_end;
+                index_end = index_begin + std::mem::size_of::<i64>();
+                BigEndian::read_i64_into(
+                    &input_buf[index_begin..index_end], 
+                    &mut vec_ms[i..]
+                );
+            }
+
+            // step 2: compress into u8 array
+            let mut compressed_months = auto_compress::<i32>(& vec_months, self.compression_level);
+            let mut compressed_days = auto_compress::<i32>(& vec_days, self.compression_level);
+            let mut compressed_ms = auto_compress::<i64>(& vec_ms, self.compression_level);
+            
+            // step 3: create header containing the offsets
+            let vec_header = vec![compressed_months.len() as u32, 
+                                            compressed_days.len() as u32,
+                                            compressed_ms.len() as u32
+                                            ];
+            let mut vec_header_u8 : Vec<u8> = Vec::new();
+            BigEndian::write_u32_into(&vec_header, &mut vec_header_u8);
+
+            output_buf.append(&mut vec_header_u8);
+
+            // step 4: append all compressed data for each field
+            output_buf.append(&mut compressed_months);
+            output_buf.append(&mut compressed_days);
+            output_buf.append(&mut compressed_ms);
+
+            Ok(())
+        }
+
+
+        //////////////////////////////////////////////////////////////////////////////////
+        /// 
+        /// decompress
+        /// 
+        //////////////////////////////////////////////////////////////////////////////////
+         
+        
         // decompress decimal (all u32 are treated as in the same series)
         fn decompress_decimal_single_field(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>, _uncompress_size: Option<usize>) -> Result<usize> {
             let mut decompressed_u32 = auto_decompress::<u32>(input_buf).expect("failed to decompress");
@@ -798,8 +965,14 @@ mod qcom_codec {
 
             Ok(output_buf.len())
         }
+
         // decompress decimal, treat u32 in different fields as in the different series
-        fn decompress_decimal_separate_fields(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>, _uncompress_size: Option<usize>) -> Result<usize> {
+        fn decompress_composite_value_with_separate_fields_decimal(
+            &mut self, 
+            input_buf: &[u8], 
+            output_buf: &mut Vec<u8>, 
+            _uncompress_size: Option<usize>) -> Result<usize> 
+        {
             
             let header_length = 4*std::mem::size_of::<u32>();
 
@@ -866,6 +1039,102 @@ mod qcom_codec {
                     BigEndian::write_u32_into(&vec![x], &mut vec_u8);        
                     output_buf.append(&mut vec_u8);
                 }
+            }
+
+            Ok(output_buf.len())
+        }
+
+        // DateType::Timestamp: { secs: i64, nsecs: u32 }
+        fn decompress_composite_value_with_separate_fields_timestamp(
+            &mut self, 
+            input_buf: &[u8], 
+            output_buf: &mut Vec<u8>, 
+            _uncompress_size: Option<usize>) -> Result<usize> 
+        {
+            // check if input_buf satisfies requirements
+
+            let num_fields = 2;
+
+            let header_length = num_fields * std::mem::size_of::<u32>();
+
+            if input_buf.len() <= header_length {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 header: input len {:?}, header len {:?} type {:?}", 
+                    input_buf.len(), header_length, self.datatype).into(),
+                ));
+            }
+
+            let len_type = self.datatype.data_type_len();
+
+            if (input_buf.len() - header_length) % len_type != 0 {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8 to convert into Decimal: input len {:?}, datatype len {:?} type {:?}", 
+                    input_buf.len(), len_type, self.datatype).into(),
+                ));
+            }
+
+            let num_composites = (input_buf.len() - header_length) / len_type;
+
+            // step 1: read header
+
+            let mut vec_header_u32 : Vec<u32> = Vec::new();
+            vec_header_u32.resize(num_fields, 0u32);
+
+            BigEndian::read_u32_into(&input_buf[0..header_length], &mut vec_header_u32);
+
+            let payload_length : u32 = vec_header_u32.iter().sum();
+
+            if input_buf.len() < header_length +  payload_length as usize {
+                return Err(ParquetError::General(
+                    format!("input array does not have enough u8: input len {:?}, header len {:?} field len {:?}, type {:?}", 
+                    input_buf.len(), header_length, vec_header_u32, self.datatype).into(),
+                ));
+            }
+
+            // step 2: decompress each field
+
+            let mut vec_secs = Vec::new();
+            let mut vec_nsecs = Vec::new();
+
+            let index_initial = header_length;
+            let mut index_begin = header_length;
+            let mut index_end = header_length;
+
+            for i in 0..num_fields {
+                index_begin = index_end;
+                index_end = index_begin + vec_header_u32[i] as usize;
+                match i {
+                    0 => {
+                        vec_secs = auto_decompress::<i64>(&input_buf[index_begin..index_end]).expect("failed to decompress");
+                    },
+                    1 => {
+                        vec_nsecs = auto_decompress::<u32>(&input_buf[index_begin..index_end]).expect("failed to decompress");
+                    }
+                    _ => panic!("reached unreachable branch in match i%4"),
+                }
+            }
+
+            if num_composites != vec_secs.len() || vec_nsecs.len() != num_composites {
+                return Err(ParquetError::General(
+                    format!("decompress {:?} results in different dimensions in secs/nsecs: {:?} {:?} input len {:?}, header len {:?} type {:?}", 
+                        self.datatype, vec_secs.len(), vec_nsecs.len(), input_buf.len(), header_length, self.datatype).into(),
+                ));
+            }
+
+            // step 3 : generate u8 output
+            let mut vec_u8 : Vec<u8> = Vec::new();
+
+            for i in 0..num_composites {
+                // i64
+                vec_u8.clear();
+                vec_u8.resize(std::mem::size_of::<i64>(), 0u8);
+                BigEndian::write_i64_into(&vec![ vec_secs[i] ], &mut vec_u8);        
+                output_buf.append(&mut vec_u8);
+                // u32
+                vec_u8.clear();
+                vec_u8.resize(std::mem::size_of::<u32>(), 0u8);
+                BigEndian::write_u32_into(&vec![ vec_nsecs[i] ], &mut vec_u8);        
+                output_buf.append(&mut vec_u8);
             }
 
             Ok(output_buf.len())
@@ -942,6 +1211,60 @@ mod qcom_codec {
                     //
                     self.decompress_decimal_single_field(input_buf, output_buf, _uncompress_size)
                 },
+
+                DataType::Date => {
+                    //
+                    // DataType::Date --> NativeDateWrapper --> chrono::NaiveDate --> chrono::DateImpl --> i32
+                    //
+                    // common usage: src/common/src/types/chrono_wrapper.rs
+                    //  i32 -> Date: NativeDateWrapper::with_days()
+                    //  Date -> Vec<u8>: NativeDateWrapper::to_protobuf_owned()
+                    //  Vec<u8> -> Date: NativeDateWrapper::from_protobuf_bytes()
+                    //
+                    // Serialization / Deserialization: 
+                    //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                    //
+                    // Note: 
+                    //      original struct: 4 bytes (i32)
+                    //      after serialization: 4 bytes (NaiveDate--> i32)
+                    
+                    // treat it as i32
+
+                    let mut internal_output_buf = Vec::new();
+                    internal_output_buf.append( &mut auto_decompress::<i32>(input_buf).expect("failed to decompress") );
+                    let extra_len = internal_output_buf.len() * std::mem::size_of::<i32>();
+                    let current_len = output_buf.len();
+                    output_buf.resize(current_len + extra_len, 0);
+                    BigEndian::write_i32_into(&internal_output_buf, &mut output_buf[current_len..]);
+                    Ok(output_buf.len())
+                },
+                DataType::Time => {
+                    //
+                    // DataType::Time --> NativeTimeWrapper --> chrono::NaiveTime == {secs: u32, frac: u32}
+                    //
+                    // common usage: src/common/src/types/chrono_wrapper.rs
+                    //  (secs, nano) -> Date: NativeTimeWrapper::with_secs_nano(secs: u32, nano: u32)
+                    //  Time -> Vec<u8>: NativeTimeWrapper::to_protobuf_owned()
+                    //  Vec<u8> -> Time: NativeTimeWrapper::from_protobuf_bytes()
+                    //
+                    // Serialization / Deserialization: 
+                    //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                    //
+                    // Note: 
+                    //      original struct: 8 bytes (secs: u32, frac: u32)
+                    //      after serialization: 8 bytes (secs+frac --> u64)
+                    
+                    // treat it as u64
+
+                    let mut internal_output_buf = Vec::new();
+                    internal_output_buf.append( &mut auto_decompress::<u64>(input_buf).expect("failed to decompress") );
+                    let extra_len = internal_output_buf.len() * std::mem::size_of::<u64>();
+                    let current_len = output_buf.len();
+                    output_buf.resize(current_len + extra_len, 0);
+                    BigEndian::write_u64_into(&internal_output_buf, &mut output_buf[current_len..]);
+                    Ok(output_buf.len())
+                },
+
                 _ => Err(ParquetError::General(
                     format!("QcomCodec decompress does not deal with this data type: {:?}", self.datatype).into(),
                 )),
@@ -1001,15 +1324,126 @@ mod qcom_codec {
                     //
                     // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
                     //
+
+                    // method 1: treat all data as u32 array and apply compression
                     self.compress_decimal_single_field(input_buf, output_buf)
                 },
-    
-                DataType::Date
-                | DataType::Timestamp
-                | DataType::Timestampz 
-                | DataType::Interval 
-                | DataType::Varchar => {
+                DataType::Date => {
+                    //
+                    // DataType::Date --> NativeDateWrapper --> chrono::NaiveDate --> chrono::DateImpl --> i32
+                    //
+                    // common usage: src/common/src/types/chrono_wrapper.rs
+                    //  i32 -> Date: NativeDateWrapper::with_days()
+                    //  Date -> Vec<u8>: NativeDateWrapper::to_protobuf_owned()
+                    //  Vec<u8> -> Date: NativeDateWrapper::from_protobuf_bytes()
+                    //
+                    // Serialization / Deserialization: 
+                    //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                    //
+                    // Note: 
+                    //      original struct: 4 bytes (i32)
+                    //      after serialization: 4 bytes (NaiveDate--> i32)
+                    
+                    // treat it as i32
+
+                    let len = input_buf.len() / std::mem::size_of::<i32>();
+                    let mut internal_buf = vec![0; len];
+                    BigEndian::read_i32_into(&input_buf, &mut internal_buf);
+                    output_buf.append( &mut auto_compress::<i32>(& internal_buf, self.compression_level) );
                     Ok(())
+                },
+                DataType::Time => {
+                    //
+                    // DataType::Time --> NativeTimeWrapper --> chrono::NaiveTime == {secs: u32, frac: u32}
+                    //
+                    // common usage: src/common/src/types/chrono_wrapper.rs
+                    //  (secs, nano) -> Date: NativeTimeWrapper::with_secs_nano(secs: u32, nano: u32)
+                    //  Time -> Vec<u8>: NativeTimeWrapper::to_protobuf_owned()
+                    //  Vec<u8> -> Time: NativeTimeWrapper::from_protobuf_bytes()
+                    //
+                    // Serialization / Deserialization: 
+                    //      src/common/src/util/value_encoding/mod.rs:: serialize_value(), deserialize_value()
+                    //
+                    // Note: 
+                    //      original struct: 8 bytes (secs: u32, frac: u32)
+                    //      after serialization: 8 bytes (secs+frac --> u64)
+                    
+                    // treat it as u64
+
+                    let len = input_buf.len() / std::mem::size_of::<u64>();
+                    let mut internal_buf = vec![0; len];
+                    BigEndian::read_u64_into(&input_buf, &mut internal_buf);
+                    output_buf.append( &mut auto_compress::<u64>(& internal_buf, self.compression_level) );
+                    Ok(())
+                },
+                DataType::Timestamp => {
+                    //
+                    // DataType::Timestamp --> NativeTDateimeWrapper --> chrono::NaiveDateTime == {date: NaiveDate, time: NaiveTime}
+                    //
+                    // common usage: src/common/src/types/chrono_wrapper.rs
+                    //
+                    //  (secs, nsecs) -> Date: NativeTDateimeWrapper::with_secs_nsecs(secs: i64, nsecs: u32)
+                    //  TimeStamp (i64) -> Vec<u8>: NativeTDateimeWrapper::to_protobuf_owned()
+                    //  Vec<u8> -> TimeStamp: NativeTDateimeWrapper::from_protobuf_bytes()
+                    // 
+                    // Serialization / Deserialization: src/common/src/util/value_encoding/mod.rs::
+                    //       serialize_value() 
+                    //       deserialize_value()
+                    //
+                    // Note: 
+                    //      original struct: 12 bytes (date: i32, secs: u32, frac: u32)
+                    //      after serialization: 8 bytes (date+secs+frac --> i64)
+                    //
+                    // Question: Timestampz is serialized to i64, or i64+u32 ?
+                    //      i64: src/common/src/types/chrono_wrapper.rs::NativeTDateimeWrapper::to_protobuf_owned()
+                    //      i64+u32: src/common/src/util/value_encoding/mod.rs::serialize_naivedatetime()
+                    
+                    // method 1: treat all data as u32 array and apply compression
+                    self.compress_decimal_single_field(input_buf, output_buf)
+                    // panic!("Do not know if DataType::Timestamp is serialized to i64 or i64+u32");
+                },
+                DataType::Timestampz => {
+                    //
+                    // DataType::Timestamp --> ??
+                    //
+                    // Question: 
+                    //      did not find its defnition
+                    //      src/common/src/types/mod.rs suggests it is i64
+                    //      is it OK to treat it as i64?
+                    
+                    // piestream_common::types::DataType::Int64
+                    let len = input_buf.len() / std::mem::size_of::<i64>();
+                    let mut internal_buf = vec![0; len];
+                    BigEndian::read_i64_into(&input_buf, &mut internal_buf);
+                    output_buf.append( &mut auto_compress::<i64>(& internal_buf, self.compression_level) );
+                    Ok(())
+                },
+                DataType::Interval => {
+                    //
+                    // DataType::Interval --> IntervalUnit == {months: i32, days: i32, ms: i64}
+                    //
+                    // common usage: src/common/src/types/interval.rs
+                    //
+                    //  (months, days, ms) -> IntervalUnit: new(months, days, ms)
+                    //  Interval -> Vec<u8>: to_protobuf_owned()
+                    //  Vec<u8> -> Interval: from_protobuf_bytes()
+                    // 
+                    // Serialization / Deserialization: 
+                    //    src/common/src/types/interval.rs,
+                    //       serialize()
+                    //       deserialize()
+                    //    src/common/src/util/value_encoding/mod.rs,
+                    //       serialize_interval()
+                    //       deserialize_interval()
+                    //
+                    // Note: 
+                    //      original struct: 16 bytes (months: i32, days: i32, ms: i64)
+                    //      after serialization: 16 bytes
+
+                    // method 1: treat all data as u32 array and apply compression
+                    self.compress_decimal_single_field(input_buf, output_buf)
+                    // panic!("Do not know if DataType::Timestamp is serialized to i64 or i64+u32");
+                    
                 },
 
                 _ => Err(ParquetError::General(
