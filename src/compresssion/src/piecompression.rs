@@ -47,7 +47,7 @@ impl PiestreamCompression {
     pub fn new(c: CodecType, dt: DataType, level: usize) -> Self {
         let codec_options = CodecOptionsBuilder::default()
             .set_backward_compatible_lz4(false)
-            .set_type_value(dt.type_to_index())  // this only affects q-compression
+            .set_type_value(dt.clone())  // this only affects q-compression
             .set_compression_level(level)
             .build();
         let cdc = create_codec(c, &codec_options).unwrap().unwrap();
@@ -55,7 +55,7 @@ impl PiestreamCompression {
         Self {
             codectype : c,
             level : level,
-            datatype: dt,
+            datatype: dt.clone(),
             codec: cdc,
         }
     }
@@ -78,8 +78,29 @@ impl PiestreamCompression {
 
             },
 
-            DataType::Decimal 
-            | DataType::Date
+            DataType::Decimal => {
+                //
+                // piestream uses RustDecimal: {flags: u32, hi: u32, low: u32, mid: u32}
+                // RustDecimal: 16 bytes, 4 x u32
+                // see src/common/src/types/decimal.rs :: Decimal
+                //
+                // common usage: DecimalValueReader::read(buf:&[u8]) defined in src/common/src/array/value_reader.rs
+                //
+                
+                let len_decimal = self.datatype.data_type_len();
+                if input.len() % len_decimal != 0 {
+                    return Err(ParquetError::General(
+                        format!("input array does not have enough u8 to convert into Decimal: input len {:?}, decimal len {:?} type {:?}", 
+                        input.len(), len_decimal, self.datatype).into(),
+                    ));
+                }
+
+                // convert to Decimal, then compress into u8 array
+                println!("Now compress data type: {:?}, input: {:?}", self.datatype, input);
+                Ok(())
+            },
+
+            DataType::Date
             | DataType::Timestamp
             | DataType::Timestampz 
             | DataType::Interval 

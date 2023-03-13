@@ -37,6 +37,9 @@
 use crate::basic::Compression as CodecType;
 use crate::errors::{ParquetError, Result};
 
+// use DataType defined in piestream_common 
+use piestream_common::types::DataType;
+
 macro_rules! nyi_err {
     ($fmt:expr) => (ParquetError::NYI($fmt.to_owned()));
     ($fmt:expr, $($args:expr),*) => (ParquetError::NYI(format!($fmt, $($args),*)));
@@ -71,7 +74,7 @@ pub trait Codec: Send {
 pub struct CodecOptions {
     /// Whether or not to fallback to other LZ4 older implementations on error in LZ4_HADOOP.
     backward_compatible_lz4: bool,
-    type_value: u8,
+    datatype: DataType,
     compression_level: usize,
 }
 
@@ -84,7 +87,7 @@ impl Default for CodecOptions {
 pub struct CodecOptionsBuilder {
     /// Whether or not to fallback to other LZ4 older implementations on error in LZ4_HADOOP.
     backward_compatible_lz4: bool,
-    type_value: u8,
+    datatype: DataType,
     compression_level: usize,
 }
 
@@ -93,7 +96,7 @@ impl Default for CodecOptionsBuilder {
         Self {
             backward_compatible_lz4: true,
             // 1 == piestream_common::types::DataType::Int16(_) 
-            type_value: 1u8,
+            datatype: DataType::Int32,
             compression_level: 8usize,
         }
     }
@@ -113,8 +116,8 @@ impl CodecOptionsBuilder {
         self
     }
 
-    pub fn set_type_value(mut self, value: u8) -> CodecOptionsBuilder {
-        self.type_value = value;
+    pub fn set_type_value(mut self, dt: DataType) -> CodecOptionsBuilder {
+        self.datatype = dt.clone();
         self
     }
 
@@ -126,7 +129,7 @@ impl CodecOptionsBuilder {
     pub fn build(self) -> CodecOptions {
         CodecOptions {
             backward_compatible_lz4: self.backward_compatible_lz4,
-            type_value: self.type_value,
+            datatype: self.datatype,
             compression_level: self.compression_level,
         }
     }
@@ -156,7 +159,7 @@ pub fn create_codec(
         CodecType::LZ4_RAW => Ok(Some(Box::new(LZ4RawCodec::new()))),
         // q-compress
         #[cfg(any(feature = "q_compress", test))]
-        CodecType::QCOM => Ok(Some(Box::new(QcomCodec::new(_options.type_value, _options.compression_level)))),
+        CodecType::QCOM => Ok(Some(Box::new(QcomCodec::new(_options.datatype.clone(), _options.compression_level)))),
         CodecType::UNCOMPRESSED => Ok(None),
         _ => Err(nyi_err!("The codec type {} is not supported yet", codec)),
     }
@@ -673,22 +676,24 @@ pub use lz4_hadoop_codec::*;
 mod qcom_codec {
     use crate::compression::Codec;
     use crate::errors::{ParquetError, Result};
+    // use DataType defined in piestream_common 
+    use piestream_common::types::DataType;
 
     use byteorder::{ByteOrder, BigEndian};
     use q_compress::{auto_compress, auto_decompress, DEFAULT_COMPRESSION_LEVEL};
 
     /// Codec for LZ4 Raw compression algorithm.
     pub struct QcomCodec { 
-        type_value: u8,
+        datatype: DataType,
         compression_level: usize,
     }
 
     impl QcomCodec {
         /// Creates new LZ4 Raw compression codec.
-        pub(crate) fn new(tv: u8, lv: usize) -> Self {
+        pub(crate) fn new(dt: DataType, lv: usize) -> Self {
             Self { 
                 compression_level: lv, 
-                type_value: tv, 
+                datatype: dt.clone(), 
             }
         }
     }
@@ -701,8 +706,8 @@ mod qcom_codec {
             _uncompress_size: Option<usize>,
         ) -> Result<usize> { 
 
-            match self.type_value {
-                1 => {
+            match self.datatype {
+                DataType::Int16 => {
                     // piestream_common::types::DataType::Int16
                     let mut internal_output_buf = Vec::new();
                     internal_output_buf.append( &mut auto_decompress::<i16>(input_buf).expect("failed to decompress") );
@@ -712,7 +717,7 @@ mod qcom_codec {
                     BigEndian::write_i16_into(&internal_output_buf, &mut output_buf[current_len..]);
                     Ok(output_buf.len())
                 },
-                2 => {
+                DataType::Int32 => {
                     // piestream_common::types::DataType::Int32
                     let mut internal_output_buf = Vec::new();
                     internal_output_buf.append( &mut auto_decompress::<i32>(input_buf).expect("failed to decompress") );
@@ -722,7 +727,7 @@ mod qcom_codec {
                     BigEndian::write_i32_into(&internal_output_buf, &mut output_buf[current_len..]);
                     Ok(output_buf.len())
                 },
-                3 => {
+                DataType::Int64 => {
                     // piestream_common::types::DataType::Int64
                     let mut internal_output_buf = Vec::new();
                     internal_output_buf.append( &mut auto_decompress::<i64>(input_buf).expect("failed to decompress") );
@@ -732,7 +737,7 @@ mod qcom_codec {
                     BigEndian::write_i64_into(&internal_output_buf, &mut output_buf[current_len..]);
                     Ok(output_buf.len())
                 }, 
-                4 => {
+                DataType::Float32 => {
                     // piestream_common::types::DataType::Float32
                     let mut internal_output_buf = Vec::new();
                     internal_output_buf.append( &mut auto_decompress::<f32>(input_buf).expect("failed to decompress") );
@@ -742,7 +747,7 @@ mod qcom_codec {
                     BigEndian::write_f32_into(&internal_output_buf, &mut output_buf[current_len..]);
                     Ok(output_buf.len())
                 },
-                5 => {
+                DataType::Float64 => {
                     // piestream_common::types::DataType::Float64
                     let mut internal_output_buf = Vec::new();
                     internal_output_buf.append( &mut auto_decompress::<f64>(input_buf).expect("failed to decompress") );
@@ -753,15 +758,15 @@ mod qcom_codec {
                     Ok(output_buf.len())
                 },
                 _ => Err(ParquetError::General(
-                    format!("QcomCodec decompress does not deal with this data type: {:?}", self.type_value).into(),
+                    format!("QcomCodec decompress does not deal with this data type: {:?}", self.datatype).into(),
                 )),
             }
             
         }
 
         fn compress(&mut self, input_buf: &[u8], output_buf: &mut Vec<u8>) -> Result<()> {
-            match self.type_value {
-                1 => {
+            match self.datatype {
+                DataType::Int16 => {
                     // piestream_common::types::DataType::Int16
                     let len = input_buf.len() / std::mem::size_of::<i16>();
                     let mut internal_buf = vec![0; len];
@@ -770,7 +775,7 @@ mod qcom_codec {
                     Ok(())
                 },
                 
-                2 => {
+                DataType::Int32 => {
                     // piestream_common::types::DataType::Int32
                     let len = input_buf.len() / std::mem::size_of::<i32>();
                     let mut internal_buf = vec![0; len];
@@ -778,7 +783,7 @@ mod qcom_codec {
                     output_buf.append( &mut auto_compress::<i32>(& internal_buf, self.compression_level) );
                     Ok(())
                 },
-                3 => {
+                DataType::Int64 => {
                     // piestream_common::types::DataType::Int64
                     let len = input_buf.len() / std::mem::size_of::<i64>();
                     let mut internal_buf = vec![0; len];
@@ -786,7 +791,7 @@ mod qcom_codec {
                     output_buf.append( &mut auto_compress::<i64>(& internal_buf, self.compression_level) );
                     Ok(())
                 },
-                4 => {
+                DataType::Float32 => {
                     // piestream_common::types::DataType::Float32
                     let len = input_buf.len() / std::mem::size_of::<f32>();
                     let mut internal_buf = vec![0f32; len];
@@ -794,7 +799,7 @@ mod qcom_codec {
                     output_buf.append( &mut auto_compress::<f32>(& internal_buf, self.compression_level) );
                     Ok(())
                 },
-                5 => {
+                DataType::Float64 => {
                     // piestream_common::types::DataType::Float64
                     let len = input_buf.len() / std::mem::size_of::<f64>();
                     let mut internal_buf = vec![0f64; len];
@@ -803,7 +808,7 @@ mod qcom_codec {
                     Ok(())
                 },
                 _ => Err(ParquetError::General(
-                    format!("QcomCodec compress does not deal with this data type: {:?}", self.type_value).into(),
+                    format!("QcomCodec compress does not deal with this data type: {:?}", self.datatype).into(),
                 )),
             }
         }
