@@ -42,11 +42,11 @@ services:
       - "--etcd-endpoints"
       - "http://${NODE3}:2389,http://${NODE4}:2389"
       - "--config-path"
-      - /risingwave.toml
+      - /piestream.toml
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      - ./rise.toml:/risingwave.toml
+      - ./rise.toml:/piestream.toml
     depends_on:
       etcd-ok:
         condition: service_healthy
